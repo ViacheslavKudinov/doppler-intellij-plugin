@@ -8,6 +8,8 @@ on:
       - .github/ISSUE_TEMPLATE/**
       - dependabot.yaml
       - LICENSE
+      - .github/workflows/codeql.yaml
+      - .github/workflows/zizmor.yaml
   # Trigger the workflow on any pull request
   pull_request:
     paths-ignore:
@@ -15,6 +17,8 @@ on:
       - .github/ISSUE_TEMPLATE/**
       - dependabot.yaml
       - LICENSE
+      - .github/workflows/codeql.yaml
+      - .github/workflows/zizmor.yaml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -57,7 +61,7 @@ jobs:
 
       # Build plugin
       - name: Build plugin
-        run: ./gradlew buildPlugin --no-daemon
+        run: ./gradlew buildPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
       # Store an already-built plugin as an artifact for downloading
       # - name: Upload artifact
@@ -101,7 +105,7 @@ jobs:
 
       # Run tests
       - name: Run Tests
-        run: ./gradlew check --no-daemon
+        run: ./gradlew check --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
       # Collect Tests Result of failed tests
       # - name: Collect Tests Result
@@ -146,7 +150,7 @@ jobs:
 
       # Run Verify Plugin task and IntelliJ Plugin Verifier tool
       - name: Run Plugin Verification tasks
-        run: ./gradlew verifyPlugin --no-daemon
+        run: ./gradlew verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
       # Collect Plugin Verifier Result
       # - name: Collect Plugin Verifier Result

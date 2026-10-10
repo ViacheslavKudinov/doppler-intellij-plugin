@@ -1,0 +1,16 @@
+{
+  "bootstrap-sha": "3aa7b0cd3fffe994f9a08a7bbb9a3aae6d0595d4",
+  "packages": {
+    ".": {
+      "release-type": "java",
+      "package-name": "doppler-intellij-plugin",
+      "include-component-in-tag": false,
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "gradle.properties"
+        }
+      ]
+    }
+  }
+}

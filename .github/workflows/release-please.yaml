@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+
+permissions: {}
+
+jobs:
+  build:
+    name: Run CI checks
+    uses: $/.github/workflows/build.yaml
+  
+  release-please:
+    name: Create release PRs and GitHub releases
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Run Release Please
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json

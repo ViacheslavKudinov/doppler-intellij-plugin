@@ -13,6 +13,7 @@ jobs:
   publish:
     name: Sign & Publish to JetBrains Marketplace
     runs-on: ubuntu-latest
+    cache-mode: none
     permissions:
       contents: read
 

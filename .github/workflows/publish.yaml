@@ -11,6 +11,9 @@ jobs:
   publish:
     name: Sign & Publish to JetBrains Marketplace
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      cache-mode: none
 
     steps:
       - name: Harden the runner (Audit all outbound calls)

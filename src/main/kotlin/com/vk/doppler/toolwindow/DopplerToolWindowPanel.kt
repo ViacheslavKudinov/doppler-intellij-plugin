@@ -21,8 +21,7 @@ import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.treeStructure.Tree
-import org.jetbrains.plugins.terminal.ShellTerminalWidget
-import org.jetbrains.plugins.terminal.TerminalToolWindowManager
+import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTabsManager
 import com.vk.doppler.DopplerIcons
 import com.vk.doppler.cli.DopplerConfig
 import com.vk.doppler.cli.DopplerProject
@@ -226,11 +225,14 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
             else -> "(curl -Ls --tlsv1.2 --proto '=https' --retry 3 https://cli.doppler.com/install.sh || wget -t 3 -qO- https://cli.doppler.com/install.sh) | sudo sh"
         }
         runCatching {
-            val manager = TerminalToolWindowManager.getInstance(project)
-            val terminal = ShellTerminalWidget.toShellJediTermWidgetOrThrow(
-                manager.createNewSession(),
-            )
-            terminal.executeCommand(command)
+            val terminalTab = TerminalToolWindowTabsManager.getInstance(project)
+                .createTabBuilder()
+                .workingDirectory(project.basePath ?: System.getProperty("user.home"))
+                .tabName("Install Doppler CLI")
+                .requestFocus(true)
+                .deferSessionStartUntilUiShown(true)
+                .createTab()
+            terminalTab.view.createSendTextBuilder().shouldExecute().send(command)
         }.onFailure { error ->
             showStatus("Could not open terminal: ${error.message}", "Retry")
         }

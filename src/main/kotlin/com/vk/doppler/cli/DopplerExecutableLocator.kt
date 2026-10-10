@@ -1,6 +1,5 @@
 package com.vk.doppler.cli
 
-import com.intellij.execution.configurations.PathEnvironmentVariableUtil
 import com.intellij.openapi.util.SystemInfo
 import java.io.File
 
@@ -13,6 +12,13 @@ object DopplerExecutableLocator {
 
     private val EXECUTABLE_NAME: String
         get() = if (SystemInfo.isWindows) "doppler.exe" else "doppler"
+
+    private fun findOnPath(): File? = System.getenv("PATH")
+        ?.split(File.pathSeparator)
+        ?.asSequence()
+        ?.filter { it.isNotBlank() }
+        ?.map { File(it, EXECUTABLE_NAME) }
+        ?.firstOrNull { it.canExecute() }
 
     private fun fallbackDirectories(): List<String> = when {
         SystemInfo.isWindows -> listOfNotNull(
@@ -39,7 +45,7 @@ object DopplerExecutableLocator {
             return if (file.canExecute()) file.absolutePath else null
         }
 
-        PathEnvironmentVariableUtil.findInPath(EXECUTABLE_NAME)?.let { return it.absolutePath }
+        findOnPath()?.let { return it.absolutePath }
 
         return fallbackDirectories()
             .asSequence()

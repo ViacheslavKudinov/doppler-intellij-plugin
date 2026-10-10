@@ -1,3 +1,5 @@
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ViacheslavKudinov/doppler-plugin/badge)](https://scorecard.dev/viewer/?uri=github.com/ViacheslavKudinov/doppler-plugin)
+
 # Doppler for IntelliJ IDEA
 
 Browse and edit your [Doppler](https://doppler.com) secrets without leaving the IDE — a JetBrains

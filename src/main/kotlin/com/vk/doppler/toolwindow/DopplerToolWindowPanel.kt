@@ -228,12 +228,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         runCatching {
             val manager = TerminalToolWindowManager.getInstance(project)
             val terminal = ShellTerminalWidget.toShellJediTermWidgetOrThrow(
-                manager.createShellWidget(
-                    project.basePath ?: System.getProperty("user.home"),
-                    "Install Doppler CLI",
-                    true,
-                    true,
-                ),
+                manager.createNewSession(),
             )
             terminal.executeCommand(command)
         }.onFailure { error ->

@@ -23,23 +23,23 @@
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="Doppler"
                     anchor="right"
-                    factoryClass="com.viacheslavkudinov.doppler.toolwindow.DopplerToolWindowFactory"
+                    factoryClass="com.vk.doppler.toolwindow.DopplerToolWindowFactory"
                     icon="/icons/doppler.svg"/>
 
-        <applicationService serviceImplementation="com.viacheslavkudinov.doppler.settings.DopplerSettings"/>
-        <applicationService serviceImplementation="com.viacheslavkudinov.doppler.service.DopplerService"/>
-        <projectService serviceImplementation="com.viacheslavkudinov.doppler.editor.DopplerSecretsEditorService"/>
+        <applicationService serviceImplementation="com.vk.doppler.settings.DopplerSettings"/>
+        <applicationService serviceImplementation="com.vk.doppler.service.DopplerService"/>
+        <projectService serviceImplementation="com.vk.doppler.editor.DopplerSecretsEditorService"/>
 
         <applicationConfigurable parentId="tools"
-                                 instance="com.viacheslavkudinov.doppler.settings.DopplerConfigurable"
-                                 id="com.viacheslavkudinov.doppler.settings.DopplerConfigurable"
+                                 instance="com.vk.doppler.settings.DopplerConfigurable"
+                                 id="com.vk.doppler.settings.DopplerConfigurable"
                                  displayName="Doppler"/>
 
         <virtualFileSystem key="doppler"
-                           implementationClass="com.viacheslavkudinov.doppler.editor.DopplerFileSystem"
+                           implementationClass="com.vk.doppler.editor.DopplerFileSystem"
                            physical="false"/>
 
-        <editorTabTitleProvider implementation="com.viacheslavkudinov.doppler.editor.DopplerEditorTabTitleProvider"/>
+        <editorTabTitleProvider implementation="com.vk.doppler.editor.DopplerEditorTabTitleProvider"/>
 
         <notificationGroup id="Doppler" displayType="BALLOON"/>
     </extensions>

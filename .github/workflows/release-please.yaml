@@ -12,6 +12,7 @@ jobs:
     uses: $/.github/workflows/build.yaml
   
   release-please:
+    needs: build
     name: Create release PRs and GitHub releases
     runs-on: ubuntu-latest
     permissions:

@@ -43,4 +43,14 @@ intellijPlatform {
             create(IntelliJPlatformType.IntellijIdea, "2026.2.3")
         }
     }
+
+    signing {
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("PRIVATE_KEY")
+        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    }
+
+    publishing {
+      token = providers.environmentVariable("PUBLISH_TOKEN")
+  }
 }

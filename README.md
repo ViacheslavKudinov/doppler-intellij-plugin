@@ -1,4 +1,4 @@
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ViacheslavKudinov/doppler-plugin/badge)](https://scorecard.dev/viewer/?uri=github.com/ViacheslavKudinov/doppler-plugin)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ViacheslavKudinov/doppler-intellij-plugin/badge)](https://scorecard.dev/viewer/?uri=github.com/ViacheslavKudinov/doppler-intellij-plugin)
 
 # Doppler for IntelliJ IDEA
 

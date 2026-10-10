@@ -10,8 +10,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-jobs:
+permissions: {}
 
+jobs:
   # Prepare the environment and build the plugin
   build:
     name: Build

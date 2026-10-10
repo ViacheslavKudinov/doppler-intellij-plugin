@@ -42,7 +42,7 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
         assumeFalse(SystemInfo.isWindows)
         val marker = Files.createTempFile("doppler-args-", ".txt")
         Disposer.register(testRootDisposable) { Files.deleteIfExists(marker) }
-        val cli = cli("printf '%s\\n' \"\$@\" > '$marker'\nexit 0")
+        val cli = cli("printf '%s\\n' \"\$@\" > '$marker'\nif [ \"\$2\" = set ]; then cat >/dev/null; fi\nexit 0")
 
         for (name in listOf("--config", "-h")) {
             cli.setSecret("project", "config", name, "synthetic-value")

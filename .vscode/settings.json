@@ -1,4 +1,5 @@
 {
     "doppler.autocomplete.enable": true,
-    "doppler.hover.enable": true
+    "doppler.hover.enable": true,
+    "WhiteSource Advise.Diff.BaseBranch": "main"
 }

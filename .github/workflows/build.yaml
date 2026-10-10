@@ -8,6 +8,8 @@ on:
       - .github/ISSUE_TEMPLATE/**
       - dependabot.yaml
       - LICENSE
+      - CODEOWNERS
+      - .github/copilot-instructions.md
       - .github/workflows/codeql.yaml
       - .github/workflows/zizmor.yaml
   # Trigger the workflow on any pull request
@@ -17,6 +19,8 @@ on:
       - .github/ISSUE_TEMPLATE/**
       - dependabot.yaml
       - LICENSE
+      - CODEOWNERS
+      - .github/copilot-instructions.md
       - .github/workflows/codeql.yaml
       - .github/workflows/zizmor.yaml
 

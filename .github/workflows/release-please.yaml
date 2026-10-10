@@ -9,7 +9,7 @@ permissions: {}
 jobs:
   build:
     name: Run CI checks
-    uses: ./.github/workflows/build.yaml
+    uses: $/.github/workflows/build.yaml
   
   release-please:
     name: Create release PRs and GitHub releases

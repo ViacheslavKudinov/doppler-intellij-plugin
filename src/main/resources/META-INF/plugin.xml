@@ -1,0 +1,46 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>com.viacheslavkudinov.doppler</id>
+    <name>Doppler Secrets Manager</name>
+    <vendor>Viacheslav Kudinov</vendor>
+
+    <description><![CDATA[
+        Browse and edit your <a href="https://doppler.com">Doppler</a> secrets without leaving the IDE.
+        <ul>
+            <li><b>Projects tree</b> &mdash; browse projects, environments and configs in a dedicated tool window.</li>
+            <li><b>Edit secrets</b> &mdash; open a config to edit its secrets in a virtual editor tab.
+                Secrets are held in memory only and are never written to disk.</li>
+            <li><b>Two-way sync</b> &mdash; saving the tab pushes a minimal diff back to Doppler;
+                reload at any time to pull the latest values.</li>
+        </ul>
+        Requires the <a href="https://docs.doppler.com/docs/install-cli">Doppler CLI</a> to be installed and
+        authenticated via <code>doppler login</code>. The plugin never stores or transmits your token.
+        ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>org.jetbrains.plugins.terminal</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Doppler"
+                    anchor="right"
+                    factoryClass="com.viacheslavkudinov.doppler.toolwindow.DopplerToolWindowFactory"
+                    icon="/icons/doppler.svg"/>
+
+        <applicationService serviceImplementation="com.viacheslavkudinov.doppler.settings.DopplerSettings"/>
+        <applicationService serviceImplementation="com.viacheslavkudinov.doppler.service.DopplerService"/>
+        <projectService serviceImplementation="com.viacheslavkudinov.doppler.editor.DopplerSecretsEditorService"/>
+
+        <applicationConfigurable parentId="tools"
+                                 instance="com.viacheslavkudinov.doppler.settings.DopplerConfigurable"
+                                 id="com.viacheslavkudinov.doppler.settings.DopplerConfigurable"
+                                 displayName="Doppler"/>
+
+        <virtualFileSystem key="doppler"
+                           implementationClass="com.viacheslavkudinov.doppler.editor.DopplerFileSystem"
+                           physical="false"/>
+
+        <editorTabTitleProvider implementation="com.viacheslavkudinov.doppler.editor.DopplerEditorTabTitleProvider"/>
+
+        <notificationGroup id="Doppler" displayType="BALLOON"/>
+    </extensions>
+</idea-plugin>

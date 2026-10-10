@@ -4,6 +4,7 @@ on:
   push:
     branches: [ main ]
     paths-ignore:
+      - .gitignore
       - README.md
       - .github/ISSUE_TEMPLATE/**
       - dependabot.yaml
@@ -15,6 +16,7 @@ on:
   # Trigger the workflow on any pull request
   pull_request:
     paths-ignore:
+      - .gitignore
       - README.md
       - .github/ISSUE_TEMPLATE/**
       - dependabot.yaml

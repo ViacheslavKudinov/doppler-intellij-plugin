@@ -1,4 +1,5 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ViacheslavKudinov/doppler-intellij-plugin/badge)](https://scorecard.dev/viewer/?uri=github.com/ViacheslavKudinov/doppler-intellij-plugin)
+[![License: Apache 2.0](https://img.shields.io/badge/license-apache--2.0-green.svg)](LICENSE)
 
 # Doppler for IntelliJ IDEA
 

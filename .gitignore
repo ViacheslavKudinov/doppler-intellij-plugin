@@ -1,5 +1,7 @@
 .gradle
 .idea
 .intellijPlatform
+.kotlin
 build
+.vscode/
 .DS_Store

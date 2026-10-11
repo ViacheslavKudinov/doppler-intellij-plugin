@@ -2,6 +2,18 @@
 
 # Doppler-plugin Changelog
 
+## [1.1.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.0.1...v1.1.0) (2026-10-11)
+
+
+### Features
+
+* **editor:** protect unsaved changes and improve config navigation ([#31](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/31)) ([3593755](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/3593755b36edea07f41ed196b7f61fea2926e04c))
+
+
+### Maintenance
+
+* **workflows:** enhance build and publish workflows ([#29](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/29)) ([bd8a1af](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/bd8a1af63b7375bba2871fe5a783c0328dfe2683))
+
 ## [1.0.1](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.0.0...v1.0.1) (2026-10-11)
 
 

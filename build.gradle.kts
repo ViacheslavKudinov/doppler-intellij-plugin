@@ -1,6 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
-import org.jetbrains.intellij.platform.gradle.tasks.PublishPluginTask
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.cyclonedx.gradle.CyclonedxDirectTask
 import org.cyclonedx.model.Component
@@ -75,10 +74,4 @@ tasks.cyclonedxBom {
     xmlOutput.convention(null as RegularFile?)
 }
 
-tasks.named<PublishPluginTask>("publishPlugin") {
-    val prebuiltArchive = providers.gradleProperty("prebuiltPluginArchive")
-    if (prebuiltArchive.isPresent) {
-        archiveFiles.setFrom(layout.projectDirectory.file(prebuiltArchive.get()))
-        setDependsOn(emptyList<Any>())
-    }
-}
+

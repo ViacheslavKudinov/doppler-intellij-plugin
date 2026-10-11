@@ -12,12 +12,11 @@ permissions: {}
 
 jobs:
   publish:
-    name: Publish release artifact to JetBrains Marketplace
+    name: Sign & Publish to JetBrains Marketplace
     runs-on: ubuntu-latest
-    cache-mode: none
+    cache-mode: write
     permissions:
       contents: read
-      attestations: read
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -46,29 +45,18 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
-      - name: Download and verify signed release artifact
-        id: artifact
-        shell: bash
+      - name: Build plugin
+        run: ./gradlew buildPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+
+      - name: Sign plugin
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ inputs.tag }}
-        run: |
-          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = false
-          gh release download "$RELEASE_TAG" --pattern '*.zip' --dir release-artifacts
-          archives=(release-artifacts/*.zip)
-          if [[ ${#archives[@]} -ne 1 || ! -f "${archives[0]}" ]]; then
-            echo "Expected exactly one release plugin archive" >&2
-            exit 1
-          fi
-          archive="${archives[0]}"
-          gh attestation verify "$archive" --repo "$GH_REPO" \
-            --signer-workflow "$GH_REPO/.github/workflows/release-please.yaml"
-          echo "path=$archive" >> "$GITHUB_OUTPUT"
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+        run: ./gradlew signPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
       # Publish plugin to JetBrains Marketplace
       - name: Publish to JetBrains Marketplace
         env:
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
-          PLUGIN_ARCHIVE: ${{ steps.artifact.outputs.path }}
-        run: ./gradlew publishPlugin "-PprebuiltPluginArchive=$PLUGIN_ARCHIVE" --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+        run: ./gradlew publishPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g

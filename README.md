@@ -137,29 +137,13 @@ Install the built archive via **Settings | Plugins | ⚙ | Install Plugin from D
 Restart the IDE when prompted after installation, updates, or removal. The plugin requires
 restart because its in-memory secret editors cannot be reliably unloaded while the IDE is running.
 
-## Verify release provenance
+## Releases
 
-Released plugin archives are signed and have GitHub build provenance. After downloading an archive
-from JetBrains Marketplace, verify that its contents match the artifact built by this repository's
-GitHub Actions workflow. The attestation uses the Marketplace filename (without Gradle's `-signed`
-suffix), and its digest is computed from the signed archive.
-The CycloneDX SBOM is a project dependency inventory covering all resolvable Gradle configurations,
-including test, IDE, and buildscript dependencies; it is broader than the libraries bundled in the
-plugin ZIP. It is attached to the GitHub release as `doppler-plugin-<version>.cdx.json` and attested
-against the signed archive. The SBOM file also has its own build-provenance attestation. GitHub Actions
-dependencies remain in GitHub's separate dependency graph.
+The Release workflow runs CI checks and Release Please to create release PRs and publish
+GitHub releases. The manual Publish workflow builds and signs the selected tag, then uploads
+the plugin to JetBrains Marketplace. These workflows do not generate attestations or attach SBOMs.
 
-The Release workflow builds and signs the plugin, generates the SBOM, and creates all three
-attestations while the GitHub release is a draft. It attaches the signed ZIP and SBOM before
-publishing the immutable release. The manual Publish workflow verifies and uploads that same
-signed ZIP to JetBrains Marketplace without rebuilding or changing the GitHub release.
-
-```bash
-gh attestation verify doppler-plugin-<version>.zip \
-  --repo ViacheslavKudinov/doppler-intellij-plugin
-gh attestation verify doppler-plugin-<version>.cdx.json \
-  --repo ViacheslavKudinov/doppler-intellij-plugin
-```
+Generate a local dependency SBOM with `./gradlew cyclonedxBom`.
 
 ## Project layout
 

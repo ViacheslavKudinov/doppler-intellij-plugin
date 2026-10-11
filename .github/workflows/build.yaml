@@ -57,7 +57,12 @@ jobs:
 
       # Build plugin
       - name: Build plugin
-        run: ./gradlew buildPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+        run: |
+          args=()
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            args+=(-Psnapshot)
+          fi
+          ./gradlew buildPlugin "${args[@]}" --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
   # Run tests and upload test reports on failure
   test:
@@ -110,7 +115,7 @@ jobs:
           egress-policy: audit
 
       # Check out the current repository
-      - name: Fetch Sources
+      - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

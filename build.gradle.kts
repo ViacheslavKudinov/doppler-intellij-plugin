@@ -1,5 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.tasks.PublishPluginTask
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.cyclonedx.gradle.CyclonedxDirectTask
 import org.cyclonedx.model.Component
@@ -11,6 +12,10 @@ plugins {
     id("org.jetbrains.qodana")
     id("org.jetbrains.intellij.platform")
     alias(libs.plugins.cyclonedx)
+}
+
+if (providers.gradleProperty("snapshot").isPresent) {
+    version = "${project.version.toString().removeSuffix("-SNAPSHOT")}-SNAPSHOT"
 }
 
 kotlin {
@@ -68,4 +73,12 @@ tasks.cyclonedxBom {
     projectType = Component.Type.APPLICATION
     jsonOutput = layout.buildDirectory.file("distributions/${project.name}-${project.version}.cdx.json")
     xmlOutput.convention(null as RegularFile?)
+}
+
+tasks.named<PublishPluginTask>("publishPlugin") {
+    val prebuiltArchive = providers.gradleProperty("prebuiltPluginArchive")
+    if (prebuiltArchive.isPresent) {
+        archiveFiles.setFrom(layout.projectDirectory.file(prebuiltArchive.get()))
+        setDependsOn(emptyList<Any>())
+    }
 }

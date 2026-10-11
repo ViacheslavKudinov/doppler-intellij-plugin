@@ -123,6 +123,9 @@ The project uses the [IntelliJ Platform Gradle Plugin](https://plugins.jetbrains
 ./gradlew runIde       # launch a sandbox IDE with the plugin installed
 ```
 
+Use `./gradlew buildPlugin -Psnapshot` to append `-SNAPSHOT` to the version from
+`gradle.properties` without modifying the file. Without the flag, the version stays unchanged.
+
 If no JDK is on your `PATH`, any JetBrains IDE ships one:
 
 ```bash
@@ -145,6 +148,11 @@ including test, IDE, and buildscript dependencies; it is broader than the librar
 plugin ZIP. It is attached to the GitHub release as `doppler-plugin-<version>.cdx.json` and attested
 against the signed archive. The SBOM file also has its own build-provenance attestation. GitHub Actions
 dependencies remain in GitHub's separate dependency graph.
+
+The Release workflow builds and signs the plugin, generates the SBOM, and creates all three
+attestations while the GitHub release is a draft. It attaches the signed ZIP and SBOM before
+publishing the immutable release. The manual Publish workflow verifies and uploads that same
+signed ZIP to JetBrains Marketplace without rebuilding or changing the GitHub release.
 
 ```bash
 gh attestation verify doppler-plugin-<version>.zip \

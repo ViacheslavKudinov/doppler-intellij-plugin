@@ -1,10 +1,13 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin require-restart="true">
     <id>com.viacheslavkudinov.doppler</id>
-    <name>Doppler Secrets Manager</name>
-    <vendor>Viacheslav Kudinov</vendor>
+    <name>Doppler Secrets Manager (Unofficial)</name>
+    <vendor url="https://kudinov.tech">Viacheslav Kudinov</vendor>
 
     <description><![CDATA[
+        <p><b>Unofficial, independently developed plugin.</b> Not affiliated with, endorsed by,
+        or supported by Doppler. Doppler's name, trademarks, and copyrighted materials belong to Doppler.
+        The plugin uses an original icon, not the official Doppler logo.</p>
         Browse and edit your <a href="https://doppler.com">Doppler</a> secrets without leaving the IDE.
         <ul>
             <li><b>Projects tree</b> &mdash; browse projects, environments and configs in a dedicated tool window.</li>

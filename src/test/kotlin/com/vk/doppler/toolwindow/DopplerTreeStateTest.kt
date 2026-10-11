@@ -1,0 +1,205 @@
+package com.vk.doppler.toolwindow
+
+import com.vk.doppler.cli.DopplerConfig
+import com.vk.doppler.cli.DopplerProject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertSame
+import org.junit.Test
+import java.beans.PropertyChangeEvent
+import javax.swing.JButton
+import javax.swing.JPanel
+import javax.swing.JTree
+import javax.swing.SwingUtilities
+import javax.swing.tree.DefaultMutableTreeNode
+import javax.swing.tree.DefaultTreeModel
+import javax.swing.tree.TreePath
+import javax.swing.event.TreeModelEvent
+import javax.swing.event.TreeModelListener
+
+class DopplerTreeStateTest {
+    @Test
+    fun `initial project insertion is visible in an empty tree`() {
+        SwingUtilities.invokeAndWait {
+            val model = DefaultTreeModel(DefaultMutableTreeNode())
+            val tree = JTree(model).apply { isRootVisible = false }
+            val state = DopplerTreeState(tree)
+            DopplerTreeUpdater(model).projects(listOf(DopplerProject("backend", "Backend", null)))
+            state.restore(tree)
+            assertEquals("The initial project must be visible", 1, tree.rowCount)
+        }
+    }
+
+    @Test
+    fun `identical refresh emits no model events and retains selected nodes`() {
+        SwingUtilities.invokeAndWait {
+            val root = DefaultMutableTreeNode()
+            val model = DefaultTreeModel(root)
+            val updater = DopplerTreeUpdater(model)
+            val projects = listOf(DopplerProject("backend", "Backend", null))
+            val configs = listOf(DopplerConfig("dev_personal", "dev"))
+            updater.projects(projects)
+            val project = root.getChildAt(0) as ProjectNode
+            updater.configs(project, configs)
+            val environment = project.getChildAt(0) as EnvironmentNode
+            val config = environment.getChildAt(0) as ConfigNode
+            val tree = JTree(model).apply { isRootVisible = false }
+            tree.selectionPath = TreePath(config.path)
+            var events = 0
+            model.addTreeModelListener(object : TreeModelListener {
+                override fun treeNodesChanged(event: TreeModelEvent) { events++ }
+                override fun treeNodesInserted(event: TreeModelEvent) { events++ }
+                override fun treeNodesRemoved(event: TreeModelEvent) { events++ }
+                override fun treeStructureChanged(event: TreeModelEvent) { events++ }
+            })
+
+            assertFalse(updater.projects(projects))
+            assertFalse(updater.configs(project, configs))
+            assertEquals(0, events)
+            assertSame(config, tree.lastSelectedPathComponent)
+            assertTrue(tree.isExpanded(TreePath(environment.path)))
+        }
+    }
+
+    @Test
+    fun `refresh reconciles added deleted and renamed entries without replacing unchanged branches`() {
+        SwingUtilities.invokeAndWait {
+            val root = DefaultMutableTreeNode()
+            val updater = DopplerTreeUpdater(DefaultTreeModel(root))
+            updater.projects(listOf(DopplerProject("backend", "Backend", null), DopplerProject("old", "Old", null)))
+            val project = root.getChildAt(0) as ProjectNode
+            updater.configs(project, listOf(DopplerConfig("keep", "dev"), DopplerConfig("old", "dev")))
+            val environment = project.getChildAt(0) as EnvironmentNode
+            val kept = environment.getChildAt(0)
+
+            assertTrue(updater.projects(listOf(DopplerProject("backend", "Renamed", null), DopplerProject("new", "New", null))))
+            assertSame(project, root.getChildAt(0))
+            assertEquals("Renamed", project.dopplerProject.name)
+            assertTrue(updater.configs(project, listOf(DopplerConfig("keep", "dev"), DopplerConfig("renamed", "dev"), DopplerConfig("stg", "stg"))))
+            assertSame(environment, project.getChildAt(0))
+            assertSame(kept, environment.getChildAt(0))
+            assertEquals("renamed", (environment.getChildAt(1) as ConfigNode).config.name)
+            assertEquals("stg", (project.getChildAt(1) as EnvironmentNode).environment)
+            assertTrue(updater.configs(project, listOf(DopplerConfig("stg", "stg"))))
+            assertEquals(1, project.childCount)
+            assertTrue(updater.projects(emptyList()))
+            assertEquals(0, root.childCount)
+        }
+    }
+
+    @Test
+    fun `returning to the IDE refreshes a visible panel without changing its focus owner`() {
+        SwingUtilities.invokeAndWait {
+            var visible = true
+            val panel = object : JPanel() {
+                override fun isShowing() = visible
+            }
+            val window = JPanel().apply { add(panel) }
+            val otherWindow = JPanel()
+            val tree = JTree().also { panel.add(it) }
+            var refreshes = 0
+            val listener = DopplerFocusRefreshListener(panel) { refreshes++ }
+
+            listener.propertyChange(PropertyChangeEvent(panel, "focusOwner", null, tree))
+            assertEquals(1, refreshes)
+            listener.propertyChange(PropertyChangeEvent(panel, "focusedWindow", window, null))
+            listener.propertyChange(PropertyChangeEvent(panel, "focusedWindow", null, window))
+            assertEquals(2, refreshes)
+            listener.propertyChange(PropertyChangeEvent(panel, "focusedWindow", window, otherWindow))
+            assertEquals(2, refreshes)
+            visible = false
+            listener.propertyChange(PropertyChangeEvent(panel, "focusedWindow", otherWindow, window))
+            assertEquals(2, refreshes)
+        }
+    }
+
+    @Test
+    fun `focus refresh occurs on entry but not navigation within the panel`() {
+        SwingUtilities.invokeAndWait {
+            val panel = JPanel()
+            val tree = JTree()
+            val toolbarButton = JButton()
+            panel.add(tree)
+            panel.add(toolbarButton)
+            val outside = JButton()
+            var refreshes = 0
+            val listener = DopplerFocusRefreshListener(panel) { refreshes++ }
+
+            listener.propertyChange(PropertyChangeEvent(panel, "focusOwner", outside, tree))
+            assertEquals(1, refreshes)
+            listener.propertyChange(PropertyChangeEvent(panel, "focusOwner", tree, toolbarButton))
+            listener.propertyChange(PropertyChangeEvent(panel, "focusOwner", toolbarButton, tree))
+            listener.propertyChange(PropertyChangeEvent(panel, "focusOwner", tree, null))
+            listener.propertyChange(PropertyChangeEvent(panel, "focusOwner", null, toolbarButton))
+            assertEquals(1, refreshes)
+            listener.propertyChange(PropertyChangeEvent(panel, "focusOwner", tree, outside))
+            listener.propertyChange(PropertyChangeEvent(panel, "focusOwner", outside, null))
+            assertEquals(1, refreshes)
+            listener.propertyChange(PropertyChangeEvent(panel, "focusOwner", null, tree))
+            assertEquals(2, refreshes)
+        }
+    }
+
+    @Test
+    fun `refresh restores config selection after lazy loading with new node instances`() {
+        SwingUtilities.invokeAndWait {
+            val root = DefaultMutableTreeNode()
+            val original = projectNode()
+            root.add(original)
+            val tree = JTree(root).apply { isRootVisible = false }
+            val environment = original.getChildAt(0) as EnvironmentNode
+            tree.expandPath(TreePath(original.path))
+            tree.expandPath(TreePath(environment.path))
+            tree.selectionPath = TreePath((environment.getChildAt(0) as ConfigNode).path)
+            val state = DopplerTreeState(tree)
+
+            root.removeAllChildren()
+            val replacement = ProjectNode(DopplerProject("backend", "Renamed project", null))
+            replacement.add(LoadingNode())
+            root.add(replacement)
+            (tree.model as DefaultTreeModel).reload()
+            state.restore(tree)
+            assertEquals(replacement, tree.lastSelectedPathComponent)
+            assertTrue(tree.isExpanded(TreePath(replacement.path)))
+
+            replacement.removeAllChildren()
+            val newEnvironment = EnvironmentNode("dev")
+            val newConfig = ConfigNode("backend", DopplerConfig("dev_personal", "dev"))
+            newEnvironment.add(newConfig)
+            replacement.add(newEnvironment)
+            (tree.model as DefaultTreeModel).nodeStructureChanged(replacement)
+            state.restore(tree)
+            assertEquals(newConfig, tree.lastSelectedPathComponent)
+            assertTrue(tree.isExpanded(TreePath(newEnvironment.path)))
+        }
+    }
+
+    @Test
+    fun `refresh preserves project and environment selection and collapsed branches`() {
+        SwingUtilities.invokeAndWait {
+            for (selectEnvironment in listOf(false, true)) {
+                val root = DefaultMutableTreeNode()
+                val original = projectNode()
+                root.add(original)
+                val tree = JTree(root).apply { isRootVisible = false }
+                val selected = if (selectEnvironment) original.getChildAt(0) as EnvironmentNode else original
+                tree.selectionPath = TreePath(selected.path)
+                val state = DopplerTreeState(tree)
+                root.removeAllChildren()
+                val replacement = projectNode()
+                root.add(replacement)
+                (tree.model as DefaultTreeModel).reload()
+                state.restore(tree)
+                assertEquals(if (selectEnvironment) replacement.getChildAt(0) else replacement, tree.lastSelectedPathComponent)
+                assertFalse(tree.isExpanded(TreePath((replacement.getChildAt(0) as EnvironmentNode).path)))
+            }
+        }
+    }
+
+    private fun projectNode(): ProjectNode = ProjectNode(DopplerProject("backend", "Backend", null)).apply {
+        add(EnvironmentNode("dev").apply {
+            add(ConfigNode("backend", DopplerConfig("dev_personal", "dev")))
+        })
+    }
+}

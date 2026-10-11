@@ -1,12 +1,16 @@
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
+import org.cyclonedx.gradle.CyclonedxDirectTask
+import org.cyclonedx.model.Component
+import org.gradle.api.file.RegularFile
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.changelog")
     id("org.jetbrains.qodana")
     id("org.jetbrains.intellij.platform")
+    alias(libs.plugins.cyclonedx)
 }
 
 kotlin {
@@ -53,4 +57,15 @@ intellijPlatform {
     publishing {
       token = providers.environmentVariable("PUBLISH_TOKEN")
   }
+}
+
+tasks.named<CyclonedxDirectTask>("cyclonedxDirectBom") {
+    includeBuildEnvironment = true
+    xmlOutput.convention(null as RegularFile?)
+}
+
+tasks.cyclonedxBom {
+    projectType = Component.Type.APPLICATION
+    jsonOutput = layout.buildDirectory.file("distributions/${project.name}-${project.version}.cdx.json")
+    xmlOutput.convention(null as RegularFile?)
 }

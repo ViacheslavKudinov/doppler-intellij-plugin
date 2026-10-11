@@ -41,6 +41,5 @@
 
         <editorTabTitleProvider implementation="com.vk.doppler.editor.DopplerEditorTabTitleProvider"/>
 
-        <notificationGroup id="Doppler" displayType="BALLOON"/>
     </extensions>
 </idea-plugin>

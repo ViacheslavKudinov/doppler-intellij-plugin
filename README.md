@@ -126,6 +126,18 @@ export JAVA_HOME="/Applications/IntelliJ IDEA.app/Contents/jbr/Contents/Home"
 
 Install the built archive via **Settings | Plugins | ⚙ | Install Plugin from Disk…**.
 
+## Verify release provenance
+
+Released plugin archives are signed and have GitHub build provenance. After downloading an archive
+from JetBrains Marketplace, verify that its contents match the artifact built by this repository's
+GitHub Actions workflow. The attestation uses the Marketplace filename (without Gradle's `-signed`
+suffix), and its digest is computed from the signed archive.
+
+```bash
+gh attestation verify doppler-plugin-<version>.zip \
+  --repo ViacheslavKudinov/doppler-intellij-plugin
+```
+
 ## Project layout
 
 ```

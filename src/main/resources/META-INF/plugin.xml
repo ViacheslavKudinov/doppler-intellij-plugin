@@ -1,5 +1,5 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
-<idea-plugin>
+<idea-plugin require-restart="true">
     <id>com.viacheslavkudinov.doppler</id>
     <name>Doppler Secrets Manager</name>
     <vendor>Viacheslav Kudinov</vendor>
@@ -41,5 +41,6 @@
 
         <editorTabTitleProvider implementation="com.vk.doppler.editor.DopplerEditorTabTitleProvider"/>
 
+        <notificationGroup id="Doppler" displayType="BALLOON"/>
     </extensions>
 </idea-plugin>

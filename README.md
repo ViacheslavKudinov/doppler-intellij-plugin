@@ -127,6 +127,9 @@ export JAVA_HOME="/Applications/IntelliJ IDEA.app/Contents/jbr/Contents/Home"
 
 Install the built archive via **Settings | Plugins | ⚙ | Install Plugin from Disk…**.
 
+Restart the IDE when prompted after installation, updates, or removal. The plugin requires
+restart because its in-memory secret editors cannot be reliably unloaded while the IDE is running.
+
 ## Verify release provenance
 
 Released plugin archives are signed and have GitHub build provenance. After downloading an archive

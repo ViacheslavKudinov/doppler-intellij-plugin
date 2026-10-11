@@ -5,6 +5,7 @@
       "release-type": "java",
       "package-name": "doppler-intellij-plugin",
       "include-component-in-tag": false,
+      "skip-snapshot": true,
       "changelog-sections": [
         { "type": "feat", "section": "Features" },
         { "type": "fix", "section": "Bug Fixes" },

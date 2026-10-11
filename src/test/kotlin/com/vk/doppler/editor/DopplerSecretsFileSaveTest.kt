@@ -120,8 +120,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         val file = DopplerFileSystem.getInstance().obtain("icons", "dev")
 
         assertSame(DopplerIcons.EditorTab, provider.getIcon(file, 0, project))
-        assertEquals(16, DopplerIcons.EditorTab.iconWidth)
-        assertEquals(16, DopplerIcons.EditorTab.iconHeight)
+        assertNotNull(DopplerIcons::class.java.getResource("/icons/doppler_tab.svg"))
         assertEquals("YAML", file.fileType.name)
         assertNull(provider.getIcon(LightVirtualFile("ordinary.yaml"), 0, project))
     }

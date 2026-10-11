@@ -2,7 +2,10 @@ package com.vk.doppler.toolwindow
 
 import com.vk.doppler.cli.DopplerConfig
 import com.vk.doppler.cli.DopplerProject
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import javax.swing.JTree
+import javax.swing.SwingUtilities
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
 import javax.swing.tree.TreePath
@@ -24,6 +27,27 @@ class ConfigNode(
 
 class LoadingNode : DefaultMutableTreeNode("Loading…") {
     override fun isLeaf(): Boolean = true
+}
+
+internal class DopplerTreeClickListener(
+    private val tree: JTree,
+    private val openConfig: (ConfigNode) -> Unit,
+) : MouseAdapter() {
+    init {
+        tree.toggleClickCount = 0
+    }
+
+    override fun mouseClicked(event: MouseEvent) {
+        if (!SwingUtilities.isLeftMouseButton(event)) return
+        val path = tree.getPathForLocation(event.x, event.y) ?: return
+        if (tree.getPathBounds(path)?.contains(event.point) != true) return
+        when (val node = path.lastPathComponent) {
+            is ProjectNode, is EnvironmentNode -> {
+                if (tree.isExpanded(path)) tree.collapsePath(path) else tree.expandPath(path)
+            }
+            is ConfigNode -> if (event.clickCount == 1) openConfig(node)
+        }
+    }
 }
 
 internal class DopplerTreeState(tree: JTree) {

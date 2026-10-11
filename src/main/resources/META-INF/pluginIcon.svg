@@ -2,7 +2,7 @@
   <rect x="2" y="2" width="36" height="36" rx="8" fill="#123E37"/>
   <g stroke="#E6F5EF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
     <path d="M11 11H8V29H11M29 11H32V29H29"/>
-    <circle cx="17" cy="17" r="4"/>
+    <path d="M17 17C16 14 17 12 19 11M17 17C14 17 12 18 11 20M17 17C18 18 19 19 20 20"/>
     <path d="M20 20L27 27M24 24L27 21M26 26L29 23"/>
   </g>
 </svg>

@@ -24,6 +24,9 @@ class DopplerSecretsFile(
 ) : VirtualFile() {
 
     @Volatile
+    var environment: String? = null
+
+    @Volatile
     private var content: ByteArray = EMPTY_DOCUMENT.toByteArray(StandardCharsets.UTF_8)
 
     @Volatile

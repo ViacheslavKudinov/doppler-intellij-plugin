@@ -17,7 +17,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.ui.ColoredTreeCellRenderer
-import com.intellij.ui.ClickListener
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.ui.components.JBScrollPane
@@ -35,7 +34,6 @@ import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.Component
 import java.awt.KeyboardFocusManager
-import java.awt.event.MouseEvent
 import java.beans.PropertyChangeEvent
 import java.beans.PropertyChangeListener
 import javax.swing.JComponent
@@ -115,15 +113,10 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
             override fun treeWillCollapse(event: TreeExpansionEvent) = Unit
         })
 
-        object : ClickListener() {
-            override fun onClick(event: MouseEvent, clickCount: Int): Boolean {
-                if (clickCount != 1 || !SwingUtilities.isLeftMouseButton(event)) return false
-                val path = tree.getPathForLocation(event.x, event.y) ?: return false
-                val node = path.lastPathComponent as? ConfigNode ?: return false
-                DopplerSecretsEditorService.getInstance(project).openConfig(node.projectSlug, node.config.name)
-                return true
-            }
-        }.installOn(tree)
+        tree.addMouseListener(DopplerTreeClickListener(tree) { node ->
+            DopplerSecretsEditorService.getInstance(project)
+                .openConfig(node.projectSlug, node.config.name, node.config.environment)
+        })
     }
 
     /** Re-checks CLI availability and authentication, then reloads the project list. */

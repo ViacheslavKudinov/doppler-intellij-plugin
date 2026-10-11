@@ -1,5 +1,5 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
-<idea-plugin require-restart="true">
+<idea-plugin>
     <id>com.viacheslavkudinov.doppler</id>
     <name>Doppler Secrets Manager (Unofficial)</name>
     <vendor url="https://kudinov.tech">Viacheslav Kudinov</vendor>
@@ -24,6 +24,8 @@
     <depends>org.jetbrains.plugins.terminal</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <ide.dynamicPluginVetoer implementation="com.vk.doppler.DopplerPluginUnloadVetoer"/>
+
         <toolWindow id="Doppler"
                     anchor="right"
                     factoryClass="com.vk.doppler.toolwindow.DopplerToolWindowFactory"
@@ -43,6 +45,8 @@
                            physical="false"/>
 
         <editorTabTitleProvider implementation="com.vk.doppler.editor.DopplerEditorTabTitleProvider"/>
+        <fileIconProvider implementation="com.vk.doppler.editor.DopplerFileIconProvider"/>
+        <virtualFilePreCloseCheck implementation="com.vk.doppler.editor.DopplerFileCloseCheck"/>
 
         <notificationGroup id="Doppler" displayType="BALLOON"/>
     </extensions>

@@ -35,6 +35,8 @@ private const val HEARTBEAT_SECONDS = 1L
 class DopplerSecretsEditorService(private val project: Project) : Disposable {
 
     private val openPaths = ConcurrentHashMap.newKeySet<String>()
+    private val closeAfterSync = mutableMapOf<DopplerSecretsFile, () -> Unit>()
+    private val tabPresentation = DopplerEditorTabPresentation(project)
 
     @Volatile
     private var lastPollAt = 0L
@@ -48,7 +50,12 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         project.messageBus.connect(this).subscribe(
             FileEditorManagerListener.FILE_EDITOR_MANAGER,
             object : FileEditorManagerListener {
+                override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
+                    tabPresentation.refresh()
+                }
+
                 override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
+                    tabPresentation.refresh()
                     if (file !is DopplerSecretsFile || source.isFileOpen(file)) return
                     openPaths.remove(file.path)
                     releaseIfUnused(file)
@@ -59,6 +66,8 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
 
     override fun dispose() {
         pollHandle.cancel(false)
+        tabPresentation.dispose()
+        closeAfterSync.clear()
     }
 
     fun owns(file: DopplerSecretsFile): Boolean = openPaths.contains(file.path)
@@ -74,8 +83,9 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
     }
 
     /** Fetches a config's secrets and opens (or refreshes) its editor tab. */
-    fun openConfig(projectSlug: String, configName: String) {
-        runLoad(projectSlug, configName, "Opening $projectSlug/$configName…") { file ->
+    fun openConfig(projectSlug: String, configName: String, environment: String? = null) {
+        runLoad(projectSlug, configName, "Opening /$projectSlug/$configName…") { file ->
+            if (environment != null) file.environment = environment
             openPaths.add(file.path)
             // Preview tab, like the VS Code extension: browsing configs reuses one tab and only
             // editing promotes it to a permanent one. OpenFileDescriptor is used rather than
@@ -89,8 +99,8 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
 
     /** Re-reads the config from Doppler, discarding unsaved local edits. */
     fun reload(file: DopplerSecretsFile) {
-        runLoad(file.projectSlug, file.configName, "Reloading ${file.projectSlug}/${file.configName}…") {
-            DopplerNotifier.info(project, "Reloaded ${file.projectSlug}/${file.configName} from Doppler.")
+        runLoad(file.projectSlug, file.configName, "Reloading /${file.projectSlug}/${file.configName}…") {
+            DopplerNotifier.info(project, "Reloaded /${file.projectSlug}/${file.configName} from Doppler.")
         }
     }
 
@@ -113,14 +123,14 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             override fun onSuccess() {
                 val file = DopplerFileSystem.getInstance().obtain(projectSlug, configName)
                 if (file.pushInProgress.get()) {
-                    DopplerNotifier.error(project, "Wait for the current sync before reloading $projectSlug/$configName.")
+                    DopplerNotifier.error(project, "Wait for the current sync before reloading /$projectSlug/$configName.")
                     return
                 }
                 onReady(materialize(projectSlug, configName, text, snapshot))
             }
 
             override fun onThrowable(error: Throwable) {
-                DopplerNotifier.error(project, "Could not load $projectSlug/$configName: ${error.message}")
+                DopplerNotifier.error(project, "Could not load /$projectSlug/$configName: ${error.message}")
             }
         })
     }
@@ -206,6 +216,34 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         }, project.disposed)
     }
 
+    internal fun saveBeforeClose(file: DopplerSecretsFile, onSaved: () -> Unit): Boolean {
+        val documents = FileDocumentManager.getInstance()
+        val document = documents.getCachedDocument(file) ?: return false
+        closeAfterSync[file] = onSaved
+        documents.saveDocument(document)
+        if (file.hasPendingSync && !file.pushInProgress.get()) push(file, document.text)
+        if (!file.hasPendingSync && !file.pushInProgress.get() && !documents.isDocumentUnsaved(document)) {
+            closeAfterSync.remove(file)
+            return true
+        }
+        if (!file.pushInProgress.get()) closeAfterSync.remove(file)
+        return false
+    }
+
+    internal fun discardLocalChanges(file: DopplerSecretsFile) {
+        file.pendingPushText.set(null)
+        applyServerContent(file, SecretsDocumentFormat.serialize(file.remoteSnapshot), file.remoteSnapshot)
+    }
+
+    internal fun cancelCloseRequest(file: DopplerSecretsFile) {
+        closeAfterSync.remove(file)
+    }
+
+    internal fun finishCloseRequest(file: DopplerSecretsFile) {
+        val close = closeAfterSync.remove(file)
+        if (!file.hasPendingSync && !project.isDisposed) close?.invoke()
+    }
+
     /**
      * Pushes the edited document to Doppler as a minimal set of writes.
      * Called from the VFS write hook on the EDT, so the work is handed to a background task.
@@ -235,7 +273,7 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             return
         }
 
-        val label = "${file.projectSlug}/${file.configName}"
+        val label = "/${file.projectSlug}/${file.configName}"
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "Syncing $label to Doppler…", false) {
                 private var refreshedText: String? = null
@@ -290,6 +328,7 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
                 }
 
                 override fun onThrowable(error: Throwable) {
+                    closeAfterSync.remove(file)
                     DopplerNotifier.error(project, "Failed to sync $label: ${error.message}")
                 }
 
@@ -298,8 +337,9 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
                     val pendingText = file.pendingPushText.getAndSet(null)
                     if (pendingText != null) {
                         push(file, pendingText)
-                    } else if (!owns(file)) {
-                        releaseIfUnused(file)
+                    } else {
+                        finishCloseRequest(file)
+                        if (!owns(file)) releaseIfUnused(file)
                     }
                 }
             },

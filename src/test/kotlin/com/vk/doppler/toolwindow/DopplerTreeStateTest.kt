@@ -8,6 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.assertSame
 import org.junit.Test
 import java.beans.PropertyChangeEvent
+import java.awt.event.MouseEvent
 import javax.swing.JButton
 import javax.swing.JPanel
 import javax.swing.JTree
@@ -19,6 +20,69 @@ import javax.swing.event.TreeModelEvent
 import javax.swing.event.TreeModelListener
 
 class DopplerTreeStateTest {
+    @Test
+    fun `consecutive clicks toggle selected project and environment labels every time`() {
+        SwingUtilities.invokeAndWait {
+            val root = DefaultMutableTreeNode()
+            val project = projectNode()
+            root.add(project)
+            val tree = JTree(root).apply {
+                isRootVisible = false
+                setSize(400, 300)
+            }
+            val listener = DopplerTreeClickListener(tree) { error("Branch clicks must not open configs") }
+            val projectPath = TreePath(project.path)
+            tree.selectionPath = projectPath
+            tree.collapsePath(projectPath)
+            for (clickCount in 1..3) {
+                clickLabel(tree, listener, projectPath, clickCount)
+                assertEquals(clickCount % 2 == 1, tree.isExpanded(projectPath))
+                assertEquals(projectPath, tree.selectionPath)
+            }
+            val environmentPath = TreePath((project.getChildAt(0) as EnvironmentNode).path)
+            tree.selectionPath = environmentPath
+            tree.collapsePath(environmentPath)
+            for (clickCount in 1..3) {
+                clickLabel(tree, listener, environmentPath, clickCount)
+                assertEquals(clickCount % 2 == 1, tree.isExpanded(environmentPath))
+            }
+            assertEquals(0, tree.toggleClickCount)
+        }
+    }
+
+    @Test
+    fun `config clicks still open once and clicks outside labels do not toggle branches`() {
+        SwingUtilities.invokeAndWait {
+            val root = DefaultMutableTreeNode()
+            val project = projectNode()
+            root.add(project)
+            val tree = JTree(root).apply {
+                isRootVisible = false
+                setSize(400, 300)
+            }
+            var opens = 0
+            val listener = DopplerTreeClickListener(tree) { opens++ }
+            val environment = project.getChildAt(0) as EnvironmentNode
+            val configPath = TreePath((environment.getChildAt(0) as ConfigNode).path)
+            tree.expandPath(TreePath(project.path))
+            tree.expandPath(TreePath(environment.path))
+            clickLabel(tree, listener, configPath, 1)
+            clickLabel(tree, listener, configPath, 2)
+            assertEquals(1, opens)
+            val projectPath = TreePath(project.path)
+            val bounds = requireNotNull(tree.getPathBounds(projectPath))
+            listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
+                bounds.x - 1, bounds.y + bounds.height / 2, 1, false, MouseEvent.BUTTON1))
+            assertTrue(tree.isExpanded(projectPath))
+        }
+    }
+
+    private fun clickLabel(tree: JTree, listener: DopplerTreeClickListener, path: TreePath, clickCount: Int) {
+        val bounds = requireNotNull(tree.getPathBounds(path))
+        listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
+            bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, clickCount, false, MouseEvent.BUTTON1))
+    }
+
     @Test
     fun `initial project insertion is visible in an empty tree`() {
         SwingUtilities.invokeAndWait {

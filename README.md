@@ -1,10 +1,14 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ViacheslavKudinov/doppler-intellij-plugin/badge)](https://scorecard.dev/viewer/?uri=github.com/ViacheslavKudinov/doppler-intellij-plugin)
 [![License: Apache 2.0](https://img.shields.io/badge/license-apache--2.0-green.svg)](LICENSE)
 
-# Doppler for IntelliJ IDEA
+# Doppler for IntelliJ IDEA (Unofficial)
 
-Browse and edit your [Doppler](https://doppler.com) secrets without leaving the IDE — a JetBrains
-counterpart to the [official Doppler VS Code extension](https://github.com/DopplerHQ/vscode).
+**This is an unofficial, independently developed plugin. It is not affiliated with, endorsed by,
+or supported by Doppler.** Doppler's name, trademarks, and copyrighted materials belong to Doppler.
+The plugin uses an original icon, not the official Doppler logo. The plugin's source code remains
+available under the [Apache License 2.0](LICENSE).
+
+Browse and edit your [Doppler](https://doppler.com) secrets without leaving the IDE.
 
 ## Features
 
@@ -126,6 +130,9 @@ export JAVA_HOME="/Applications/IntelliJ IDEA.app/Contents/jbr/Contents/Home"
 ```
 
 Install the built archive via **Settings | Plugins | ⚙ | Install Plugin from Disk…**.
+
+Restart the IDE when prompted after installation, updates, or removal. The plugin requires
+restart because its in-memory secret editors cannot be reliably unloaded while the IDE is running.
 
 ## Verify release provenance
 

@@ -2,6 +2,7 @@ package com.vk.doppler.toolwindow
 
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -32,7 +33,11 @@ import com.vk.doppler.service.DopplerStatusReport
 import com.vk.doppler.settings.DopplerConfigurable
 import java.awt.BorderLayout
 import java.awt.CardLayout
+import java.awt.Component
+import java.awt.KeyboardFocusManager
 import java.awt.event.MouseEvent
+import java.beans.PropertyChangeEvent
+import java.beans.PropertyChangeListener
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JTree
@@ -46,14 +51,20 @@ private const val CARD_STATUS = "status"
 private const val CARD_TREE = "tree"
 private const val INSTALL_DOCS_URL = "https://docs.doppler.com/docs/install-cli"
 
-class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPanel(true, true) {
+class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPanel(true, true), Disposable {
 
     private val rootNode = DefaultMutableTreeNode()
     private val treeModel = DefaultTreeModel(rootNode)
+    private val treeUpdater = DopplerTreeUpdater(treeModel)
     private val tree = Tree(treeModel)
     private val statusPanel = JBPanelWithEmptyText(BorderLayout())
     private val cardLayout = CardLayout()
     private val cards = JPanel(cardLayout)
+    private var refreshGeneration = 0
+    private var refreshing = false
+    private var disposed = false
+    private val focusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager()
+    private val focusListener = DopplerFocusRefreshListener(this, ::refresh)
 
     init {
         configureTree()
@@ -61,7 +72,16 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         cards.add(JBScrollPane(tree), CARD_TREE)
         setContent(cards)
         toolbar = buildToolbar()
+        focusManager.addPropertyChangeListener("focusOwner", focusListener)
+        focusManager.addPropertyChangeListener("focusedWindow", focusListener)
         refresh()
+    }
+
+    override fun dispose() {
+        disposed = true
+        refreshGeneration++
+        focusManager.removePropertyChangeListener("focusOwner", focusListener)
+        focusManager.removePropertyChangeListener("focusedWindow", focusListener)
     }
 
     private fun buildToolbar(): JComponent {
@@ -108,7 +128,10 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
     /** Re-checks CLI availability and authentication, then reloads the project list. */
     fun refresh() {
-        showStatus("Connecting to Doppler…", null)
+        if (disposed || project.isDisposed || refreshing) return
+        refreshing = true
+        val generation = ++refreshGeneration
+        if (rootNode.childCount == 0) showStatus("Connecting to Doppler…", null)
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "Loading Doppler projects…", true) {
                 private lateinit var report: DopplerStatusReport
@@ -123,6 +146,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                 }
 
                 override fun onSuccess() {
+                    if (project.isDisposed || generation != refreshGeneration) return
                     if (report.status == DopplerStatus.READY) {
                         populate(projects)
                     } else {
@@ -131,31 +155,37 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                 }
 
                 override fun onThrowable(error: Throwable) {
+                    if (project.isDisposed || generation != refreshGeneration) return
                     showStatus("Could not reach Doppler: ${error.message}", "Retry")
+                }
+
+                override fun onFinished() {
+                    if (generation == refreshGeneration) refreshing = false
                 }
             },
         )
     }
 
     private fun populate(projects: List<DopplerProject>) {
-        rootNode.removeAllChildren()
+        val state = DopplerTreeState(tree)
+        val changed = treeUpdater.projects(projects)
         if (projects.isEmpty()) {
             showStatus("No Doppler projects found for this account.", "Retry")
             return
         }
-        projects.forEach { dopplerProject ->
-            val node = ProjectNode(dopplerProject)
-            node.add(LoadingNode())
-            rootNode.add(node)
-        }
-        treeModel.reload()
         cardLayout.show(cards, CARD_TREE)
+        if (changed) state.restore(tree)
+        rootNode.children().toList().filterIsInstance<ProjectNode>().forEach { node ->
+            node.loading = false
+            if (node.loaded || tree.isExpanded(javax.swing.tree.TreePath(node.path))) loadConfigs(node, true)
+        }
     }
 
-    private fun loadConfigs(node: ProjectNode) {
-        if (node.loaded) return
-        node.loaded = true
+    private fun loadConfigs(node: ProjectNode, force: Boolean = false) {
+        if (node.loading || (node.loaded && !force)) return
+        node.loading = true
         val slug = node.dopplerProject.slug
+        val generation = refreshGeneration
 
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "Loading configs for $slug…", true) {
@@ -166,23 +196,24 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                 }
 
                 override fun onSuccess() {
-                    node.removeAllChildren()
-                    configs.groupBy { it.environment }
-                        .toSortedMap()
-                        .forEach { (environment, environmentConfigs) ->
-                            val envNode = EnvironmentNode(environment)
-                            environmentConfigs.forEach { envNode.add(ConfigNode(slug, it)) }
-                            node.add(envNode)
-                        }
-                    treeModel.nodeStructureChanged(node)
-                    tree.expandPath(javax.swing.tree.TreePath(treeModel.getPathToRoot(node)))
+                    if (project.isDisposed || generation != refreshGeneration || node.parent !== rootNode) return
+                    val state = DopplerTreeState(tree)
+                    val changed = treeUpdater.configs(node, configs)
+                    node.loaded = true
+                    if (changed) state.restore(tree)
                 }
 
                 override fun onThrowable(error: Throwable) {
+                    if (project.isDisposed || generation != refreshGeneration || node.parent !== rootNode) return
+                    if (node.loaded) return
                     node.loaded = false
                     node.removeAllChildren()
                     node.add(DefaultMutableTreeNode("Failed to load: ${error.message}"))
                     treeModel.nodeStructureChanged(node)
+                }
+
+                override fun onFinished() {
+                    if (generation == refreshGeneration) node.loading = false
                 }
             },
         )
@@ -245,6 +276,26 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
             statusPanel.emptyText.appendLine(actionLabel, SimpleTextAttributes.LINK_ATTRIBUTES) { refresh() }
         }
         cardLayout.show(cards, CARD_STATUS)
+    }
+}
+
+internal class DopplerFocusRefreshListener(
+    private val panel: Component,
+    private val refresh: () -> Unit,
+) : PropertyChangeListener {
+    private var focusedInside = false
+
+    override fun propertyChange(event: PropertyChangeEvent) {
+        if (event.propertyName == "focusedWindow") {
+            val window = event.newValue as? Component ?: return
+            if (panel.isShowing && SwingUtilities.isDescendingFrom(panel, window)) refresh()
+            return
+        }
+        val focused = event.newValue as? Component ?: return
+        val previous = event.oldValue as? Component
+        val wasInside = previous?.let { SwingUtilities.isDescendingFrom(it, panel) } ?: focusedInside
+        focusedInside = SwingUtilities.isDescendingFrom(focused, panel)
+        if (focusedInside && !wasInside) refresh()
     }
 }
 

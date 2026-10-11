@@ -13,6 +13,10 @@ plugins {
     alias(libs.plugins.cyclonedx)
 }
 
+if (providers.gradleProperty("snapshot").isPresent) {
+    version = "${project.version.toString().removeSuffix("-SNAPSHOT")}-SNAPSHOT"
+}
+
 kotlin {
     compilerOptions {
         jvmDefault = JvmDefaultMode.NO_COMPATIBILITY
@@ -69,3 +73,5 @@ tasks.cyclonedxBom {
     jsonOutput = layout.buildDirectory.file("distributions/${project.name}-${project.version}.cdx.json")
     xmlOutput.convention(null as RegularFile?)
 }
+
+

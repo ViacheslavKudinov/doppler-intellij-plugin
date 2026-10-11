@@ -2,6 +2,22 @@
 
 # Doppler-plugin Changelog
 
+## [1.0.1](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.0.0...v1.0.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* update tree state management, robust refresh logic, and improved user experience ([#28](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/28)) ([c42e643](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/c42e643c5aeda2f5690b9edf85bdad27c3af8f79))
+
+
+### Maintenance
+
+* Add provenance generation ([#25](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/25)) ([6adb4b0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/6adb4b04d0970018b7270cdc05e33fa442df9966))
+* Change publish login and skip snapshot  ([#24](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/24)) ([65224cc](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/65224ccf0ed26d8e5ed02b093517d9027a324891))
+* **main:** release 1.0.1-SNAPSHOT ([#22](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/22)) ([acfe18f](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/acfe18fd7955d899e0cc207304831f7dfb49847b))
+* **workflows:** clean up build and publish workflows by removing commented-out steps and unnecessary permissions ([#26](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/26)) ([bacdf74](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/bacdf74f2068ac778cfccd8fa8ac7daf70c1c841))
+* **workflows:** enhance publish workflow to include SBOM generation and attestation ([#27](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/27)) ([29ea086](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/29ea0862f9e200c478d04f00e9d4106eee77204b))
+
 ## 1.0.0 (2026-10-11)
 
 

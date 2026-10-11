@@ -1,5 +1,9 @@
 [versions]
 junit = "4.13.2"
+cyclonedx = "3.5.1"
 
 [libraries]
 junit = { module = "junit:junit", version.ref = "junit" }
+
+[plugins]
+cyclonedx = { id = "org.cyclonedx.bom", version.ref = "cyclonedx" }

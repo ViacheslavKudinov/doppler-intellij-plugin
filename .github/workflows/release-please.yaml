@@ -13,7 +13,7 @@ jobs:
   
   release-please:
     needs: build
-    name: Create release PRs and GitHub releases
+    name: Create release PR
     runs-on: ubuntu-latest
     permissions:
       contents: write

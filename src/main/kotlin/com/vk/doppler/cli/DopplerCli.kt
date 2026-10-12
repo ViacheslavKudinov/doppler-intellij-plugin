@@ -270,8 +270,13 @@ internal fun parseSecrets(element: JsonElement): List<DopplerSecret> {
 
 private fun JsonElement.isSecretValue(): Boolean = when {
     isJsonPrimitive -> true
-    isJsonObject -> asJsonObject.has("raw") ||
-        asJsonObject.get("rawVisibility")?.let { it.isJsonPrimitive && it.asString == "restricted" } == true
+    isJsonObject -> {
+        val rawValue = asJsonObject.get("raw")
+        val hasValidRawValue = rawValue != null && (rawValue.isJsonNull || rawValue.isJsonPrimitive)
+        val isRestrictedWithoutRaw = rawValue == null &&
+            asJsonObject.get("rawVisibility")?.let { it.isJsonPrimitive && it.asString == "restricted" } == true
+        hasValidRawValue || isRestrictedWithoutRaw
+    }
     else -> false
 }
 

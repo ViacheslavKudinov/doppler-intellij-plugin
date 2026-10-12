@@ -93,6 +93,16 @@ class ParseSecretsTest {
     }
 
     @Test
+    fun `tolerates a secrets wrapper containing a secret named raw`() {
+        val wrapped = JsonParser.parseString(
+            """{"secrets": {"raw": {"raw": "1", "computed": "1"}}}""",
+        )
+        val secret = parseSecrets(wrapped).single()
+        assertEquals("raw", secret.name)
+        assertEquals("1", secret.raw)
+    }
+
+    @Test
     fun `parses a primitive secret named secrets from the bare map`() {
         val secrets = parseSecrets(JsonParser.parseString("""{"secrets": "value", "A": "1"}"""))
         assertEquals(listOf("A", "secrets"), secrets.map { it.name })

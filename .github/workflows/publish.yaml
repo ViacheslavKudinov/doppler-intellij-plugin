@@ -17,6 +17,7 @@ jobs:
     cache-mode: write
     permissions:
       contents: read
+    environment: publish
 
     steps:
       - name: Harden the runner (Audit all outbound calls)

@@ -11,13 +11,13 @@ on:
 permissions: {}
 
 jobs:
-  publish:
-    name: Sign & Publish to JetBrains Marketplace
+  validate-release:
+    name: Validate release tag
     runs-on: ubuntu-latest
-    cache-mode: write
     permissions:
       contents: read
-    environment: publish
+    outputs:
+      commit: ${{ steps.validate.outputs.commit }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -30,8 +30,57 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.inputs.tag }}
+          ref: main
+          fetch-depth: 0
           fetch-tags: true
+
+      - name: Validate tag
+        id: validate
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "::error::Input must be a semantic version tag (e.g., v1.0.0), got: $RELEASE_TAG"
+            exit 1
+          fi
+
+          if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            echo "::error::Tag $RELEASE_TAG does not exist"
+            exit 1
+          fi
+
+          tag_commit="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          if ! git merge-base --is-ancestor "$tag_commit" origin/main; then
+            echo "::error::Tag $RELEASE_TAG does not point to a commit in main history"
+            exit 1
+          fi
+
+          echo "commit=$tag_commit" >> "$GITHUB_OUTPUT"
+          echo "Validated $RELEASE_TAG at $tag_commit"
+
+  publish:
+    name: Sign & Publish to JetBrains Marketplace
+    needs: validate-release
+    runs-on: ubuntu-latest
+    cache-mode: write
+    permissions:
+      contents: read
+    environment: publish
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout validated release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate-release.outputs.commit }}
 
       # Set up the Java environment for the next steps
       - name: Setup Java

@@ -10,6 +10,8 @@ jobs:
   build:
     name: Run CI checks
     uses: $/.github/workflows/build.yaml
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   
   release-please:
     needs: build

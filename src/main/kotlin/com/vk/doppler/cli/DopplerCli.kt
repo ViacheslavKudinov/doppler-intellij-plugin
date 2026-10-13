@@ -231,10 +231,15 @@ class DopplerCli(private val executablePath: String) {
 internal fun parseSecrets(element: JsonElement): List<DopplerSecret> {
     val root = element as? JsonObject
         ?: throw DopplerCliException("Expected a Doppler secrets object.")
-    // The CLI emits a bare name -> secret map; tolerate a `secrets` wrapper as well.
-    val map = if (root.has("secrets")) {
-        root.get("secrets") as? JsonObject
-            ?: throw DopplerCliException("Expected a Doppler secrets object.")
+    // Prefer the documented bare map when `secrets` is itself a secret value.
+    val wrappedMap = root.get("secrets") as? JsonObject
+    val map = if (
+        root.size() == 1 &&
+        wrappedMap != null &&
+        !root.get("secrets").isSecretValue() &&
+        wrappedMap.entrySet().all { (_, value) -> value.isSecretValue() }
+    ) {
+        wrappedMap
     } else {
         root
     }
@@ -261,6 +266,18 @@ internal fun parseSecrets(element: JsonElement): List<DopplerSecret> {
             else -> throw DopplerCliException("Doppler secrets output contains an invalid value.")
         }
     }.sortedBy { it.name }
+}
+
+private fun JsonElement.isSecretValue(): Boolean = when {
+    isJsonPrimitive -> true
+    isJsonObject -> {
+        val rawValue = asJsonObject.get("raw")
+        val hasValidRawValue = rawValue != null && (rawValue.isJsonNull || rawValue.isJsonPrimitive)
+        val isRestrictedWithoutRaw = rawValue == null &&
+            asJsonObject.get("rawVisibility")?.let { it.isJsonPrimitive && it.asString == "restricted" } == true
+        hasValidRawValue || isRestrictedWithoutRaw
+    }
+    else -> false
 }
 
 private fun JsonObject.stringOrNull(key: String): String? {

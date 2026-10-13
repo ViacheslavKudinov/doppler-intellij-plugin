@@ -14,6 +14,7 @@ import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.ui.ColoredTreeCellRenderer
@@ -48,6 +49,7 @@ import javax.swing.tree.DefaultTreeModel
 private const val CARD_STATUS = "status"
 private const val CARD_TREE = "tree"
 private const val INSTALL_DOCS_URL = "https://docs.doppler.com/docs/install-cli"
+private const val INSTALL_SCRIPT_URL = "https://cli.doppler.com/install.sh"
 
 class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPanel(true, true), Disposable {
 
@@ -250,7 +252,22 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         val command = when {
             SystemInfo.isMac -> "brew install gnupg && brew install dopplerhq/cli/doppler"
             SystemInfo.isWindows -> "winget install doppler.doppler"
-            else -> "(curl -Ls --tlsv1.2 --proto '=https' --retry 3 https://cli.doppler.com/install.sh || wget -t 3 -qO- https://cli.doppler.com/install.sh) | sudo sh"
+            else -> {
+                val choice = Messages.showDialog(
+                    project,
+                    "This command downloads a shell script from $INSTALL_SCRIPT_URL and executes it with " +
+                        "administrator privileges (sudo). Remote scripts can change your system and access " +
+                        "sensitive data. Review the script's contents before execution and proceed only if " +
+                        "you trust the source.",
+                    "Remote Script Execution Warning",
+                    arrayOf("Review Script", "Run Installer", "Cancel"),
+                    0,
+                    Messages.getWarningIcon(),
+                )
+                if (choice == 0) BrowserUtil.browse(INSTALL_SCRIPT_URL)
+                if (choice != 1) return
+                "(curl -Ls --tlsv1.2 --proto '=https' --retry 3 $INSTALL_SCRIPT_URL || wget -t 3 -qO- $INSTALL_SCRIPT_URL) | sudo sh"
+            }
         }
         runCatching {
             val terminalTab = TerminalToolWindowTabsManager.getInstance(project)
@@ -260,7 +277,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                 .requestFocus(true)
                 .deferSessionStartUntilUiShown(true)
                 .createTab()
-            terminalTab.view.createSendTextBuilder().shouldExecute().send(command)
+            terminalTab.view.createSendTextBuilder().send(command)
         }.onFailure { error ->
             showStatus("Could not open terminal: ${error.message}", "Retry")
         }

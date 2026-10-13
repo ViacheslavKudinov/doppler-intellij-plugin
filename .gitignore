@@ -3,5 +3,6 @@
 .intellijPlatform
 .kotlin
 build
+/bin/
 .vscode/
 .DS_Store

@@ -9,13 +9,17 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBPanelWithEmptyText
@@ -36,6 +40,15 @@ import java.awt.Component
 import java.awt.KeyboardFocusManager
 import java.beans.PropertyChangeEvent
 import java.beans.PropertyChangeListener
+import java.net.HttpURLConnection
+import java.net.URI
+import java.net.URL
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermission
+import java.security.MessageDigest
+import javax.net.ssl.HttpsURLConnection
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JTree
@@ -47,7 +60,11 @@ import javax.swing.tree.DefaultTreeModel
 
 private const val CARD_STATUS = "status"
 private const val CARD_TREE = "tree"
+private const val DOPPLER_TERMINAL_TAB_NAME = "Doppler CLI"
 private const val INSTALL_DOCS_URL = "https://docs.doppler.com/docs/install-cli"
+private const val INSTALL_SCRIPT_URL = "https://cli.doppler.com/install.sh"
+private const val MAX_INSTALLER_BYTES = 2 * 1024 * 1024
+private const val MAX_INSTALLER_REDIRECTS = 5
 
 class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPanel(true, true), Disposable {
 
@@ -61,6 +78,8 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
     private var refreshGeneration = 0
     private var refreshing = false
     private var disposed = false
+    private var downloadingInstaller = false
+    private var reviewedInstaller: ReviewedInstaller? = null
     private val focusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager()
     private val focusListener = DopplerFocusRefreshListener(this, ::refresh)
 
@@ -237,7 +256,10 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
             DopplerStatus.NOT_AUTHENTICATED -> {
                 statusPanel.emptyText.clear()
                 statusPanel.emptyText.text = "Not logged in to Doppler."
-                statusPanel.emptyText.appendLine("Run 'doppler login' in a terminal, then retry.")
+                statusPanel.emptyText.appendLine("Run 'doppler login' in Terminal", SimpleTextAttributes.LINK_ATTRIBUTES) {
+                    sendInstallCommand("doppler login")
+                }
+                statusPanel.emptyText.appendLine("Then retry.")
                 statusPanel.emptyText.appendLine("Retry", SimpleTextAttributes.LINK_ATTRIBUTES) { refresh() }
                 cardLayout.show(cards, CARD_STATUS)
             }
@@ -247,24 +269,167 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
     }
 
     private fun installCliInTerminal() {
-        val command = when {
-            SystemInfo.isMac -> "brew install gnupg && brew install dopplerhq/cli/doppler"
-            SystemInfo.isWindows -> "winget install doppler.doppler"
-            else -> "(curl -Ls --tlsv1.2 --proto '=https' --retry 3 https://cli.doppler.com/install.sh || wget -t 3 -qO- https://cli.doppler.com/install.sh) | sudo sh"
-        }
-        runCatching {
-            val terminalTab = TerminalToolWindowTabsManager.getInstance(project)
-                .createTabBuilder()
-                .workingDirectory(project.basePath ?: System.getProperty("user.home"))
-                .tabName("Install Doppler CLI")
-                .requestFocus(true)
-                .deferSessionStartUntilUiShown(true)
-                .createTab()
-            terminalTab.view.createSendTextBuilder().shouldExecute().send(command)
-        }.onFailure { error ->
-            showStatus("Could not open terminal: ${error.message}", "Retry")
+        when {
+            SystemInfo.isMac -> sendInstallCommand("brew install gnupg && brew install dopplerhq/cli/doppler")
+            SystemInfo.isWindows -> sendInstallCommand("winget install doppler.doppler")
+            SystemInfo.isLinux -> {
+                val option = detectLinuxInstallerOption()
+                if (option == null) {
+                    reviewLinuxInstaller()
+                } else sendInstallCommand(option.command)
+            }
+
+            else -> reviewLinuxInstaller()
         }
     }
+
+    private fun detectLinuxInstallerOption(): LinuxInstallerOption? {
+        val osRelease = runCatching { Files.readAllLines(Path.of("/etc/os-release")) }.getOrNull() ?: return null
+        return linuxInstallerOption(osRelease)
+    }
+
+    private fun reviewLinuxInstaller() {
+        if (downloadingInstaller) return
+        downloadingInstaller = true
+        ProgressManager.getInstance().run(
+            object : Task.Backgroundable(project, "Downloading Doppler installer for review…", true) {
+                private lateinit var installer: ReviewedInstaller
+
+                override fun run(indicator: ProgressIndicator) {
+                    installer = downloadInstaller()
+                }
+
+                override fun onSuccess() {
+                    if (project.isDisposed || disposed) {
+                        Files.deleteIfExists(installer.path)
+                        return
+                    }
+                    reviewedInstaller = installer
+                    val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(installer.path)
+                    if (file == null) {
+                        Files.deleteIfExists(installer.path)
+                        reviewedInstaller = null
+                        showStatus("Could not open the downloaded installer for review.", null)
+                        return
+                    }
+                    OpenFileDescriptor(project, file).navigate(true)
+                    showInstallerReady(installer)
+                }
+
+                override fun onThrowable(error: Throwable) {
+                    if (!project.isDisposed && !disposed) {
+                        showStatus("Could not download the Doppler installer: ${error.message}", null)
+                    }
+                }
+
+                override fun onFinished() {
+                    downloadingInstaller = false
+                }
+            },
+        )
+    }
+
+    private fun downloadInstaller(): ReviewedInstaller {
+        var url = URI(INSTALL_SCRIPT_URL).toURL()
+        for (redirect in 0..MAX_INSTALLER_REDIRECTS) {
+            require(url.protocol.equals("https", ignoreCase = true)) {
+                "Installer redirects must use HTTPS."
+            }
+            val connection = url.openConnection() as? HttpsURLConnection
+                ?: error("Installer URL must use HTTPS.")
+            connection.instanceFollowRedirects = false
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 30_000
+            try {
+                when (val response = connection.responseCode) {
+                    in 300..399 -> {
+                        require(redirect < MAX_INSTALLER_REDIRECTS) { "Too many installer redirects." }
+                        val location = connection.getHeaderField("Location")
+                            ?: error("Installer redirect did not include a location.")
+                        url = url.toURI().resolve(location).toURL()
+                    }
+
+                    HttpURLConnection.HTTP_OK -> {
+                        val bytes = connection.inputStream.use { it.readNBytes(MAX_INSTALLER_BYTES + 1) }
+                        require(bytes.isNotEmpty()) { "Downloaded installer is empty." }
+                        require(bytes.size <= MAX_INSTALLER_BYTES) { "Downloaded installer is too large." }
+                        val sha256 = installerSha256(bytes)
+                        val path = Files.createTempFile("doppler-installer-", ".sh")
+                        try {
+                            Files.write(path, bytes)
+                            Files.setPosixFilePermissions(path, setOf(PosixFilePermission.OWNER_READ))
+                            return ReviewedInstaller(path, sha256)
+                        } catch (error: Throwable) {
+                            Files.deleteIfExists(path)
+                            throw error
+                        }
+                    }
+
+                    else -> error("Installer download failed with HTTP status $response.")
+                }
+            } finally {
+                connection.disconnect()
+            }
+        }
+        error("Too many installer redirects.")
+    }
+
+    private fun showInstallerReady(installer: ReviewedInstaller) {
+        statusPanel.emptyText.clear()
+        statusPanel.emptyText.text = "Review the downloaded installer in the editor before running it."
+        statusPanel.emptyText.appendLine("Run reviewed installer…", SimpleTextAttributes.LINK_ATTRIBUTES) {
+            runReviewedInstaller(installer)
+        }
+        statusPanel.emptyText.appendLine("Discard downloaded installer", SimpleTextAttributes.LINK_ATTRIBUTES) {
+            if (reviewedInstaller == installer) {
+                Files.deleteIfExists(installer.path)
+                reviewedInstaller = null
+                showStatus("Downloaded installer discarded.", null)
+            }
+        }
+        cardLayout.show(cards, CARD_STATUS)
+    }
+
+    private fun runReviewedInstaller(installer: ReviewedInstaller) {
+        if (reviewedInstaller != installer || !Files.isRegularFile(installer.path, LinkOption.NOFOLLOW_LINKS)) return
+        val choice = Messages.showDialog(
+            project,
+            "This will run the downloaded file you reviewed (${installer.path.fileName}) with administrator privileges (sudo). " +
+                "Continue only if you trust its contents.",
+            "Run Reviewed Doppler Installer",
+            arrayOf("Open Terminal", "Cancel"),
+            1,
+            Messages.getWarningIcon(),
+        )
+        if (choice != 0) return
+        if (!sendInstallCommand(reviewedInstallerCommand(installer))) {
+            return
+        }
+        reviewedInstaller = null
+    }
+
+    private fun sendInstallCommand(command: String): Boolean =
+        runCatching {
+            val tabsManager = TerminalToolWindowTabsManager.getInstance(project)
+            val terminalTab = tabsManager.tabs.lastOrNull {
+                it.content.displayName == DOPPLER_TERMINAL_TAB_NAME || it.content.displayName == "Install Doppler CLI"
+            }
+                ?: tabsManager.createTabBuilder()
+                    .workingDirectory(project.basePath ?: System.getProperty("user.home"))
+                    .tabName(DOPPLER_TERMINAL_TAB_NAME)
+                    .requestFocus(true)
+                    .deferSessionStartUntilUiShown(true)
+                    .createTab()
+            terminalTab.content.displayName = DOPPLER_TERMINAL_TAB_NAME
+            terminalTab.content.manager?.setSelectedContent(terminalTab.content)
+            ToolWindowManager.getInstance(project)
+                .getToolWindow("Terminal")
+                ?.activate(null, true)
+            terminalTab.view.createSendTextBuilder().shouldExecute().send(command)
+            true
+        }.onFailure { error ->
+            showStatus("Could not open terminal: ${error.message}", "Retry")
+        }.getOrDefault(false)
 
     private fun showStatus(message: String, actionLabel: String?) {
         statusPanel.emptyText.clear()

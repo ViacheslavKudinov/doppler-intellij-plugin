@@ -17,7 +17,7 @@ internal fun reviewedInstallerCommand(installer: ReviewedInstaller): String {
         expected_sha256=${dollar}2
         umask 077
         root_copy=${dollar}(mktemp /tmp/doppler-installer.XXXXXX)
-        trap 'rm -f -- "${dollar}root_copy"' EXIT
+        trap 'rm -f -- "${dollar}root_copy"' 0
         cat -- "${dollar}source_path" > "${dollar}root_copy"
         if command -v sha256sum >/dev/null 2>&1; then
             printf '%s  %s\n' "${dollar}expected_sha256" "${dollar}root_copy" | sha256sum -c - >/dev/null

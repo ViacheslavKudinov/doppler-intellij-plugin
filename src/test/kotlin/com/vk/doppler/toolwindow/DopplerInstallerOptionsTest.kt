@@ -49,6 +49,9 @@ class DopplerInstallerOptionsTest {
         val command = reviewedInstallerCommand(installer)
 
         assertTrue(command.contains("mktemp /tmp/doppler-installer.XXXXXX"))
+        val trapLine = command.substringAfter("trap ").substringBefore('\n')
+        assertTrue(trapLine.endsWith(" 0"))
+        assertFalse(trapLine.contains("EXIT"))
         assertTrue(command.contains("cat -- \"\$source_path\" > \"\$root_copy\""))
         assertTrue(command.contains("sha256sum -c -"))
         assertTrue(command.contains("sh \"\$root_copy\""))

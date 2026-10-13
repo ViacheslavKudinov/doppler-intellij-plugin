@@ -9,6 +9,7 @@ import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessListener
 import com.intellij.openapi.diagnostic.thisLogger
+import java.security.MessageDigest
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicReference
 
@@ -32,6 +33,10 @@ class DopplerCli(private val executablePath: String) {
             "invalid auth token",
             "doppler login",
             "unauthorized",
+            "forbidden",
+            "not authorized",
+            "access denied",
+            "permission denied",
         )
     }
 
@@ -42,7 +47,27 @@ class DopplerCli(private val executablePath: String) {
 
     /** Verifies that a usable token is configured. Throws [DopplerCliException] otherwise. */
     fun checkAuth() {
-        runJson(listOf("me"))
+        authContextId()
+    }
+
+    /** Stable, non-reversible identifier for the CLI account and token context. */
+    fun authContextId(): String {
+        val me = runJson(listOf("me")) as? JsonObject
+            ?: throw DopplerCliException("The Doppler CLI returned invalid account information.")
+        val workplace = me.get("workplace") as? JsonObject
+            ?: throw DopplerCliException("The Doppler CLI returned incomplete account information.")
+        val identity = listOf(
+            me.string("slug"),
+            me.string("type"),
+            me.string("token_preview"),
+            workplace.string("slug"),
+        )
+        if (identity.any { it.isNullOrBlank() }) {
+            throw DopplerCliException("The Doppler CLI returned incomplete account information.")
+        }
+        val bytes = MessageDigest.getInstance("SHA-256")
+            .digest(identity.joinToString("\u0000").toByteArray(StandardCharsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 
     fun listProjects(): List<DopplerProject> {

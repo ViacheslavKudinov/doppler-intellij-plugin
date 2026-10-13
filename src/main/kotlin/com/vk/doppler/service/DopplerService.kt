@@ -13,7 +13,13 @@ import com.vk.doppler.settings.DopplerSettings
 
 enum class DopplerStatus { READY, CLI_NOT_FOUND, NOT_AUTHENTICATED, ERROR }
 
-data class DopplerStatusReport(val status: DopplerStatus, val detail: String?)
+data class DopplerStatusReport(
+    val status: DopplerStatus,
+    val detail: String?,
+    val authContextId: String? = null,
+)
+
+data class DopplerSecretsSnapshot(val authContextId: String, val secrets: List<DopplerSecret>)
 
 /**
  * Entry point for all Doppler access. Every method performs blocking I/O and must be
@@ -34,35 +40,76 @@ class DopplerService {
 
     fun checkStatus(): DopplerStatusReport = try {
         val cli = cli()
-        cli.checkAuth()
-        DopplerStatusReport(DopplerStatus.READY, cli.version())
+        val authContextId = cli.authContextId()
+        DopplerStatusReport(DopplerStatus.READY, cli.version(), authContextId)
     } catch (e: DopplerCliException) {
         val status = when (e.kind) {
             DopplerCliException.Kind.CLI_NOT_FOUND -> DopplerStatus.CLI_NOT_FOUND
             DopplerCliException.Kind.NOT_AUTHENTICATED -> DopplerStatus.NOT_AUTHENTICATED
+            DopplerCliException.Kind.AUTH_CONTEXT_CHANGED -> DopplerStatus.ERROR
             DopplerCliException.Kind.GENERIC -> DopplerStatus.ERROR
         }
         DopplerStatusReport(status, e.message)
     }
 
-    fun listProjects(): List<DopplerProject> = cli().listProjects()
+    fun currentAuthContextId(): String = cli().authContextId()
+
+    fun listProjects(expectedAuthContextId: String): List<DopplerProject> {
+        val cli = cli()
+        requireAuthContext(cli, expectedAuthContextId)
+        val projects = cli.listProjects()
+        requireAuthContext(cli, expectedAuthContextId)
+        return projects
+    }
 
     fun listConfigs(projectSlug: String): List<DopplerConfig> = cli().listConfigs(projectSlug)
 
-    fun listSecrets(projectSlug: String, configName: String): List<DopplerSecret> =
-        cli().listSecrets(projectSlug, configName)
+    fun loadSecrets(
+        projectSlug: String,
+        configName: String,
+        expectedAuthContextId: String? = null,
+    ): DopplerSecretsSnapshot {
+        val cli = cli()
+        val authContextId = cli.authContextId()
+        if (expectedAuthContextId != null && expectedAuthContextId != authContextId) {
+            throw authContextChanged()
+        }
+        val secrets = cli.listSecrets(projectSlug, configName)
+        requireAuthContext(cli, authContextId)
+        return DopplerSecretsSnapshot(authContextId, secrets)
+    }
 
     /**
      * Applies a diff to a config. Deletions run first so that a rename (delete + add)
      * cannot transiently exceed any per-config limits.
      */
-    fun applyChanges(projectSlug: String, configName: String, changes: SecretChanges) {
+    fun applyChanges(
+        authContextId: String,
+        projectSlug: String,
+        configName: String,
+        changes: SecretChanges,
+    ) {
         val cli = cli()
-        cli.deleteSecrets(projectSlug, configName, changes.removed)
+        requireAuthContext(cli, authContextId)
+        if (changes.removed.isNotEmpty()) {
+            requireAuthContext(cli, authContextId)
+            cli.deleteSecrets(projectSlug, configName, changes.removed)
+        }
         for ((name, value) in changes.upserted) {
+            requireAuthContext(cli, authContextId)
             cli.setSecret(projectSlug, configName, name, value)
         }
+        requireAuthContext(cli, authContextId)
     }
+
+    private fun requireAuthContext(cli: DopplerCli, expected: String) {
+        if (cli.authContextId() != expected) throw authContextChanged()
+    }
+
+    private fun authContextChanged() = DopplerCliException(
+        "The Doppler account changed. Reopen this config under the current account.",
+        DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
+    )
 
     companion object {
         fun getInstance(): DopplerService = service()

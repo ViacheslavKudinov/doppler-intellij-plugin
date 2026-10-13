@@ -15,6 +15,10 @@ on:
       - .github/workflows/release-please.yaml
       - .github/copilot-instructions.md
   workflow_call:
+    secrets:
+      CODECOV_TOKEN:
+        description: Token used by the Codecov upload step
+        required: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

@@ -2,6 +2,29 @@
 
 # Doppler-plugin Changelog
 
+## [1.2.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.1.0...v1.2.0) (2026-10-13)
+
+
+### Features
+
+* add download and codecov badges to README and configure Jacoco task for test coverage ([#42](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/42)) ([39e04a6](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/39e04a679ffdacd1d6312857249a7db13a4bf2b2))
+* **auth:** implement auth context handling and improve token verification ([#37](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/37)) ([0e090ee](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/0e090ee6ba5386a5162ea10164d83acb4bc706d8))
+* **secrets:** enhance parseSecrets to handle primitive and object secrets from bare map ([#36](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/36)) ([194f866](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/194f866de0c6dbff1641ecea98c31b7bdaefccb1))
+* **tests:** add Jacoco for code coverage and upload reports to Codecov ([#40](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/40)) ([939ac31](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/939ac3183b65531b8da66e0de42fdc4004fa19d1))
+* **toolwindow:** add warning dialog for remote script execution in installer command ([#38](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/38)) ([c12440b](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/c12440bdde1e3240675f1480f13daba5c16fd33e))
+
+
+### Bug Fixes
+
+* **security:** [Aikido] AI Fix for Overly Broad Permissions in GitHub Actions Workflows is risky ([#33](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/33)) ([1612a12](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/1612a12b035dc015bb9db53f13a275e5d10e4e68))
+
+
+### Maintenance
+
+* **gradle:** add missing distributionSha256Sum to gradle-wrapper.properties ([#39](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/39)) ([9811820](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/98118204a65868d7ef7d49079fac625032f14b7e))
+* pass codecov token and tune publish workflow ([#41](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/41)) ([bb54481](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/bb5448141daba148fd4242a34d5b0aa94cb26d13))
+* **workflows:** add environment configuration for publish job ([#35](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/35)) ([f882811](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/f88281123315eef74a2048bdc63773675cdd7cea))
+
 ## [1.1.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.0.1...v1.1.0) (2026-10-11)
 
 

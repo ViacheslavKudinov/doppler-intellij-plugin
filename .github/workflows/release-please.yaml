@@ -9,7 +9,7 @@ permissions: {}
 jobs:
   build:
     name: Run CI checks
-    uses: ./.github/workflows/build.yaml
+    uses: $/.github/workflows/build.yaml
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   

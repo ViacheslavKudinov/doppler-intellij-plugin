@@ -7,6 +7,7 @@ import org.gradle.api.file.RegularFile
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
+    id("jacoco")
     id("org.jetbrains.changelog")
     id("org.jetbrains.qodana")
     id("org.jetbrains.intellij.platform")
@@ -61,6 +62,14 @@ intellijPlatform {
     publishing {
       token = providers.environmentVariable("PUBLISH_TOKEN")
   }
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
 }
 
 tasks.named<CyclonedxDirectTask>("cyclonedxDirectBom") {

@@ -1,9 +1,9 @@
+# Doppler for IntelliJ IDEA (Unofficial)
+
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ViacheslavKudinov/doppler-intellij-plugin/badge)](https://scorecard.dev/viewer/?uri=github.com/ViacheslavKudinov/doppler-intellij-plugin)
 [![License: Apache 2.0](https://img.shields.io/badge/license-apache--2.0-green.svg)](LICENSE)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/34961-doppler-secrets-manager-unofficial-.svg)](https://plugins.jetbrains.com/plugin/34961-doppler-secrets-manager-unofficial-)
 [![codecov](https://codecov.io/gh/ViacheslavKudinov/doppler-intellij-plugin/graph/badge.svg?token=4EI6QNLEYR)](https://codecov.io/gh/ViacheslavKudinov/doppler-intellij-plugin)
-
-# Doppler for IntelliJ IDEA (Unofficial)
 
 **This is an unofficial, independently developed plugin. It is not affiliated with, endorsed by,
 or supported by Doppler.** Doppler's name, trademarks, and copyrighted materials belong to Doppler.

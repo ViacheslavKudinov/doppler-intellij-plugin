@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.cyclonedx.gradle.CyclonedxDirectTask
 import org.cyclonedx.model.Component
 import org.gradle.api.file.RegularFile
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -69,6 +70,13 @@ tasks.jacocoTestReport {
     reports {
         xml.required.set(true)
         html.required.set(true)
+    }
+}
+
+tasks.test {
+    extensions.configure<JacocoTaskExtension> {
+        isIncludeNoLocationClasses = true
+        includes = listOf("com.vk.doppler.*")
     }
 }
 

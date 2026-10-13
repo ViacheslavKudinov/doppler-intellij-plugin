@@ -21,6 +21,7 @@ class DopplerSecretsFile(
     private val fileSystem: DopplerFileSystem,
     val projectSlug: String,
     val configName: String,
+    val authContextId: String,
 ) : VirtualFile() {
 
     @Volatile
@@ -53,13 +54,17 @@ class DopplerSecretsFile(
     @Volatile
     var suppressPush: Boolean = false
 
+    @Volatile
+    var isInvalidated: Boolean = false
+        private set
+
     override fun getName(): String = fileName(configName)
 
     override fun getFileSystem(): VirtualFileSystem = fileSystem
 
-    override fun getPath(): String = pathFor(projectSlug, configName)
+    override fun getPath(): String = pathFor(projectSlug, configName, authContextId)
 
-    override fun isWritable(): Boolean = true
+    override fun isWritable(): Boolean = !isInvalidated
 
     override fun isDirectory(): Boolean = false
 
@@ -89,6 +94,7 @@ class DopplerSecretsFile(
         object : ByteArrayOutputStream() {
             override fun close() {
                 super.close()
+                if (isInvalidated) return
                 val bytes = toByteArray()
                 applyContent(bytes, newModificationStamp, newTimeStamp)
                 if (!suppressPush) {
@@ -101,6 +107,7 @@ class DopplerSecretsFile(
 
     /** Replaces the content with server state without triggering a push back. */
     fun setServerContent(text: String, snapshot: Map<String, String?>) {
+        isInvalidated = false
         remoteSnapshot = snapshot
         hasPendingSync = false
         applyContent(text.toByteArray(StandardCharsets.UTF_8), newModificationStamp = -1, newTimeStamp = -1)
@@ -108,6 +115,7 @@ class DopplerSecretsFile(
 
     /** Clears secret values from memory once the config is no longer shown anywhere. */
     fun scrub() {
+        isInvalidated = true
         remoteSnapshot = emptyMap()
         pendingPushText.set(null)
         hasPendingSync = false
@@ -126,7 +134,7 @@ class DopplerSecretsFile(
         /** The `.yaml` suffix gives the tab YAML highlighting without a hard plugin dependency. */
         fun fileName(configName: String): String = "$configName.yaml"
 
-        fun pathFor(projectSlug: String, configName: String): String =
-            "/$projectSlug/${fileName(configName)}"
+        fun pathFor(projectSlug: String, configName: String, authContextId: String): String =
+            "/$projectSlug/$authContextId/${fileName(configName)}"
     }
 }

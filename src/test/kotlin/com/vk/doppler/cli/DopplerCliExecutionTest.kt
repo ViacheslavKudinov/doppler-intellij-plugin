@@ -16,6 +16,24 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
         return DopplerCli(executable.toString())
     }
 
+    fun `test auth context fingerprint ignores volatile me fields`() {
+        val first = cli(
+            "printf '%s' '{\"slug\":\"alice\",\"type\":\"personal\",\"token_preview\":\"dp.preview\"," +
+                "\"workplace\":{\"slug\":\"team\"},\"created_at\":\"yesterday\",\"last_seen_at\":\"one\"}'",
+        )
+        val second = cli(
+            "printf '%s' '{\"slug\":\"alice\",\"type\":\"personal\",\"token_preview\":\"dp.preview\"," +
+                "\"workplace\":{\"slug\":\"team\"},\"created_at\":\"today\",\"last_seen_at\":\"two\"}'",
+        )
+        val otherAccount = cli(
+            "printf '%s' '{\"slug\":\"bob\",\"type\":\"personal\",\"token_preview\":\"dp.other\"," +
+                "\"workplace\":{\"slug\":\"team\"}}'",
+        )
+
+        assertEquals(first.authContextId(), second.authContextId())
+        assertFalse(first.authContextId() == otherAccount.authContextId())
+    }
+
     fun `test empty read output is rejected instead of becoming an empty config`() {
         assumeFalse(SystemInfo.isWindows)
         val cli = cli("exit 0")

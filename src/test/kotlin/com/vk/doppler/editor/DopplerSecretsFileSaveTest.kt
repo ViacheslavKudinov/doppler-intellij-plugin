@@ -23,7 +23,7 @@ import java.nio.charset.StandardCharsets
 class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
     private fun newFile(configName: String, text: String, snapshot: Map<String, String?>): DopplerSecretsFile =
-        DopplerFileSystem.getInstance().obtain("backend", configName).also {
+        DopplerFileSystem.getInstance().obtain("backend", configName, "test-context").also {
             it.setServerContent(text, snapshot)
         }
 
@@ -117,7 +117,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
     fun `test registered file icon provider only overrides Doppler files`() {
         val provider = FileIconProvider.EP_NAME.extensionList.filterIsInstance<DopplerFileIconProvider>().single()
-        val file = DopplerFileSystem.getInstance().obtain("icons", "dev")
+        val file = DopplerFileSystem.getInstance().obtain("icons", "dev", "test-context")
 
         assertSame(DopplerIcons.EditorTab, provider.getIcon(file, 0, project))
         assertNotNull(DopplerIcons::class.java.getResource("/icons/doppler_tab.svg"))
@@ -127,8 +127,8 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
     fun `test duplicate config tabs include project and environment`() {
         val fs = DopplerFileSystem.getInstance()
-        val first = fs.obtain("tab-backend", "dev").apply { environment = "development" }
-        val second = fs.obtain("tab-frontend", "dev").apply { environment = "dev" }
+        val first = fs.obtain("tab-backend", "dev", "test-context").apply { environment = "development" }
+        val second = fs.obtain("tab-frontend", "dev", "test-context").apply { environment = "dev" }
         val manager = FileEditorManager.getInstance(project)
         val provider = DopplerEditorTabTitleProvider()
         manager.openFile(first, false)
@@ -146,8 +146,8 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
     fun `test duplicate config title handles missing environment metadata`() {
         val fs = DopplerFileSystem.getInstance()
-        val first = fs.obtain("tab-known", "stg")
-        val second = fs.obtain("tab-other", "stg")
+        val first = fs.obtain("tab-known", "stg", "test-context")
+        val second = fs.obtain("tab-other", "stg", "test-context")
         val manager = FileEditorManager.getInstance(project)
         manager.openFile(first, false)
         manager.openFile(second, false)
@@ -160,8 +160,8 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
     fun `test tab presentation uses bold config and regular path and survives title resets`() {
         val fs = DopplerFileSystem.getInstance()
-        val first = fs.obtain("bold-backend", "dev").apply { environment = "dev" }
-        val second = fs.obtain("bold-frontend", "dev").apply { environment = "dev" }
+        val first = fs.obtain("bold-backend", "dev", "test-context").apply { environment = "dev" }
+        val second = fs.obtain("bold-frontend", "dev", "test-context").apply { environment = "dev" }
         val manager = FileEditorManager.getInstance(project)
         manager.openFile(first, false)
         manager.openFile(second, false)
@@ -207,8 +207,29 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
     fun `test the file system returns the same instance for a config`() {
         val fs = DopplerFileSystem.getInstance()
-        assertSame(fs.obtain("backend", "stg"), fs.obtain("backend", "stg"))
-        assertNotSame(fs.obtain("backend", "stg"), fs.obtain("backend", "prd"))
+        assertSame(fs.obtain("backend", "stg", "test-context"), fs.obtain("backend", "stg", "test-context"))
+        assertNotSame(fs.obtain("backend", "stg", "test-context"), fs.obtain("backend", "prd", "test-context"))
+        assertNotSame(fs.obtain("backend", "stg", "test-context"), fs.obtain("backend", "stg", "other-context"))
+    }
+
+    fun `test invalidating another auth context closes and scrubs the cached editor`() {
+        val fs = DopplerFileSystem.getInstance()
+        val secretText = SecretsDocumentFormat.serialize(mapOf("API_TOKEN" to "secret-value"))
+        val file = newFile("auth-scrub", secretText, mapOf("API_TOKEN" to "secret-value"))
+        val documents = FileDocumentManager.getInstance()
+        val document = requireNotNull(documents.getDocument(file))
+        val manager = FileEditorManager.getInstance(project)
+        manager.openFile(file, false)
+
+        DopplerSecretsEditorService.invalidateCachedFiles("other-context")
+
+        assertTrue(file.isInvalidated)
+        assertFalse(file.isWritable)
+        assertTrue(file.remoteSnapshot.isEmpty())
+        assertFalse(String(file.contentsToByteArray(), StandardCharsets.UTF_8).contains("secret-value"))
+        assertFalse(document.text.contains("secret-value"))
+        assertFalse(manager.isFileOpen(file))
+        assertNull(fs.findFileByPath(file.path))
     }
 
     fun `test the file is resolvable by path and is writable yaml`() {

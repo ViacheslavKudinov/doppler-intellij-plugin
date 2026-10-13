@@ -134,12 +134,15 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                     val service = DopplerService.getInstance()
                     report = service.checkStatus()
                     if (report.status == DopplerStatus.READY) {
-                        projects = service.listProjects()
+                        projects = service.listProjects(requireNotNull(report.authContextId))
                     }
                 }
 
                 override fun onSuccess() {
                     if (project.isDisposed || generation != refreshGeneration) return
+                    DopplerSecretsEditorService.invalidateCachedFiles(
+                        report.authContextId.takeIf { report.status == DopplerStatus.READY },
+                    )
                     if (report.status == DopplerStatus.READY) {
                         populate(projects)
                     } else {
@@ -149,6 +152,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
                 override fun onThrowable(error: Throwable) {
                     if (project.isDisposed || generation != refreshGeneration) return
+                    DopplerSecretsEditorService.invalidateCachedFiles(null)
                     showStatus("Could not reach Doppler: ${error.message}", "Retry")
                 }
 

@@ -25,10 +25,12 @@ class DopplerFileSystem : DeprecatedVirtualFileSystem() {
     override fun refreshAndFindFileByPath(path: String): VirtualFile? = findFileByPath(path)
 
     /** Returns the existing file for the config, creating it on first use. */
-    fun obtain(projectSlug: String, configName: String): DopplerSecretsFile =
-        files.computeIfAbsent(DopplerSecretsFile.pathFor(projectSlug, configName)) {
-            DopplerSecretsFile(this, projectSlug, configName)
+    fun obtain(projectSlug: String, configName: String, authContextId: String): DopplerSecretsFile =
+        files.computeIfAbsent(DopplerSecretsFile.pathFor(projectSlug, configName, authContextId)) {
+            DopplerSecretsFile(this, projectSlug, configName, authContextId)
         }
+
+    fun cachedFiles(): List<DopplerSecretsFile> = files.values.toList()
 
     fun forget(file: DopplerSecretsFile) {
         files.remove(file.path, file)

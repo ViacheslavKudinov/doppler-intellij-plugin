@@ -44,8 +44,10 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
+import java.security.MessageDigest
 import javax.net.ssl.HttpsURLConnection
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -77,7 +79,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
     private var refreshing = false
     private var disposed = false
     private var downloadingInstaller = false
-    private var reviewedInstaller: Path? = null
+    private var reviewedInstaller: ReviewedInstaller? = null
     private val focusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager()
     private val focusListener = DopplerFocusRefreshListener(this, ::refresh)
 
@@ -291,7 +293,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         downloadingInstaller = true
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "Downloading Doppler installer for review…", true) {
-                private lateinit var installer: Path
+                private lateinit var installer: ReviewedInstaller
 
                 override fun run(indicator: ProgressIndicator) {
                     installer = downloadInstaller()
@@ -299,13 +301,13 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
                 override fun onSuccess() {
                     if (project.isDisposed || disposed) {
-                        Files.deleteIfExists(installer)
+                        Files.deleteIfExists(installer.path)
                         return
                     }
                     reviewedInstaller = installer
-                    val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(installer)
+                    val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(installer.path)
                     if (file == null) {
-                        Files.deleteIfExists(installer)
+                        Files.deleteIfExists(installer.path)
                         reviewedInstaller = null
                         showStatus("Could not open the downloaded installer for review.", null)
                         return
@@ -327,7 +329,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         )
     }
 
-    private fun downloadInstaller(): Path {
+    private fun downloadInstaller(): ReviewedInstaller {
         var url = URI(INSTALL_SCRIPT_URL).toURL()
         for (redirect in 0..MAX_INSTALLER_REDIRECTS) {
             require(url.protocol.equals("https", ignoreCase = true)) {
@@ -351,11 +353,12 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                         val bytes = connection.inputStream.use { it.readNBytes(MAX_INSTALLER_BYTES + 1) }
                         require(bytes.isNotEmpty()) { "Downloaded installer is empty." }
                         require(bytes.size <= MAX_INSTALLER_BYTES) { "Downloaded installer is too large." }
+                        val sha256 = installerSha256(bytes)
                         val path = Files.createTempFile("doppler-installer-", ".sh")
                         try {
                             Files.write(path, bytes)
                             Files.setPosixFilePermissions(path, setOf(PosixFilePermission.OWNER_READ))
-                            return path
+                            return ReviewedInstaller(path, sha256)
                         } catch (error: Throwable) {
                             Files.deleteIfExists(path)
                             throw error
@@ -371,7 +374,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         error("Too many installer redirects.")
     }
 
-    private fun showInstallerReady(installer: Path) {
+    private fun showInstallerReady(installer: ReviewedInstaller) {
         statusPanel.emptyText.clear()
         statusPanel.emptyText.text = "Review the downloaded installer in the editor before running it."
         statusPanel.emptyText.appendLine("Run reviewed installer…", SimpleTextAttributes.LINK_ATTRIBUTES) {
@@ -379,7 +382,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         }
         statusPanel.emptyText.appendLine("Discard downloaded installer", SimpleTextAttributes.LINK_ATTRIBUTES) {
             if (reviewedInstaller == installer) {
-                Files.deleteIfExists(installer)
+                Files.deleteIfExists(installer.path)
                 reviewedInstaller = null
                 showStatus("Downloaded installer discarded.", null)
             }
@@ -387,11 +390,11 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         cardLayout.show(cards, CARD_STATUS)
     }
 
-    private fun runReviewedInstaller(installer: Path) {
-        if (reviewedInstaller != installer || !Files.isRegularFile(installer)) return
+    private fun runReviewedInstaller(installer: ReviewedInstaller) {
+        if (reviewedInstaller != installer || !Files.isRegularFile(installer.path, LinkOption.NOFOLLOW_LINKS)) return
         val choice = Messages.showDialog(
             project,
-            "This will run the downloaded file you reviewed (${installer.fileName}) with administrator privileges (sudo). " +
+            "This will run the downloaded file you reviewed (${installer.path.fileName}) with administrator privileges (sudo). " +
                 "Continue only if you trust its contents.",
             "Run Reviewed Doppler Installer",
             arrayOf("Open Terminal", "Cancel"),
@@ -399,13 +402,11 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
             Messages.getWarningIcon(),
         )
         if (choice != 0) return
-        if (!sendInstallCommand("sudo sh ${shellQuote(installer.toString())} && rm -f -- ${shellQuote(installer.toString())}")) {
+        if (!sendInstallCommand(reviewedInstallerCommand(installer))) {
             return
         }
         reviewedInstaller = null
     }
-
-    private fun shellQuote(value: String): String = "'${value.replace("'", "'\\''")}'"
 
     private fun sendInstallCommand(command: String): Boolean =
         runCatching {

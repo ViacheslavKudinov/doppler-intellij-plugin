@@ -2,6 +2,13 @@
 
 # Doppler-plugin Changelog
 
+## [1.3.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.2.0...v1.3.0) (2026-10-14)
+
+
+### Features
+
+* enhance editor tab presentation and file save handling for unsaved changes ([#44](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/44)) ([57a5367](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/57a53678a60b40f81c58f45f8a598503f25110ee))
+
 ## [1.2.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.1.0...v1.2.0) (2026-10-13)
 
 

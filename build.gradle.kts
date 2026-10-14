@@ -10,7 +10,6 @@ plugins {
     id("org.jetbrains.kotlin.jvm")
     id("jacoco")
     id("org.jetbrains.changelog")
-    id("org.jetbrains.qodana")
     id("org.jetbrains.intellij.platform")
     alias(libs.plugins.cyclonedx)
 }

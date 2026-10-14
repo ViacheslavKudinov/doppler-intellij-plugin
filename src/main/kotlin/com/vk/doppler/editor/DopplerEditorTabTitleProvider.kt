@@ -1,6 +1,7 @@
 package com.vk.doppler.editor
 
 import com.intellij.openapi.fileEditor.impl.EditorTabTitleProvider
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -15,15 +16,17 @@ class DopplerEditorTabTitleProvider : EditorTabTitleProvider {
         val duplicate = FileEditorManager.getInstance(project).openFiles.any {
             it is DopplerSecretsFile && it != config && it.configName == config.configName
         }
-        return if (duplicate) {
+        val title = if (duplicate) {
             "${config.configName} ${fullPath(config)}"
         } else {
             config.configName
         }
+        val document = FileDocumentManager.getInstance().getCachedDocument(config)
+        val serverText = SecretsDocumentFormat.serialize(config.remoteSnapshot)
+        val editing = config.pushInProgress.get() ||
+            (document?.text?.let { it != serverText } ?: config.hasPendingSync)
+        return if (editing) "$title *" else title
     }
-
-    override fun getEditorTabTooltipText(project: Project, virtualFile: VirtualFile): String? =
-        (virtualFile as? DopplerSecretsFile)?.let(::fullPath)
 
     private fun fullPath(file: DopplerSecretsFile): String =
         listOfNotNull(file.projectSlug, file.environment, file.configName).joinToString("/", prefix = "/")

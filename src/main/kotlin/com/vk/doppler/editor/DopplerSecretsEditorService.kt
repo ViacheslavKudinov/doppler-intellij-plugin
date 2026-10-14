@@ -4,6 +4,11 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.AnActionResult
+import com.intellij.openapi.actionSystem.ex.AnActionListener
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
@@ -64,6 +69,17 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
                 }
             },
         )
+        ApplicationManager.getApplication().messageBus.connect(this).subscribe(
+            AnActionListener.TOPIC,
+            object : AnActionListener {
+                override fun afterActionPerformed(action: AnAction, event: AnActionEvent, result: AnActionResult) {
+                    if (ActionManager.getInstance().getId(action) != "SaveAll" || event.project !== project) return
+                    val file = FileEditorManager.getInstance(project).selectedEditor?.file as? DopplerSecretsFile
+                        ?: return
+                    syncPendingConfig(file)
+                }
+            },
+        )
     }
 
     override fun dispose() {
@@ -89,13 +105,9 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         runLoad(projectSlug, configName, "Opening /$projectSlug/$configName…") { file ->
             if (environment != null) file.environment = environment
             openPaths.add(file.path)
-            // Preview tab, like the VS Code extension: browsing configs reuses one tab and only
-            // editing promotes it to a permanent one. OpenFileDescriptor is used rather than
-            // FileEditorOpenOptions because the latter is a Kotlin data class whose synthetic
-            // constructor signature changes between IDE releases.
-            val descriptor = OpenFileDescriptor(project, file)
-            descriptor.isUsePreviewTab = true
-            FileEditorManager.getInstance(project).openEditor(descriptor, true)
+              val descriptor = OpenFileDescriptor(project, file)
+              descriptor.isUsePreviewTab = true
+              descriptor.navigate(true)
         }
     }
 
@@ -266,10 +278,7 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         if (!file.hasPendingSync && !project.isDisposed) close?.invoke()
     }
 
-    /**
-     * Pushes the edited document to Doppler as a minimal set of writes.
-     * Called from the VFS write hook on the EDT, so the work is handed to a background task.
-     */
+    /** Pushes a saved document to Doppler as a minimal set of writes. */
     fun push(file: DopplerSecretsFile, text: String) {
         if (file.isInvalidated) return
         file.hasPendingSync = true
@@ -288,6 +297,7 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         val changes = SecretChanges.between(file.remoteSnapshot, edited)
         if (changes.isEmpty) {
             file.hasPendingSync = false
+            ApplicationManager.getApplication().invokeLater({ tabPresentation.refresh() }, project.disposed)
             return
         }
 
@@ -376,12 +386,21 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
                     if (pendingText != null) {
                         push(file, pendingText)
                     } else {
+                        tabPresentation.refresh()
                         finishCloseRequest(file)
                         if (!owns(file)) releaseIfUnused(file)
                     }
                 }
             },
         )
+    }
+
+    private fun syncPendingConfig(file: DopplerSecretsFile) {
+        if (!owns(file)) return
+        val documents = FileDocumentManager.getInstance()
+        if (!file.hasPendingSync || file.pushInProgress.get()) return
+        val document = documents.getCachedDocument(file) ?: return
+        push(file, document.text)
     }
 
     companion object {
@@ -443,15 +462,16 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             }
         }
 
-        fun getInstance(project: Project): DopplerSecretsEditorService =
-            project.getService(DopplerSecretsEditorService::class.java)
-
-        /** Locates the project whose tool window opened [file], so pushes report to the right place. */
+        /** Locates the project whose tool window opened [file], so cached files remain shared safely. */
         fun findOwner(file: DopplerSecretsFile): DopplerSecretsEditorService? =
             ProjectManager.getInstance().openProjects
                 .asSequence()
                 .filterNot { it.isDisposed }
                 .mapNotNull { it.getServiceIfCreated(DopplerSecretsEditorService::class.java) }
                 .firstOrNull { it.owns(file) }
+
+        fun getInstance(project: Project): DopplerSecretsEditorService =
+            project.getService(DopplerSecretsEditorService::class.java)
+
     }
 }

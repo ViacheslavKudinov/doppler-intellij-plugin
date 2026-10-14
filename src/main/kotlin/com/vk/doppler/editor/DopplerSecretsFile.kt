@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * One config's secrets, held entirely in memory — the bytes are never written to disk.
  *
- * Saving the editor tab goes through [getOutputStream], which is where the push back to
- * Doppler is initiated.
+ * FileDocumentManager saves update this in-memory buffer. Remote pushes happen only after an
+ * explicit IDE save action or the Save choice in the close prompt.
  */
 class DopplerSecretsFile(
     private val fileSystem: DopplerFileSystem,
@@ -99,8 +99,6 @@ class DopplerSecretsFile(
                 applyContent(bytes, newModificationStamp, newTimeStamp)
                 if (!suppressPush) {
                     hasPendingSync = true
-                    DopplerSecretsEditorService.findOwner(this@DopplerSecretsFile)
-                        ?.push(this@DopplerSecretsFile, String(bytes, StandardCharsets.UTF_8))
                 }
             }
         }

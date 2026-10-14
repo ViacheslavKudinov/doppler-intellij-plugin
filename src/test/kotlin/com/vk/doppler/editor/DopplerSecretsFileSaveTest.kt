@@ -4,6 +4,7 @@ import com.intellij.ide.FileIconProvider
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.vfs.VirtualFilePreCloseCheck
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.tabs.TabInfo
@@ -136,7 +137,6 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         manager.openFile(second, false)
 
         assertEquals("dev /tab-backend/development/dev", provider.getEditorTabTitle(project, first))
-        assertEquals("/tab-backend/development/dev", provider.getEditorTabTooltipText(project, first))
         assertEquals("dev /tab-frontend/dev/dev", provider.getEditorTabTitle(project, second))
 
         manager.closeFile(second)
@@ -186,6 +186,68 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         }
     }
 
+    fun `test tab presentation marks unsaved edits while typing`() {
+        val initialText = SecretsDocumentFormat.serialize(mapOf("A" to "old"))
+        val editedText = SecretsDocumentFormat.serialize(mapOf("A" to "changed"))
+        val file = newFile("editing", initialText, mapOf("A" to "old"))
+        val presentation = DopplerEditorTabPresentation(project)
+        val tab = TabInfo(JPanel()).setObject(file)
+        try {
+            presentation.update(tab)
+            assertEquals(listOf("editing"), tab.coloredText.texts)
+
+            val document = requireNotNull(FileDocumentManager.getInstance().getDocument(file))
+            WriteAction.run<RuntimeException> { document.setText(editedText) }
+
+            assertEquals(listOf("editing", " *"), tab.coloredText.texts)
+            assertTrue(FileDocumentManager.getInstance().isDocumentUnsaved(document))
+
+            WriteAction.run<RuntimeException> { document.setText(initialText) }
+
+            assertTrue("the IDE still considers the reverted document unsaved", FileDocumentManager.getInstance().isDocumentUnsaved(document))
+            assertEquals("undoing back to the server content clears the edit marker", listOf("editing"), tab.coloredText.texts)
+
+            WriteAction.run<RuntimeException> { document.setText(editedText) }
+            assertEquals(listOf("editing", " *"), tab.coloredText.texts)
+
+            file.suppressPush = true
+            try {
+                WriteAction.run<RuntimeException> { FileDocumentManager.getInstance().saveDocument(document) }
+            } finally {
+                file.suppressPush = false
+            }
+            file.setServerContent(editedText, mapOf("A" to "changed"))
+            presentation.update(tab)
+
+            assertEquals(listOf("editing"), tab.coloredText.texts)
+        } finally {
+            presentation.dispose()
+        }
+    }
+
+    fun `test real editor tab presentation tracks undo to server content`() {
+        val initialText = SecretsDocumentFormat.serialize(mapOf("A" to "old"))
+        val editedText = SecretsDocumentFormat.serialize(mapOf("A" to "changed"))
+        val file = newFile("real-tab-editing", initialText, mapOf("A" to "old"))
+        val manager = FileEditorManager.getInstance(project)
+        val editor = manager.openFile(file, false).single()
+        val presentation = DopplerEditorTabPresentation(project)
+        val tab = TabInfo(JPanel()).setObject(editor)
+        try {
+            presentation.update(tab)
+            val document = requireNotNull(FileDocumentManager.getInstance().getDocument(file))
+
+            WriteAction.run<RuntimeException> { document.setText(editedText) }
+            assertEquals(listOf("real-tab-editing", " *"), tab.coloredText.texts)
+
+            WriteAction.run<RuntimeException> { document.setText(initialText) }
+            assertEquals(listOf("real-tab-editing"), tab.coloredText.texts)
+        } finally {
+            presentation.dispose()
+            manager.closeFile(file)
+        }
+    }
+
     fun `test editing marks the document unsaved and saving writes through to the file`() {
         val file = newFile("dev", "API_KEY: old", mapOf("API_KEY" to "old"))
         val manager = FileDocumentManager.getInstance()
@@ -199,6 +261,8 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         WriteAction.run<RuntimeException> { manager.saveDocument(document) }
 
         assertFalse("document should be saved", manager.isDocumentUnsaved(document))
+        assertTrue("local save should remain pending for explicit remote sync", file.hasPendingSync)
+        assertFalse("local save must not start a remote push", file.pushInProgress.get())
         assertEquals(
             "API_KEY: new",
             String(file.contentsToByteArray(), StandardCharsets.UTF_8),

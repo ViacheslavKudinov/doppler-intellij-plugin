@@ -310,6 +310,7 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
                 project,
                 "Not saved to Doppler - new secrets need a value. Use \"\" for an empty value; null is only a placeholder for an existing restricted secret.",
             )
+            file.hasPendingSync = false
             return
         }
 

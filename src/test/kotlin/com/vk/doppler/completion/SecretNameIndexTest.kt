@@ -35,6 +35,7 @@ class SecretNameIndexTest {
             authContextId: String,
             checkCancelled: () -> Unit,
             reportProgress: (String) -> Unit,
+            previousNames: SecretNames,
         ): SecretNames {
             calls++
             failure?.let { throw it }
@@ -270,8 +271,36 @@ class SecretNameIndexTest {
         assertEquals(2, executor.pending)
         executor.runAll()
 
-        assertEquals(listOf("a"), loader.cancelledContexts)
+        assertTrue(loader.cancelledContexts.isEmpty())
         assertEquals(second, index.namesFor("b") {})
+    }
+
+    @Test
+    fun `invalidating an in-flight load starts a fresh generation and ignores the old result`() {
+        val results = ArrayDeque(listOf(first, second))
+        lateinit var index: SecretNameIndex
+        val queuedLoader = object : SecretNamesLoader {
+            private var calls = 0
+
+            override fun load(
+                authContextId: String,
+                checkCancelled: () -> Unit,
+                reportProgress: (String) -> Unit,
+                previousNames: SecretNames,
+            ): SecretNames {
+                calls++
+                if (calls == 1) index.invalidate()
+                return results.removeFirst()
+            }
+        }
+        index = SecretNameIndex(queuedLoader, executor, { now }, 1_000L, 500L)
+
+        index.namesFor("ctx") {}
+        executor.runAll()
+        index.namesFor("ctx") {}
+        executor.runAll()
+
+        assertEquals(second, index.namesFor("ctx") {})
     }
 
     @Test
@@ -393,7 +422,7 @@ class SecretNameIndexTest {
         executor.runAll()
 
         assertEquals(0, notified)
-        assertEquals(listOf("ctx"), loader.cancelledContexts)
+        assertTrue(loader.cancelledContexts.isEmpty())
         assertEquals(emptyMap<String, Map<String, Set<String>>>(), index.namesFor("ctx") {})
     }
 

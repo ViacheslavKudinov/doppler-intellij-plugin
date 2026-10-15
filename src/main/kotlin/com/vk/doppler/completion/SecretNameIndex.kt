@@ -9,7 +9,12 @@ import java.util.concurrent.RejectedExecutionException
 
 internal fun interface SecretNamesLoader {
     /** Reads every config's secret names; reports progress and lets cancellation escape. */
-    fun load(authContextId: String, checkCancelled: () -> Unit, reportProgress: (String) -> Unit): SecretNames
+    fun load(
+        authContextId: String,
+        checkCancelled: () -> Unit,
+        reportProgress: (String) -> Unit,
+        previousNames: SecretNames,
+    ): SecretNames
 }
 
 /**
@@ -85,7 +90,10 @@ internal class SecretNameIndex(
 
     /** Marks the names stale so the next read refreshes them, while still serving the old ones. */
     fun invalidate() {
-        synchronized(lock) { state = state.copy(loadedAt = null, retryAfter = 0L) }
+        synchronized(lock) {
+            generation++
+            state = state.copy(loadedAt = null, retryAfter = 0L, loading = false)
+        }
     }
 
     fun dispose() {
@@ -106,6 +114,10 @@ internal class SecretNameIndex(
 
     private fun load(authContextId: String, startedGeneration: Int) {
         val indicator = ProgressManager.getInstance().progressIndicator
+        val previousNames = synchronized(lock) {
+            if (generation != startedGeneration) return
+            state.names
+        }
         val loaded = try {
             loader.load(
                 authContextId,
@@ -114,6 +126,7 @@ internal class SecretNameIndex(
                     if (generation != startedGeneration) throw CancellationException()
                 },
                 reportProgress = { message -> indicator?.text2 = message },
+                previousNames = previousNames,
             )
         } catch (e: ProcessCanceledException) {
             finish(startedGeneration, null, retry = false)

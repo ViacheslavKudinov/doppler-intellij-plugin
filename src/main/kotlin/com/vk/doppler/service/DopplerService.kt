@@ -64,9 +64,24 @@ class DopplerService {
 
     fun listConfigs(projectSlug: String): List<DopplerConfig> = cli().listConfigs(projectSlug)
 
-    /** Names only, with no account check; callers verify the auth context around a batch. */
+    fun listConfigs(expectedAuthContextId: String, projectSlug: String): List<DopplerConfig> {
+        val cli = cli()
+        requireAuthContext(cli, expectedAuthContextId)
+        val configs = cli.listConfigs(projectSlug)
+        requireAuthContext(cli, expectedAuthContextId)
+        return configs
+    }
+
     fun listSecretNames(projectSlug: String, configName: String): Set<String> =
         cli().listSecretNames(projectSlug, configName)
+
+    fun listSecretNames(expectedAuthContextId: String, projectSlug: String, configName: String): Set<String> {
+        val cli = cli()
+        requireAuthContext(cli, expectedAuthContextId)
+        val names = cli.listSecretNames(projectSlug, configName)
+        requireAuthContext(cli, expectedAuthContextId)
+        return names
+    }
 
     fun loadSecrets(
         projectSlug: String,

@@ -64,6 +64,25 @@ class DopplerService {
 
     fun listConfigs(projectSlug: String): List<DopplerConfig> = cli().listConfigs(projectSlug)
 
+    fun listConfigs(expectedAuthContextId: String, projectSlug: String): List<DopplerConfig> {
+        val cli = cli()
+        requireAuthContext(cli, expectedAuthContextId)
+        val configs = cli.listConfigs(projectSlug)
+        requireAuthContext(cli, expectedAuthContextId)
+        return configs
+    }
+
+    fun listSecretNames(projectSlug: String, configName: String): Set<String> =
+        cli().listSecretNames(projectSlug, configName)
+
+    fun listSecretNames(expectedAuthContextId: String, projectSlug: String, configName: String): Set<String> {
+        val cli = cli()
+        requireAuthContext(cli, expectedAuthContextId)
+        val names = cli.listSecretNames(projectSlug, configName)
+        requireAuthContext(cli, expectedAuthContextId)
+        return names
+    }
+
     fun loadSecrets(
         projectSlug: String,
         configName: String,
@@ -128,6 +147,11 @@ data class SecretChanges(
         (original - removed) + upserted
 
     companion object {
+        fun unvaluedAdditions(original: Map<String, String?>, edited: ParsedSecrets): Set<String> =
+            edited.values
+                .filter { (name, value) -> name !in original && value == null }
+                .keys + edited.cleared.filterNot(original::containsKey)
+
         fun between(original: Map<String, String?>, edited: ParsedSecrets): SecretChanges {
             val upserted = edited.values
                 .mapNotNull { (name, value) -> value?.let { name to it } }

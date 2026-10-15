@@ -11,6 +11,34 @@ private fun edited(values: Map<String, String?>, cleared: Set<String> = emptySet
 class SecretChangesTest {
 
     @Test
+    fun `new null or cleared entries are identified as unvalued additions`() {
+        val edited = ParsedSecrets(
+            values = mapOf("NULL_VALUE" to null, "EMPTY_VALUE" to ""),
+            cleared = setOf("BLANK_VALUE"),
+        )
+
+        assertEquals(
+            setOf("NULL_VALUE", "BLANK_VALUE"),
+            SecretChanges.unvaluedAdditions(emptyMap(), edited),
+        )
+    }
+
+    @Test
+    fun `restricted secrets and explicit empty values are not unvalued additions`() {
+        val edited = ParsedSecrets(
+            values = mapOf("RESTRICTED" to null, "EMPTY_VALUE" to ""),
+            cleared = setOf("REMOVED"),
+        )
+
+        assertTrue(
+            SecretChanges.unvaluedAdditions(
+                original = mapOf("RESTRICTED" to null, "REMOVED" to "old"),
+                edited = edited,
+            ).isEmpty(),
+        )
+    }
+
+    @Test
     fun `no edits produce no writes`() {
         val original = mapOf("A" to "1", "B" to "2")
         val changes = SecretChanges.between(original, edited(original))

@@ -29,6 +29,7 @@ import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTabsManager
 import com.vk.doppler.DopplerIcons
 import com.vk.doppler.cli.DopplerConfig
 import com.vk.doppler.cli.DopplerProject
+import com.vk.doppler.completion.SecretReferenceService
 import com.vk.doppler.editor.DopplerSecretsEditorService
 import com.vk.doppler.service.DopplerService
 import com.vk.doppler.service.DopplerStatus
@@ -162,6 +163,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                     DopplerSecretsEditorService.invalidateCachedFiles(
                         report.authContextId.takeIf { report.status == DopplerStatus.READY },
                     )
+                    SecretReferenceService.getInstance().invalidate()
                     if (report.status == DopplerStatus.READY) {
                         populate(projects)
                     } else {

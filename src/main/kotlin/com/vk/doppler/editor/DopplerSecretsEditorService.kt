@@ -24,6 +24,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.openapi.wm.WindowManager
 import com.vk.doppler.cli.DopplerCliException
+import com.vk.doppler.completion.SecretReferenceService
 import com.vk.doppler.notifications.DopplerNotifier
 import com.vk.doppler.service.DopplerService
 import com.vk.doppler.service.DopplerSecretsSnapshot
@@ -129,6 +130,9 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             private lateinit var text: String
 
             override fun run(indicator: ProgressIndicator) {
+                indicator.isIndeterminate = true
+                indicator.text = "Loading Doppler secrets for /$projectSlug/$configName…"
+                indicator.text2 = "Waiting for the Doppler CLI to return secret values"
                 snapshot = DopplerService.getInstance().loadSecrets(projectSlug, configName)
                 text = SecretsDocumentFormat.serialize(snapshot.secrets)
             }
@@ -162,12 +166,19 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         return file
     }
 
+    /** Keeps `${...}` completion in step with what the config actually contains on the server. */
+    private fun publishSecretNames(file: DopplerSecretsFile) {
+        SecretReferenceService.getInstance()
+            .update(file.authContextId, file.projectSlug, file.configName, file.remoteSnapshot.keys)
+    }
+
     /** Replaces both the file and its open document with server state, without pushing back. */
     private fun applyServerContent(file: DopplerSecretsFile, text: String, snapshot: Map<String, String?>) {
         if (file.isInvalidated) return
         file.suppressPush = true
         try {
             file.setServerContent(text, snapshot)
+            publishSecretNames(file)
             val documents = FileDocumentManager.getInstance()
             documents.getCachedDocument(file)?.let { document ->
                 if (document.text == text) return@let
@@ -290,7 +301,16 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         val edited = try {
             SecretsDocumentFormat.parse(text)
         } catch (e: SecretsFormatException) {
-            DopplerNotifier.error(project, "Not saved to Doppler — ${e.message}")
+            DopplerNotifier.error(project, "Not saved to Doppler - ${e.message}")
+            return
+        }
+
+        if (SecretChanges.unvaluedAdditions(file.remoteSnapshot, edited).isNotEmpty()) {
+            DopplerNotifier.error(
+                project,
+                "Not saved to Doppler - new secrets need a value. Use \"\" for an empty value; null is only a placeholder for an existing restricted secret.",
+            )
+            file.hasPendingSync = false
             return
         }
 
@@ -360,11 +380,12 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
                     file.hasPendingSync = hasNewerEdits
                     refreshedText?.let {
                         file.remoteSnapshot = refreshedSnapshot
+                        publishSecretNames(file)
                         if (!hasNewerEdits) applyServerContent(file, it, refreshedSnapshot)
                     }
                     DopplerNotifier.info(
                         project,
-                        "Synced $label — ${changes.upserted.size} updated, ${changes.removed.size} deleted.",
+                        "Synced $label - ${changes.upserted.size} updated, ${changes.removed.size} deleted.",
                     )
                 }
 

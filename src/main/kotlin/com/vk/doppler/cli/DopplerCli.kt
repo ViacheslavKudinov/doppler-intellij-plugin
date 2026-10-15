@@ -105,6 +105,14 @@ class DopplerCli(private val executablePath: String) {
         return parseSecrets(element)
     }
 
+    /** Reads only the secret names of a config; the CLI never returns the values. */
+    fun listSecretNames(projectSlug: String, configName: String): Set<String> {
+        val element = runJson(
+            listOf("secrets", "--only-names", "--project", projectSlug, "--config", configName)
+        )
+        return parseSecretNames(element)
+    }
+
     /**
      * Sets a single secret. The value is streamed over stdin so it never appears in the
      * process arguments, where it would be readable by other local users.
@@ -291,6 +299,16 @@ internal fun parseSecrets(element: JsonElement): List<DopplerSecret> {
             else -> throw DopplerCliException("Doppler secrets output contains an invalid value.")
         }
     }.sortedBy { it.name }
+}
+
+/**
+ * Maps the output of `doppler secrets --json --only-names`, a bare object of `name -> {}`, to
+ * the set of names. Values are never read, so nothing secret is held in memory.
+ */
+internal fun parseSecretNames(element: JsonElement): Set<String> {
+    val root = element as? JsonObject
+        ?: throw DopplerCliException("Expected a Doppler secrets object.")
+    return root.keySet().filterNotTo(linkedSetOf()) { DopplerReservedSecrets.isReserved(it) }
 }
 
 private fun JsonElement.isSecretValue(): Boolean = when {

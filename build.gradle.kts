@@ -5,6 +5,8 @@ import org.cyclonedx.gradle.CyclonedxDirectTask
 import org.cyclonedx.model.Component
 import org.gradle.api.file.RegularFile
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import org.jetbrains.intellij.platform.gradle.tasks.PublishPluginTask
+import org.jetbrains.intellij.platform.gradle.tasks.SignPluginTask
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -65,6 +67,17 @@ intellijPlatform {
   }
 }
 
+// Publishing a release must sign the verified release asset, never rebuild it.
+providers.gradleProperty("releaseArchive").orNull?.let { archive ->
+    val signRelease = tasks.named<SignPluginTask>("signPlugin") {
+        archiveFile.set(layout.projectDirectory.file(archive))
+    }
+    tasks.named<PublishPluginTask>("publishPlugin") {
+        setDependsOn(listOf(signRelease))
+        archiveFiles.setFrom(signRelease.flatMap { it.signedArchiveFile })
+    }
+}
+
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
     reports {
@@ -90,5 +103,4 @@ tasks.cyclonedxBom {
     jsonOutput = layout.buildDirectory.file("distributions/${project.name}-${project.version}.cdx.json")
     xmlOutput.convention(null as RegularFile?)
 }
-
 

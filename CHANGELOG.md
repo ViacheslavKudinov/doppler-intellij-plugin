@@ -2,6 +2,14 @@
 
 # Doppler-plugin Changelog
 
+## [1.4.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.3.0...v1.4.0) (2026-10-15)
+
+
+### Features
+
+* secret ref completion ([#48](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/48)) ([933a7cb](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/933a7cb38c45e963e4a654903928cb56333c3f6a))
+* **workflow:** Enhance release ([#46](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/46)) ([3e181f2](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/3e181f296f7ebc1efef6054ea8068bd77c13255a))
+
 ## [1.3.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.2.0...v1.3.0) (2026-10-14)
 
 

@@ -141,9 +141,24 @@ restart because its in-memory secret editors cannot be reliably unloaded while t
 
 ## Releases
 
-The Release workflow runs CI checks and Release Please to create release PRs and publish
-GitHub releases. The manual Publish workflow builds and signs the selected tag, then uploads
-the plugin to JetBrains Marketplace. These workflows do not generate attestations or attach SBOMs.
+GitHub releases are [immutable](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases),
+so assets can only be attached while a release is a draft.
+
+1. The Release workflow runs CI checks and Release Please. Merging the release PR makes Release
+   Please create the tag and a **draft** GitHub release.
+2. In the same run, the plugin zip and a CycloneDX SBOM are built from the released commit,
+   together with a `SHA256SUMS` file. Build provenance is attested for all three files, and the
+   SBOM is attested against the zip. The files are then attached to the draft, which is published.
+3. The manual Publish workflow builds and signs the selected tag, then uploads the plugin to
+   JetBrains Marketplace.
+
+Verify a downloaded release asset with the GitHub CLI:
+
+```bash
+gh attestation verify doppler-plugin-<version>.zip --repo ViacheslavKudinov/doppler-plugin
+gh attestation verify doppler-plugin-<version>.zip --repo ViacheslavKudinov/doppler-plugin \
+  --predicate-type https://cyclonedx.org/bom   # the SBOM attestation
+```
 
 Generate a local dependency SBOM with `./gradlew cyclonedxBom`.
 

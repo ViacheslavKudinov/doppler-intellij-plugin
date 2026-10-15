@@ -1,3 +1,12 @@
+# Build and Unit Tests
+
+- Add or update unit tests for new code and changed behavior, including relevant edge cases. Include a regression test for bug fixes. Follow the existing test conventions under `src/test/kotlin`.
+- After code or build-configuration changes, run `./gradlew buildPlugin test --console=plain` locally from the repository root. Run it after the final edits, not only before making changes; do not rely solely on editor diagnostics or CI.
+- Use a compatible JDK. On macOS, if no suitable JDK is configured, use the bundled IntelliJ JDK: `JAVA_HOME="/Applications/IntelliJ IDEA.app/Contents/jbr/Contents/Home" ./gradlew buildPlugin test --console=plain`.
+- Fix failures introduced by the changes and rerun validation before reporting completion. If validation is blocked or fails for an unrelated reason, report the exact command and blocker; never claim an unrun or failed check passed.
+- Do not modify `CHANGELOG.md` during implementation or validation. Avoid publishing tasks for local validation, and exclude `patchChangelog` with `-x patchChangelog` if a required task would invoke it.
+- In the final response, summarize the tests added or updated and the local build/test results. Documentation-only changes do not require a plugin build.
+
 # Commit Messages and Pull Request Titles
 
 - Use Conventional Commits for all generated commit messages and pull request titles: `<type>[optional scope][!]: <description>`.

@@ -1,6 +1,7 @@
 package com.vk.doppler.editor
 
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.codeInsight.AutoPopupController
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -9,16 +10,21 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.AnActionResult
 import com.intellij.openapi.actionSystem.ex.AnActionListener
+import com.intellij.codeInsight.AutoPopupController
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.util.Condition
+import com.intellij.openapi.util.Condition
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.Disposable
 import com.intellij.util.concurrency.AppExecutorUtil
@@ -32,8 +38,11 @@ import com.vk.doppler.settings.DopplerSettings
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
+import java.lang.ref.WeakReference
 
 private const val HEARTBEAT_SECONDS = 1L
+private const val REFERENCE_INDEX_TTL_MILLIS = 5 * 60 * 1000L
+private const val REFERENCE_INDEX_RETRY_DELAY_MILLIS = 30 * 1000L
 
 /**
  * Owns the in-memory secret editors for one IDE project and performs the two-way sync.
@@ -44,6 +53,13 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
     private val openPaths = ConcurrentHashMap.newKeySet<String>()
     private val closeAfterSync = mutableMapOf<DopplerSecretsFile, () -> Unit>()
     private val tabPresentation = DopplerEditorTabPresentation(project)
+    private val referenceIndexLock = Any()
+
+    private var referenceIndexAuthContextId: String? = null
+    private var referenceIndex: Map<SecretReferenceTarget, Set<String>> = emptyMap()
+    private var referenceIndexUpdatedAt = 0L
+    private var referenceIndexRetryAfter = 0L
+    private var referenceIndexLoading = false
 
     @Volatile
     private var lastPollAt = 0L
@@ -86,9 +102,135 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         pollHandle.cancel(false)
         tabPresentation.dispose()
         closeAfterSync.clear()
+        synchronized(referenceIndexLock) {
+            referenceIndex = emptyMap()
+            referenceIndexAuthContextId = null
+        }
     }
 
     fun owns(file: DopplerSecretsFile): Boolean = openPaths.contains(file.path)
+
+    fun secretReferenceSources(file: DopplerSecretsFile, editor: Editor): List<SecretReferenceSource> {
+        var shouldRefresh = false
+        val indexed = synchronized(referenceIndexLock) {
+            if (referenceIndexAuthContextId != file.authContextId) {
+                referenceIndexAuthContextId = file.authContextId
+                referenceIndex = emptyMap()
+                referenceIndexUpdatedAt = 0L
+                referenceIndexRetryAfter = 0L
+            }
+            val now = System.currentTimeMillis()
+            if (!referenceIndexLoading &&
+                now >= referenceIndexRetryAfter &&
+                (referenceIndexUpdatedAt == 0L || now - referenceIndexUpdatedAt >= REFERENCE_INDEX_TTL_MILLIS)
+            ) {
+                referenceIndexLoading = true
+                shouldRefresh = true
+            }
+            referenceIndex
+        }
+        if (shouldRefresh) refreshSecretReferenceIndex(file.authContextId, editor)
+
+        val sources = indexed.map { (target, names) ->
+            SecretReferenceSource(target.projectSlug, target.environment, target.configName, names)
+        } + DopplerFileSystem.getInstance().cachedFiles()
+            .asSequence()
+            .filter { it.authContextId == file.authContextId && !it.isInvalidated }
+            .map { cached ->
+                SecretReferenceSource(
+                    cached.projectSlug,
+                    cached.environment,
+                    cached.configName,
+                    cached.remoteSnapshot.keys,
+                )
+            }
+            .toList()
+
+        return sources.groupBy { Triple(it.projectSlug, it.environment, it.configName) }
+            .map { (target, entries) ->
+                SecretReferenceSource(target.first, target.second, target.third, entries.flatMapTo(mutableSetOf()) { it.secretNames })
+            }
+    }
+
+    private fun refreshSecretReferenceIndex(authContextId: String, editor: Editor) {
+        val editorReference = WeakReference(editor)
+        ProgressManager.getInstance().run(
+            object : Task.Backgroundable(project, "Loading Doppler secret references…", true) {
+                private var loadedIndex: Map<SecretReferenceTarget, Set<String>> = emptyMap()
+
+                override fun run(indicator: ProgressIndicator) {
+                    val service = DopplerService.getInstance()
+                    val projects = service.listProjects(authContextId)
+                    val index = linkedMapOf<SecretReferenceTarget, Set<String>>()
+                    for (dopplerProject in projects) {
+                        indicator.checkCanceled()
+                        indicator.text2 = "Loading configs for ${dopplerProject.slug}"
+                        for (config in service.listConfigs(dopplerProject.slug)) {
+                            indicator.checkCanceled()
+                            indicator.text2 = "Loading secrets for ${dopplerProject.slug}/${config.name}"
+                            val snapshot = service.loadSecrets(
+                                dopplerProject.slug,
+                                config.name,
+                                authContextId,
+                            )
+                            index[SecretReferenceTarget(dopplerProject.slug, config.environment, config.name)] =
+                                snapshot.secrets.mapTo(mutableSetOf()) { it.name }
+                        }
+                    }
+                    if (service.currentAuthContextId() != authContextId) {
+                        throw DopplerCliException(
+                            "The Doppler account changed while loading secret references.",
+                            DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
+                        )
+                    }
+                    loadedIndex = index
+                }
+
+                override fun onSuccess() {
+                    if (project.isDisposed) return
+                    synchronized(referenceIndexLock) {
+                        if (referenceIndexAuthContextId == authContextId) {
+                            referenceIndex = loadedIndex
+                            referenceIndexUpdatedAt = System.currentTimeMillis()
+                            referenceIndexRetryAfter = 0L
+                        }
+                    }
+                    val activeEditor = editorReference.get() ?: return
+                    if (activeEditor.isDisposed) return
+                    AutoPopupController.getInstance(project).scheduleAutoPopup(activeEditor, Condition { currentFile ->
+                        val caretOffset = activeEditor.caretModel.offset
+                        currentFile.virtualFile is DopplerSecretsFile &&
+                            SecretReferenceCompletion.contextAt(activeEditor.document.charsSequence, caretOffset) != null
+                    })
+                }
+
+                override fun onThrowable(error: Throwable) {
+                    synchronized(referenceIndexLock) {
+                        if (referenceIndexAuthContextId == authContextId) {
+                            referenceIndexRetryAfter = System.currentTimeMillis() + REFERENCE_INDEX_RETRY_DELAY_MILLIS
+                        }
+                    }
+                    if (!project.isDisposed) {
+                        DopplerNotifier.error(project, "Could not load secret reference completions: ${error.message}")
+                    }
+                }
+
+                override fun onCancel() {
+                    synchronized(referenceIndexLock) {
+                        if (referenceIndexAuthContextId == authContextId) {
+                            referenceIndexRetryAfter = System.currentTimeMillis() + REFERENCE_INDEX_RETRY_DELAY_MILLIS
+                        }
+                    }
+                }
+
+                override fun onFinished() {
+                    synchronized(referenceIndexLock) {
+                        referenceIndexLoading = false
+                    }
+                }
+            },
+        )
+    }
 
     /**
      * Drops a config's secrets from memory once no project shows it any more, so values do not

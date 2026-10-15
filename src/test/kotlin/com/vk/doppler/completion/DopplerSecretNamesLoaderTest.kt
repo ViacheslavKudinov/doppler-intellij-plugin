@@ -77,7 +77,7 @@ class DopplerSecretNamesLoaderTest {
     fun `collects names for every project and config`() {
         populate()
 
-        val names = loader.load("ctx") {}
+        val names = loader.load("ctx", {}, {})
 
         assertEquals(
             mapOf(
@@ -89,24 +89,37 @@ class DopplerSecretNamesLoaderTest {
     }
 
     @Test
+    fun `reports progress while loading projects and configs`() {
+        populate()
+        val progress = ConcurrentLinkedQueue<String>()
+
+        loader.load("ctx", {}, progress::add)
+
+        assertTrue(progress.contains("Listing Doppler projects…"))
+        assertTrue(progress.contains("Listing configs for app…"))
+        assertTrue(progress.contains("Loading secret names for app/api…"))
+        assertTrue(progress.contains("Loading secret names for other/backend…"))
+    }
+
+    @Test
     fun `lists projects for the requested account`() {
         populate()
 
-        loader.load("ctx") {}
+        loader.load("ctx", {}, {})
 
         assertEquals("ctx", api.listedProjectsFor)
     }
 
     @Test
     fun `an empty account is an empty index`() {
-        assertEquals(emptyMap<String, Map<String, Set<String>>>(), loader.load("ctx") {})
+        assertEquals(emptyMap<String, Map<String, Set<String>>>(), loader.load("ctx", {}, {}))
     }
 
     @Test
     fun `a project without configs is kept as empty`() {
         api.projects = listOf(project("empty"))
 
-        assertEquals(mapOf("empty" to emptyMap<String, Set<String>>()), loader.load("ctx") {})
+        assertEquals(mapOf("empty" to emptyMap<String, Set<String>>()), loader.load("ctx", {}, {}))
     }
 
     @Test
@@ -114,7 +127,7 @@ class DopplerSecretNamesLoaderTest {
         populate()
         api.secretFailures = mapOf(("app" to "api") to generic("denied"))
 
-        val names = loader.load("ctx") {}
+        val names = loader.load("ctx", {}, {})
 
         assertEquals(setOf("worker"), names.getValue("app").keys)
         assertEquals(setOf("backend"), names.getValue("other").keys)
@@ -125,7 +138,7 @@ class DopplerSecretNamesLoaderTest {
         populate()
         api.configFailures = mapOf("app" to generic("no access"))
 
-        val names = loader.load("ctx") {}
+        val names = loader.load("ctx", {}, {})
 
         assertEquals(emptyMap<String, Set<String>>(), names.getValue("app"))
         assertEquals(mapOf("backend" to setOf("DATABASE_URL")), names.getValue("other"))
@@ -138,7 +151,7 @@ class DopplerSecretNamesLoaderTest {
             ("app" to "api") to DopplerCliException("forbidden", DopplerCliException.Kind.NOT_AUTHENTICATED),
         )
 
-        assertEquals(setOf("worker"), loader.load("ctx") {}.getValue("app").keys)
+        assertEquals(setOf("worker"), loader.load("ctx", {}, {}).getValue("app").keys)
     }
 
     @Test
@@ -149,7 +162,7 @@ class DopplerSecretNamesLoaderTest {
         )
 
         try {
-            loader.load("ctx") {}
+            loader.load("ctx", {}, {})
             fail("Expected DopplerCliException")
         } catch (expected: DopplerCliException) {
             assertEquals(DopplerCliException.Kind.CLI_NOT_FOUND, expected.kind)
@@ -164,7 +177,7 @@ class DopplerSecretNamesLoaderTest {
         )
 
         try {
-            loader.load("ctx") {}
+            loader.load("ctx", {}, {})
             fail("Expected DopplerCliException")
         } catch (expected: DopplerCliException) {
             assertEquals(DopplerCliException.Kind.AUTH_CONTEXT_CHANGED, expected.kind)
@@ -182,7 +195,7 @@ class DopplerSecretNamesLoaderTest {
             }
         }
 
-        DopplerSecretNamesLoader(counting, pool).load("ctx") {}
+        DopplerSecretNamesLoader(counting, pool).load("ctx", {}, {})
 
         assertEquals(1, checks)
         assertEquals(3, api.secretReads.get())
@@ -194,7 +207,7 @@ class DopplerSecretNamesLoaderTest {
         api.authContexts = ArrayDeque(listOf("someone-else"))
 
         try {
-            loader.load("ctx") {}
+            loader.load("ctx", {}, {})
             fail("Expected DopplerCliException")
         } catch (expected: DopplerCliException) {
             assertEquals(DopplerCliException.Kind.AUTH_CONTEXT_CHANGED, expected.kind)
@@ -207,9 +220,9 @@ class DopplerSecretNamesLoaderTest {
         val checks = AtomicInteger()
 
         try {
-            loader.load("ctx") {
+            loader.load("ctx", {
                 if (checks.incrementAndGet() > 1) throw CancellationException()
-            }
+            }, {})
             fail("Expected CancellationException")
         } catch (expected: CancellationException) {
             assertTrue(api.secretReads.get() < 3)
@@ -221,7 +234,7 @@ class DopplerSecretNamesLoaderTest {
         populate()
         val checks = AtomicInteger()
 
-        loader.load("ctx") { checks.incrementAndGet() }
+        loader.load("ctx", { checks.incrementAndGet() }, {})
 
         // once per project plus once per config
         assertEquals(2 + 3, checks.get())
@@ -233,7 +246,7 @@ class DopplerSecretNamesLoaderTest {
         val caller = Thread.currentThread()
         val threads = ConcurrentLinkedQueue<Thread>()
 
-        loader.load("ctx") { threads += Thread.currentThread() }
+        loader.load("ctx", { threads += Thread.currentThread() }, {})
 
         assertTrue(threads.isNotEmpty())
         assertFalse(threads.any { it === caller })

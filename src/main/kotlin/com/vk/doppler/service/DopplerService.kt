@@ -132,6 +132,11 @@ data class SecretChanges(
         (original - removed) + upserted
 
     companion object {
+        fun unvaluedAdditions(original: Map<String, String?>, edited: ParsedSecrets): Set<String> =
+            edited.values
+                .filter { (name, value) -> name !in original && value == null }
+                .keys + edited.cleared.filterNot(original::containsKey)
+
         fun between(original: Map<String, String?>, edited: ParsedSecrets): SecretChanges {
             val upserted = edited.values
                 .mapNotNull { (name, value) -> value?.let { name to it } }

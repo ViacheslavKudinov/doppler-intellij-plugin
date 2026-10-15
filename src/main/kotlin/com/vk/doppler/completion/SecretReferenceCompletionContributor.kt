@@ -39,8 +39,12 @@ private object SecretReferenceProvider : CompletionProvider<CompletionParameters
         val text = editor.document.charsSequence
         val reference = SecretReferenceParser.contextAt(text, parameters.offset) ?: return
 
-        val index = SecretReferenceService.getInstance().namesFor(file.authContextId) {
+        val secretReferenceService = SecretReferenceService.getInstance()
+        val index = secretReferenceService.namesFor(file.authContextId) {
             SecretReferencePopup.scheduleLater(project, editor)
+        }
+        if (secretReferenceService.isLoading()) {
+            result.addLookupAdvertisement("Loading Doppler secret names for references…")
         }
         val candidates = SecretReferenceCandidates.find(
             SecretReferenceLocation(file.projectSlug, file.configName),

@@ -130,6 +130,9 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             private lateinit var text: String
 
             override fun run(indicator: ProgressIndicator) {
+                indicator.isIndeterminate = true
+                indicator.text = "Loading Doppler secrets for /$projectSlug/$configName…"
+                indicator.text2 = "Waiting for the Doppler CLI to return secret values"
                 snapshot = DopplerService.getInstance().loadSecrets(projectSlug, configName)
                 text = SecretsDocumentFormat.serialize(snapshot.secrets)
             }
@@ -299,6 +302,14 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             SecretsDocumentFormat.parse(text)
         } catch (e: SecretsFormatException) {
             DopplerNotifier.error(project, "Not saved to Doppler - ${e.message}")
+            return
+        }
+
+        if (SecretChanges.unvaluedAdditions(file.remoteSnapshot, edited).isNotEmpty()) {
+            DopplerNotifier.error(
+                project,
+                "Not saved to Doppler - new secrets need a value. Use \"\" for an empty value; null is only a placeholder for an existing restricted secret.",
+            )
             return
         }
 

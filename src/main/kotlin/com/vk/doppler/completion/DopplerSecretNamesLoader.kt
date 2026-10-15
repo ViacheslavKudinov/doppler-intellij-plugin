@@ -42,10 +42,15 @@ internal class DopplerSecretNamesLoader(
     private val pool: ExecutorService,
 ) : SecretNamesLoader {
 
-    override fun load(authContextId: String, checkCancelled: () -> Unit): SecretNames {
+    override fun load(
+        authContextId: String,
+        checkCancelled: () -> Unit,
+        reportProgress: (String) -> Unit,
+    ): SecretNames {
+        reportProgress("Listing Doppler projects…")
         val projects = api.listProjects(authContextId)
         val tasks = projects.map { project ->
-            project.slug to pool.submit(Callable { loadProject(project.slug, checkCancelled) })
+            project.slug to pool.submit(Callable { loadProject(project.slug, checkCancelled, reportProgress) })
         }
         val result = LinkedHashMap<String, Map<String, Set<String>>>()
         try {
@@ -69,7 +74,12 @@ internal class DopplerSecretNamesLoader(
         return result
     }
 
-    private fun loadProject(slug: String, checkCancelled: () -> Unit): Map<String, Set<String>> {
+    private fun loadProject(
+        slug: String,
+        checkCancelled: () -> Unit,
+        reportProgress: (String) -> Unit,
+    ): Map<String, Set<String>> {
+        reportProgress("Listing configs for $slug…")
         checkCancelled()
         val configs = try {
             api.listConfigs(slug)
@@ -80,6 +90,7 @@ internal class DopplerSecretNamesLoader(
         val names = LinkedHashMap<String, Set<String>>()
         for (config in configs) {
             checkCancelled()
+            reportProgress("Loading secret names for $slug/${config.name}…")
             try {
                 names[config.name] = api.listSecretNames(slug, config.name)
             } catch (e: DopplerCliException) {

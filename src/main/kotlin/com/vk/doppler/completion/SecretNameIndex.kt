@@ -2,13 +2,14 @@ package com.vk.doppler.completion
 
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.progress.ProgressManager
 import java.util.concurrent.CancellationException
 import java.util.concurrent.Executor
 import java.util.concurrent.RejectedExecutionException
 
 internal fun interface SecretNamesLoader {
-    /** Reads every config's secret names; calls [checkCancelled] often and lets its exception escape. */
-    fun load(authContextId: String, checkCancelled: () -> Unit): SecretNames
+    /** Reads every config's secret names; reports progress and lets cancellation escape. */
+    fun load(authContextId: String, checkCancelled: () -> Unit, reportProgress: (String) -> Unit): SecretNames
 }
 
 /**
@@ -66,6 +67,8 @@ internal class SecretNameIndex(
         return names
     }
 
+    fun isLoading(): Boolean = synchronized(lock) { state.loading }
+
     /** Records fresh names for one config, e.g. after it was opened or saved. */
     fun update(authContextId: String, projectSlug: String, configName: String, names: Set<String>) {
         val copy = names.toSet()
@@ -102,10 +105,16 @@ internal class SecretNameIndex(
     }
 
     private fun load(authContextId: String, startedGeneration: Int) {
+        val indicator = ProgressManager.getInstance().progressIndicator
         val loaded = try {
-            loader.load(authContextId) {
-                if (generation != startedGeneration) throw CancellationException()
-            }
+            loader.load(
+                authContextId,
+                checkCancelled = {
+                    indicator?.checkCanceled()
+                    if (generation != startedGeneration) throw CancellationException()
+                },
+                reportProgress = { message -> indicator?.text2 = message },
+            )
         } catch (e: ProcessCanceledException) {
             finish(startedGeneration, null, retry = false)
             throw e

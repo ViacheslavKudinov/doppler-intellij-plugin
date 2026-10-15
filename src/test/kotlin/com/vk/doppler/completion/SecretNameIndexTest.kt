@@ -1,7 +1,10 @@
 package com.vk.doppler.completion
 
+import com.intellij.openapi.progress.ProcessCanceledException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import java.util.concurrent.CancellationException
 import java.util.concurrent.Executor
@@ -28,7 +31,11 @@ class SecretNameIndexTest {
         var calls = 0
         val cancelledContexts = mutableListOf<String>()
 
-        override fun load(authContextId: String, checkCancelled: () -> Unit): SecretNames {
+        override fun load(
+            authContextId: String,
+            checkCancelled: () -> Unit,
+            reportProgress: (String) -> Unit,
+        ): SecretNames {
             calls++
             failure?.let { throw it }
             try {
@@ -58,10 +65,12 @@ class SecretNameIndexTest {
 
         assertEquals(emptyMap<String, Map<String, Set<String>>>(), index.namesFor("ctx") {})
         assertEquals(1, executor.pending)
+        assertTrue(index.isLoading())
         assertEquals(0, loader.calls)
 
         executor.runAll()
 
+        assertFalse(index.isLoading())
         assertEquals(first, index.namesFor("ctx") {})
     }
 
@@ -128,6 +137,28 @@ class SecretNameIndexTest {
         executor.runAll()
 
         assertEquals(2, loader.calls)
+        assertEquals(first, index.namesFor("ctx") {})
+    }
+
+    @Test
+    fun `a cancelled load can be retried immediately`() {
+        val index = index()
+        loader.failure = ProcessCanceledException()
+        index.namesFor("ctx") {}
+
+        try {
+            executor.runAll()
+            fail("Expected ProcessCanceledException")
+        } catch (_: ProcessCanceledException) {
+            // Cancellation should leave the index ready to try again.
+        }
+
+        loader.failure = null
+        loader.namesByContext = mapOf("ctx" to first)
+        index.namesFor("ctx") {}
+
+        assertEquals(1, executor.pending)
+        executor.runAll()
         assertEquals(first, index.namesFor("ctx") {})
     }
 

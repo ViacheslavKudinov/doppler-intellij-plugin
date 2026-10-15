@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 object DopplerNotifier {
 
     private const val GROUP_ID = "Doppler"
-    private const val INFO_TIMEOUT_SECONDS = 3L
+    private const val NOTIFICATION_TIMEOUT_SECONDS = 4L
 
     fun info(project: Project?, content: String) = notify(project, content, NotificationType.INFORMATION)
 
@@ -26,9 +26,7 @@ object DopplerNotifier {
             .getNotificationGroup(GROUP_ID)
             .createNotification("Doppler", StringUtil.escapeXmlEntities(content), type)
         notification.notify(project)
-        if (type == NotificationType.INFORMATION) {
-            AppExecutorUtil.getAppScheduledExecutorService()
-                .schedule(notification::expire, INFO_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        }
+        AppExecutorUtil.getAppScheduledExecutorService()
+            .schedule(notification::expire, NOTIFICATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     }
 }

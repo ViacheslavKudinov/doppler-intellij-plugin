@@ -77,11 +77,11 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout publishing configuration
+      - name: Checkout validated release commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.sha }}
+          ref: ${{ needs.validate-release.outputs.commit }}
 
       - name: Download and verify release archive
         id: archive

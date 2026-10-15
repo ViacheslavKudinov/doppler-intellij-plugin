@@ -6,6 +6,8 @@
       "package-name": "doppler-intellij-plugin",
       "include-component-in-tag": false,
       "skip-snapshot": true,
+      "draft": true,
+      "force-tag-creation": true,
       "changelog-sections": [
         { "type": "feat", "section": "Features" },
         { "type": "fix", "section": "Bug Fixes" },

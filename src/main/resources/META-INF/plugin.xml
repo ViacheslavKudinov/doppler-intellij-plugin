@@ -48,8 +48,8 @@
         <fileIconProvider implementation="com.vk.doppler.editor.DopplerFileIconProvider"/>
         <virtualFilePreCloseCheck implementation="com.vk.doppler.editor.DopplerFileCloseCheck"/>
         <completion.contributor language="any"
-                                implementationClass="com.vk.doppler.editor.DopplerSecretReferenceCompletionContributor"/>
-        <typedHandler implementation="com.vk.doppler.editor.DopplerSecretReferenceTypedHandler"/>
+                                implementationClass="com.vk.doppler.completion.DopplerSecretReferenceCompletionContributor"/>
+        <typedHandler implementation="com.vk.doppler.completion.DopplerSecretReferenceTypedHandler"/>
 
         <notificationGroup id="Doppler" displayType="BALLOON"/>
     </extensions>

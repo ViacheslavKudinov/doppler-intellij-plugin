@@ -15,3 +15,8 @@ Examples:
 - `fix(cli): handle stdin write failures`
 - `ci: increase Kotlin compiler heap for CodeQL`
 - `build(deps): upgrade Kotlin Gradle plugin`
+
+Code:
+- always make sure code complies with the project's coding standards and passes all tests
+- new code has to be covered by tests
+- no Jetbrains deprecated APIs should be used

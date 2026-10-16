@@ -11,6 +11,21 @@ import java.util.concurrent.Executor
 import java.util.concurrent.RejectedExecutionException
 
 class SecretNameIndexTest {
+    @Test
+    fun `reading cached names neither starts loading nor replaces the completion callback`() {
+        loader.namesByContext = mapOf("ctx" to first)
+        val index = index()
+        assertTrue(index.cachedNamesFor("ctx").isEmpty())
+        assertEquals(0, executor.pending)
+        var notified = 0
+        index.namesFor("ctx") { notified++ }
+        index.cachedNamesFor("ctx")
+        executor.runAll()
+        assertEquals(1, notified)
+        assertEquals(first, index.cachedNamesFor("ctx"))
+        assertTrue(index.cachedNamesFor("other").isEmpty())
+        assertEquals(1, loader.calls)
+    }
 
     private class ManualExecutor : Executor {
         private val queue = ArrayDeque<Runnable>()

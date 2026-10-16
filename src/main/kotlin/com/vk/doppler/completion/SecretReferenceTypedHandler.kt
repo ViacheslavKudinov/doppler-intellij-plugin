@@ -7,8 +7,11 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
 import com.vk.doppler.editor.DopplerSecretsFile
 
-/** Opens suggestions on `${` and `.`, and keeps whitespace out of an unfinished reference. */
-class DopplerSecretReferenceTypedHandler : TypedHandlerDelegate() {
+/** Reopens suggestions while editing a reference, and keeps whitespace out of it. */
+class DopplerSecretReferenceTypedHandler internal constructor(
+    private val schedulePopup: (Project, Editor) -> Unit,
+) : TypedHandlerDelegate() {
+    constructor() : this(SecretReferencePopup::schedule)
 
     override fun beforeCharTyped(
         charTyped: Char,
@@ -23,8 +26,12 @@ class DopplerSecretReferenceTypedHandler : TypedHandlerDelegate() {
         return if (insideReference) Result.STOP else Result.CONTINUE
     }
 
-    override fun checkAutoPopup(charTyped: Char, project: Project, editor: Editor, file: PsiFile): Result {
-        if (charTyped == '{' || charTyped == '.') SecretReferencePopup.schedule(project, editor)
+    override fun charTyped(charTyped: Char, project: Project, editor: Editor, file: PsiFile): Result {
+        // Inspect the document after insertion, including when an existing popup was dismissed.
+        if (file.virtualFile is DopplerSecretsFile &&
+            SecretReferenceParser.contextAt(editor.document.charsSequence, editor.caretModel.offset) != null) {
+            schedulePopup(project, editor)
+        }
         return Result.CONTINUE
     }
 }

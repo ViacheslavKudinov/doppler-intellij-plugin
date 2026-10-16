@@ -17,6 +17,7 @@ class DopplerSettings : PersistentStateComponent<DopplerSettings.State> {
     data class State(
         var cliPath: String = "",
         var refreshIntervalSeconds: Int = 5,
+        var logCliCalls: Boolean = false,
     )
 
     private var state = State()
@@ -32,6 +33,10 @@ class DopplerSettings : PersistentStateComponent<DopplerSettings.State> {
         set(value) {
             state.cliPath = value
         }
+
+    var logCliCalls: Boolean
+        get() = state.logCliCalls
+        set(value) { state.logCliCalls = value }
 
     /** How often open configs are re-read from Doppler. `0` disables auto-refresh. */
     var refreshIntervalSeconds: Int

@@ -44,7 +44,18 @@ private object SecretReferenceProvider : CompletionProvider<CompletionParameters
             SecretReferencePopup.scheduleLater(project, editor)
         }
         if (secretReferenceService.isLoading()) {
-            result.addLookupAdvertisement("Loading Doppler secret names for references…")
+            ApplicationManager.getApplication().invokeLater({
+                if (!project.isDisposed && !editor.isDisposed) {
+                    SecretReferenceLoadingHint.show(editor, hasSuggestions = {
+                        !SecretReferenceLoadingHint.needsLoadingHint(
+                            editor.document.charsSequence,
+                            editor.caretModel.offset,
+                            SecretReferenceLocation(file.projectSlug, file.configName),
+                            secretReferenceService.cachedNamesFor(file.authContextId),
+                        )
+                    }, isLoading = secretReferenceService::isLoading)
+                }
+            }, ModalityState.defaultModalityState())
         }
         val candidates = SecretReferenceCandidates.find(
             SecretReferenceLocation(file.projectSlug, file.configName),
@@ -54,18 +65,20 @@ private object SecretReferenceProvider : CompletionProvider<CompletionParameters
         )
 
         val matcher = result.withPrefixMatcher(reference.prefix)
+        matcher.restartCompletionOnAnyPrefixChange()
         for (candidate in candidates) {
-            matcher.addElement(
-                PrioritizedLookupElement.withPriority(
-                    LookupElementBuilder.create(candidate.reference)
-                        .withTypeText(candidate.origin, true)
-                        .withInsertHandler(CloseReferenceInsertHandler),
-                    candidate.scope.priority,
-                ),
-            )
+            matcher.addElement(secretReferenceLookupElement(candidate))
         }
     }
 }
+
+internal fun secretReferenceLookupElement(candidate: SecretReferenceCandidate): LookupElement =
+    PrioritizedLookupElement.withPriority(
+        LookupElementBuilder.create(candidate, candidate.reference)
+            .withTypeText(candidate.origin, true)
+            .withInsertHandler(CloseReferenceInsertHandler),
+        candidate.scope.priority,
+    )
 
 /** Finishes a completed reference with its closing brace and moves the caret past it. */
 private object CloseReferenceInsertHandler : InsertHandler<LookupElement> {
@@ -83,8 +96,9 @@ internal object SecretReferencePopup {
 
     /** Opens the completion popup if the caret is still inside an unclosed reference. */
     fun schedule(project: Project, editor: Editor) {
+        if (project.isDisposed || !SecretReferenceEditorFocus.isActive(editor)) return
         AutoPopupController.getInstance(project).scheduleAutoPopup(editor, Condition { file ->
-            file.virtualFile is DopplerSecretsFile &&
+            SecretReferenceEditorFocus.isActive(editor) && file.virtualFile is DopplerSecretsFile &&
                 SecretReferenceParser.contextAt(editor.document.charsSequence, editor.caretModel.offset) != null
         })
     }

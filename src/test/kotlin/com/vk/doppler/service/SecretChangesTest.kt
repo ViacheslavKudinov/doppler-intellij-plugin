@@ -117,6 +117,7 @@ class SecretChangesTest {
         )
         assertEquals(mapOf("RESTRICTED" to "new"), changes.upserted)
         assertTrue(changes.removed.isEmpty())
+        assertEquals(mapOf("RESTRICTED" to null), changes.applyTo(mapOf("RESTRICTED" to null)))
     }
 
     @Test

@@ -28,6 +28,7 @@ import com.intellij.ui.treeStructure.Tree
 import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTabsManager
 import com.vk.doppler.DopplerIcons
 import com.vk.doppler.cli.DopplerConfig
+import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.DopplerProject
 import com.vk.doppler.completion.SecretReferenceService
 import com.vk.doppler.editor.DopplerSecretsEditorService
@@ -78,6 +79,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
     private val cards = JPanel(cardLayout)
     private var refreshGeneration = 0
     private var refreshing = false
+    private var refreshOperation = CliOperation.TREE_STARTUP
     private var disposed = false
     private var downloadingInstaller = false
     private var reviewedInstaller: ReviewedInstaller? = null
@@ -92,7 +94,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         toolbar = buildToolbar()
         focusManager.addPropertyChangeListener("focusOwner", focusListener)
         focusManager.addPropertyChangeListener("focusedWindow", focusListener)
-        refresh()
+        refresh(CliOperation.TREE_STARTUP)
     }
 
     override fun dispose() {
@@ -106,7 +108,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         val group = DefaultActionGroup().apply {
             add(object : AnAction("Refresh", "Reload Doppler projects", AllIcons.Actions.Refresh) {
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
-                override fun actionPerformed(e: AnActionEvent) = refresh()
+                override fun actionPerformed(e: AnActionEvent) = refresh(CliOperation.TREE_REFRESH_BUTTON)
             })
             add(object : AnAction("Doppler Settings", "Open Doppler settings", AllIcons.General.Settings) {
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
@@ -127,7 +129,9 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
         tree.addTreeWillExpandListener(object : TreeWillExpandListener {
             override fun treeWillExpand(event: TreeExpansionEvent) {
-                (event.path.lastPathComponent as? ProjectNode)?.let(::loadConfigs)
+                (event.path.lastPathComponent as? ProjectNode)?.let {
+                    loadConfigs(it, operation = if (refreshing) refreshOperation else CliOperation.TREE_EXPAND)
+                }
             }
 
             override fun treeWillCollapse(event: TreeExpansionEvent) = Unit
@@ -140,9 +144,10 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
     }
 
     /** Re-checks CLI availability and authentication, then reloads the project list. */
-    fun refresh() {
+    fun refresh(operation: CliOperation = CliOperation.TREE_REFRESH_BUTTON) {
         if (disposed || project.isDisposed || refreshing) return
         refreshing = true
+        refreshOperation = operation
         val generation = ++refreshGeneration
         if (rootNode.childCount == 0) showStatus("Connecting to Doppler…", null)
         ProgressManager.getInstance().run(
@@ -152,9 +157,9 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
                 override fun run(indicator: ProgressIndicator) {
                     val service = DopplerService.getInstance()
-                    report = service.checkStatus()
+                    report = service.checkStatus(includeVersion = false, operation = operation)
                     if (report.status == DopplerStatus.READY) {
-                        projects = service.listProjects(requireNotNull(report.authContextId))
+                        projects = service.listTreeProjects(operation)
                     }
                 }
 
@@ -165,7 +170,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                     )
                     SecretReferenceService.getInstance().invalidate()
                     if (report.status == DopplerStatus.READY) {
-                        populate(projects)
+                        populate(projects, operation)
                     } else {
                         showStatusFor(report)
                     }
@@ -184,7 +189,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         )
     }
 
-    private fun populate(projects: List<DopplerProject>) {
+    private fun populate(projects: List<DopplerProject>, operation: CliOperation) {
         val state = DopplerTreeState(tree)
         val changed = treeUpdater.projects(projects)
         if (projects.isEmpty()) {
@@ -195,11 +200,11 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         if (changed) state.restore(tree)
         rootNode.children().toList().filterIsInstance<ProjectNode>().forEach { node ->
             node.loading = false
-            if (node.loaded || tree.isExpanded(javax.swing.tree.TreePath(node.path))) loadConfigs(node, true)
+            if (node.loaded || tree.isExpanded(javax.swing.tree.TreePath(node.path))) loadConfigs(node, true, operation)
         }
     }
 
-    private fun loadConfigs(node: ProjectNode, force: Boolean = false) {
+    private fun loadConfigs(node: ProjectNode, force: Boolean = false, operation: CliOperation = CliOperation.TREE_EXPAND) {
         if (node.loading || (node.loaded && !force)) return
         node.loading = true
         val slug = node.dopplerProject.slug
@@ -210,7 +215,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                 private var configs: List<DopplerConfig> = emptyList()
 
                 override fun run(indicator: ProgressIndicator) {
-                    configs = DopplerService.getInstance().listConfigs(slug)
+                    configs = DopplerService.getInstance().listConfigs(slug, operation)
                 }
 
                 override fun onSuccess() {
@@ -251,7 +256,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                 statusPanel.emptyText.appendLine("Set the CLI path…", SimpleTextAttributes.LINK_ATTRIBUTES) {
                     ShowSettingsUtil.getInstance().showSettingsDialog(project, DopplerConfigurable::class.java)
                 }
-                statusPanel.emptyText.appendLine("Retry", SimpleTextAttributes.LINK_ATTRIBUTES) { refresh() }
+                statusPanel.emptyText.appendLine("Retry", SimpleTextAttributes.LINK_ATTRIBUTES) { refresh(CliOperation.TREE_RETRY) }
                 cardLayout.show(cards, CARD_STATUS)
             }
 
@@ -262,7 +267,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                     sendInstallCommand("doppler login")
                 }
                 statusPanel.emptyText.appendLine("Then retry.")
-                statusPanel.emptyText.appendLine("Retry", SimpleTextAttributes.LINK_ATTRIBUTES) { refresh() }
+                statusPanel.emptyText.appendLine("Retry", SimpleTextAttributes.LINK_ATTRIBUTES) { refresh(CliOperation.TREE_RETRY) }
                 cardLayout.show(cards, CARD_STATUS)
             }
 
@@ -437,7 +442,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         statusPanel.emptyText.clear()
         statusPanel.emptyText.text = message
         if (actionLabel != null) {
-            statusPanel.emptyText.appendLine(actionLabel, SimpleTextAttributes.LINK_ATTRIBUTES) { refresh() }
+            statusPanel.emptyText.appendLine(actionLabel, SimpleTextAttributes.LINK_ATTRIBUTES) { refresh(CliOperation.TREE_RETRY) }
         }
         cardLayout.show(cards, CARD_STATUS)
     }
@@ -445,21 +450,21 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
 internal class DopplerFocusRefreshListener(
     private val panel: Component,
-    private val refresh: () -> Unit,
+    private val refresh: (CliOperation) -> Unit,
 ) : PropertyChangeListener {
     private var focusedInside = false
 
     override fun propertyChange(event: PropertyChangeEvent) {
         if (event.propertyName == "focusedWindow") {
             val window = event.newValue as? Component ?: return
-            if (panel.isShowing && SwingUtilities.isDescendingFrom(panel, window)) refresh()
+            if (panel.isShowing && SwingUtilities.isDescendingFrom(panel, window)) refresh(CliOperation.TREE_WINDOW_FOCUS)
             return
         }
         val focused = event.newValue as? Component ?: return
         val previous = event.oldValue as? Component
         val wasInside = previous?.let { SwingUtilities.isDescendingFrom(it, panel) } ?: focusedInside
         focusedInside = SwingUtilities.isDescendingFrom(focused, panel)
-        if (focusedInside && !wasInside) refresh()
+        if (focusedInside && !wasInside) refresh(CliOperation.TREE_PANEL_FOCUS)
     }
 }
 

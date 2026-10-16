@@ -13,7 +13,7 @@ import java.util.concurrent.ExecutorService
 internal interface DopplerNamesApi {
     fun listProjects(authContextId: String): List<DopplerProject>
     fun listConfigs(authContextId: String, projectSlug: String): List<DopplerConfig>
-    fun listSecretNames(authContextId: String, projectSlug: String, configName: String): Set<String>
+    fun listSecretNames(authContextId: String, projectSlug: String, configName: String, environment: String): Set<String>
     fun currentAuthContextId(): String
 }
 
@@ -24,8 +24,8 @@ internal object DopplerServiceNamesApi : DopplerNamesApi {
     override fun listConfigs(authContextId: String, projectSlug: String): List<DopplerConfig> =
         DopplerService.getInstance().listConfigs(authContextId, projectSlug)
 
-    override fun listSecretNames(authContextId: String, projectSlug: String, configName: String): Set<String> =
-        DopplerService.getInstance().listSecretNames(authContextId, projectSlug, configName)
+    override fun listSecretNames(authContextId: String, projectSlug: String, configName: String, environment: String): Set<String> =
+        DopplerService.getInstance().listSecretNames(authContextId, projectSlug, configName, environment)
 
     override fun currentAuthContextId(): String = DopplerService.getInstance().currentAuthContextId()
 }
@@ -99,7 +99,7 @@ internal class DopplerSecretNamesLoader(
             checkCancelled()
             reportProgress("Loading secret names for $slug/${config.name}…")
             try {
-                names[config.name] = api.listSecretNames(authContextId, slug, config.name)
+                names[config.name] = api.listSecretNames(authContextId, slug, config.name, config.environment)
             } catch (e: DopplerCliException) {
                 skipOrFail(e, "secrets of $slug/${config.name}")
                 previousNames[config.name]?.let { names[config.name] = it }

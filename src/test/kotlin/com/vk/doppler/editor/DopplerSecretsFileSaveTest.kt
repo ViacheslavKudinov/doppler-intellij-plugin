@@ -32,6 +32,77 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertNotNull(DopplerFileSystem.getInstance())
     }
 
+    fun `test auto refresh pauses for edits and resumes after undo despite unsaved flag`() {
+        val snapshot = mapOf("A" to "old")
+        val initialText = SecretsDocumentFormat.serialize(snapshot)
+        val file = newFile("refresh-undo", initialText, snapshot)
+        val documents = FileDocumentManager.getInstance()
+        val document = requireNotNull(documents.getDocument(file))
+        val service = DopplerSecretsEditorService.getInstance(project)
+        assertTrue(service.canAutoRefresh(file))
+
+        WriteAction.run<RuntimeException> { document.setText("A: changed") }
+        assertFalse(service.canAutoRefresh(file))
+        WriteAction.run<RuntimeException> { document.setText(initialText) }
+        assertTrue(documents.isDocumentUnsaved(document))
+        assertTrue(service.canAutoRefresh(file))
+        // The same guard rejects edits started while a refresh is in flight.
+        WriteAction.run<RuntimeException> { document.setText("A: changed again") }
+        assertFalse(service.canAutoRefresh(file))
+    }
+
+    fun `test auto refresh requires active window and selected clean config`() {
+        val text = SecretsDocumentFormat.serialize(emptyMap())
+        val selected = newFile("refresh-selected", text, emptyMap())
+        val background = newFile("refresh-background", text, emptyMap())
+        val service = DopplerSecretsEditorService.getInstance(project)
+        assertEmpty(service.autoRefreshFiles(false, arrayOf(selected)))
+        assertEmpty(service.autoRefreshFiles(true, arrayOf(LightVirtualFile("ordinary.yaml"))))
+        assertEmpty(service.autoRefreshFiles(true, emptyArray()))
+        assertEquals(listOf(selected), service.autoRefreshFiles(true, arrayOf(selected)))
+        assertFalse(service.autoRefreshFiles(true, arrayOf(selected)).contains(background))
+        selected.hasPendingSync = true
+        assertEmpty(service.autoRefreshFiles(true, arrayOf(selected)))
+        assertEquals(listOf(background), service.autoRefreshFiles(true, arrayOf(selected, background)))
+    }
+
+    fun `test auto refresh resumes after successful sync but not local save`() {
+        val file = newFile("refresh-save", SecretsDocumentFormat.serialize(mapOf("A" to "old")), mapOf("A" to "old"))
+        val documents = FileDocumentManager.getInstance()
+        val document = requireNotNull(documents.getDocument(file))
+        val service = DopplerSecretsEditorService.getInstance(project)
+        val savedSnapshot = mapOf("A" to "new")
+        val savedText = SecretsDocumentFormat.serialize(savedSnapshot)
+        WriteAction.run<RuntimeException> { document.setText(savedText); documents.saveDocument(document) }
+        assertFalse(service.canAutoRefresh(file))
+        file.pushInProgress.set(true)
+        file.setServerContent(savedText, savedSnapshot)
+        assertFalse(service.canAutoRefresh(file))
+        file.pushInProgress.set(false)
+        assertTrue(service.canAutoRefresh(file))
+
+        WriteAction.run<RuntimeException> { document.setText("A: newer edit") }
+        assertFalse(service.canAutoRefresh(file))
+    }
+
+    fun `test auto refresh skips pending failed queued and invalidated configs`() {
+        val file = newFile("refresh-pending", SecretsDocumentFormat.serialize(emptyMap()), emptyMap())
+        val other = newFile("refresh-other", SecretsDocumentFormat.serialize(emptyMap()), emptyMap())
+        val service = DopplerSecretsEditorService.getInstance(project)
+        assertTrue(service.canAutoRefresh(file))
+        file.hasPendingSync = true
+        assertFalse(service.canAutoRefresh(file))
+        assertTrue(service.canAutoRefresh(other))
+        file.hasPendingSync = false
+        file.pendingPushText.set("A: queued")
+        assertFalse(service.canAutoRefresh(file))
+        file.pendingPushText.set(null)
+        service.push(file, "A: [unclosed")
+        assertFalse(service.canAutoRefresh(file))
+        file.scrub()
+        assertFalse(service.canAutoRefresh(file))
+    }
+
     fun `test close check is registered and leaves ordinary files unaffected`() {
         val check = VirtualFilePreCloseCheck.EP_NAME.extensionList.filterIsInstance<DopplerFileCloseCheck>().single()
         assertTrue(check.canCloseFile(LightVirtualFile("ordinary.yaml")))
@@ -302,7 +373,17 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertTrue(file.isWritable)
         assertEquals("YAML", file.fileType.name)
         assertEquals("prd.yaml", file.name)
+        assertEquals("prd", file.presentableName)
         assertSame(file, DopplerFileSystem.getInstance().findFileByPath(file.path))
+    }
+
+    fun `test navigation label shows config name without synthetic yaml extension`() {
+        val file = newFile("stg", DopplerSecretsFile.EMPTY_DOCUMENT, emptyMap())
+        myFixture.configureFromExistingVirtualFile(file)
+        val psiFile = myFixture.file
+
+        assertEquals("stg", com.intellij.ide.navigationToolbar.DefaultNavBarExtension().getPresentableText(psiFile))
+        assertEquals("YAML", psiFile.fileType.name)
     }
 
     fun `test reloading server content does not push back`() {

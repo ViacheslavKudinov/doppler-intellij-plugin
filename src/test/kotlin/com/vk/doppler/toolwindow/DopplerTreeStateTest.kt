@@ -163,7 +163,8 @@ class DopplerTreeStateTest {
             val otherWindow = JPanel()
             val tree = JTree().also { panel.add(it) }
             var refreshes = 0
-            val listener = DopplerFocusRefreshListener(panel) { refreshes++ }
+            val operations = mutableListOf<com.vk.doppler.cli.CliOperation>()
+            val listener = DopplerFocusRefreshListener(panel) { refreshes++; operations += it }
 
             listener.propertyChange(PropertyChangeEvent(panel, "focusOwner", null, tree))
             assertEquals(1, refreshes)
@@ -175,6 +176,8 @@ class DopplerTreeStateTest {
             visible = false
             listener.propertyChange(PropertyChangeEvent(panel, "focusedWindow", otherWindow, window))
             assertEquals(2, refreshes)
+            assertEquals(listOf(com.vk.doppler.cli.CliOperation.TREE_PANEL_FOCUS,
+                com.vk.doppler.cli.CliOperation.TREE_WINDOW_FOCUS), operations)
         }
     }
 

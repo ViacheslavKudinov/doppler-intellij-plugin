@@ -1,5 +1,15 @@
 package com.vk.doppler.cli
 
+/** Allowlisted account metadata for the connection dialog; never contains a token preview. */
+data class DopplerAccountInfo(
+    val authContextId: String,
+    val slug: String,
+    val type: String,
+    val workplaceSlug: String,
+    val workplaceName: String?,
+    val name: String? = null,
+)
+
 /** A Doppler project as returned by `doppler projects --json`. */
 data class DopplerProject(
     val slug: String,

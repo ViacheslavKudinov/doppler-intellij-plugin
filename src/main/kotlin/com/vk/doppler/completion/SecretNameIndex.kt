@@ -74,6 +74,11 @@ internal class SecretNameIndex(
 
     fun isLoading(): Boolean = synchronized(lock) { state.loading }
 
+    /** Reads current names without starting a load or replacing the completion listener. */
+    fun cachedNamesFor(authContextId: String): SecretNames = synchronized(lock) {
+        if (state.authContextId == authContextId) state.names else emptyMap()
+    }
+
     /** Records fresh names for one config, e.g. after it was opened or saved. */
     fun update(authContextId: String, projectSlug: String, configName: String, names: Set<String>) {
         val copy = names.toSet()

@@ -36,6 +36,8 @@ class SecretReferenceService : Disposable {
 
     internal fun isLoading(): Boolean = index.isLoading()
 
+    internal fun cachedNamesFor(authContextId: String): SecretNames = index.cachedNamesFor(authContextId)
+
     /** Keeps the index current for a config whose names are already known. */
     fun update(authContextId: String, projectSlug: String, configName: String, names: Set<String>) =
         index.update(authContextId, projectSlug, configName, names)

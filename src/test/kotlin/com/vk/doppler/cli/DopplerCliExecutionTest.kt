@@ -26,7 +26,16 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
         checkAutoRefreshCalls("after", listOf("me", "secrets", "me"), true)
     }
 
-    private fun checkAutoRefreshCalls(mode: String, expectedCalls: List<String>, invalidated: Boolean) {
+    fun `test auto refresh reports generic failure without invalidating unrelated configs`() {
+        checkAutoRefreshCalls("generic", listOf("me", "secrets"), true, false)
+    }
+
+    private fun checkAutoRefreshCalls(
+        mode: String,
+        expectedCalls: List<String>,
+        invalidated: Boolean,
+        otherInvalidated: Boolean = invalidated,
+    ) {
         assumeFalse(SystemInfo.isWindows)
         val executable = Files.createTempFile("doppler-refresh-test-", ".sh")
         val calls = Files.createTempFile("doppler-refresh-calls-", ".txt")
@@ -45,7 +54,13 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
                 fi
                 printf '{"slug":"%s","type":"personal","token_preview":"synthetic","workplace":{"slug":"test"}}' "${'$'}account"
                 ;;
-              secrets) printf '{}' ;;
+                            secrets)
+                                if [ '$mode' = generic ]; then
+                                    printf '%s' '{"error":"Config unavailable"}'
+                                    exit 1
+                                fi
+                                printf '{}'
+                                ;;
               *) exit 1 ;;
             esac
         """.trimIndent())
@@ -59,10 +74,10 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
             val file = DopplerFileSystem.getInstance().obtain("refresh-test", mode, identity)
             file.setServerContent(SecretsDocumentFormat.serialize(emptyMap()), emptyMap())
             val other = DopplerFileSystem.getInstance().obtain("refresh-test", "$mode-other", identity)
-            DopplerSecretsEditorService.getInstance(project).refreshFromServer(file)
+            assertEquals(!invalidated, DopplerSecretsEditorService.getInstance(project).refreshFromServer(file))
             assertEquals(expectedCalls, Files.readAllLines(calls))
             assertEquals(invalidated, file.isInvalidated)
-            assertEquals(invalidated, other.isInvalidated)
+            assertEquals(otherInvalidated, other.isInvalidated)
         } finally {
             settings.cliPath = originalPath
         }

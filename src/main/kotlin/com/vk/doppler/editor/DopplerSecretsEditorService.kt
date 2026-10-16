@@ -209,7 +209,7 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         now: Long,
         interval: Int,
         refreshableFiles: () -> List<DopplerSecretsFile> = ::focusedRefreshFiles,
-        refresh: (DopplerSecretsFile) -> Unit = ::refreshFromServer,
+        refresh: (DopplerSecretsFile) -> Boolean = ::refreshFromServer,
         validateAccount: () -> String = {
             DopplerService.getInstance().currentAuthContextId(
                 operation = CliOperation.ACCOUNT_VALIDATION,
@@ -220,18 +220,22 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
     ) {
         if (project.isDisposed || openPaths.isEmpty()) return
 
+        var accountValidationRequired = false
         if (interval > 0 && now - lastPollAt >= interval * 1000L) {
             lastPollAt = now
             for (file in refreshableFiles().filter(::owns).sortedBy { it.path }) {
                 if (project.isDisposed) return
                 if (!owns(file) || file !in refreshableFiles()) continue
-                refresh(file)
-                // Value refresh already validates the account; don't add another `me`.
-                lastAccountValidationAt = now
+                if (refresh(file)) {
+                    lastAccountValidationAt = now
+                } else {
+                    accountValidationRequired = true
+                }
             }
         }
 
-        if (openPaths.isEmpty() || now - lastAccountValidationAt < ACCOUNT_VALIDATION_INTERVAL_MS) return
+        if (openPaths.isEmpty() ||
+            (!accountValidationRequired && now - lastAccountValidationAt < ACCOUNT_VALIDATION_INTERVAL_MS)) return
         lastAccountValidationAt = now
         try {
             invalidateCachedFiles(validateAccount())
@@ -259,7 +263,7 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         return document.text == SecretsDocumentFormat.serialize(file.remoteSnapshot)
     }
 
-    internal fun refreshFromServer(file: DopplerSecretsFile) {
+    internal fun refreshFromServer(file: DopplerSecretsFile): Boolean {
         val snapshotBeforeFetch = file.remoteSnapshot
         val loaded = try {
             DopplerService.getInstance().loadSecrets(
@@ -280,13 +284,13 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             } else {
                 invalidateCachedFile(file)
             }
-            return
+            return false
         }
 
         // loadSecrets validates the account before and after reading; no separate preflight is needed.
         invalidateCachedFiles(loaded.authContextId)
         val snapshot = loaded.secrets.associate { it.name to it.raw }
-        if (snapshot == file.remoteSnapshot) return
+        if (snapshot == file.remoteSnapshot) return true
         val text = SecretsDocumentFormat.serialize(loaded.secrets)
 
         ApplicationManager.getApplication().invokeLater({
@@ -294,6 +298,7 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             if (file.remoteSnapshot != snapshotBeforeFetch) return@invokeLater
             applyServerContent(file, text, snapshot)
         }, project.disposed)
+        return true
     }
 
     internal fun saveBeforeClose(file: DopplerSecretsFile, onSaved: () -> Unit): Boolean {

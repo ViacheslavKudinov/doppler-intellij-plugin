@@ -12,6 +12,7 @@ import com.intellij.openapi.diagnostic.thisLogger
 import java.security.MessageDigest
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicReference
+import com.vk.doppler.settings.DopplerSettings
 
 /**
  * Thin wrapper around the `doppler` binary.
@@ -19,7 +20,12 @@ import java.util.concurrent.atomic.AtomicReference
  * Every call goes through [runJson] so that error payloads, timeouts and missing-binary
  * situations are normalised into [DopplerCliException].
  */
-class DopplerCli(private val executablePath: String) {
+class DopplerCli(
+    private val executablePath: String,
+    private val operation: CliOperation = CliOperation.OTHER,
+    private val logContext: CliLogContext = CliLogContext(),
+    private val relatedConfigs: List<CliLogContext> = emptyList(),
+) {
 
     companion object {
         private const val DEFAULT_TIMEOUT_MS = 30_000
@@ -51,7 +57,10 @@ class DopplerCli(private val executablePath: String) {
     }
 
     /** Stable, non-reversible identifier for the CLI account and token context. */
-    fun authContextId(): String {
+    fun authContextId(): String = accountInfo().authContextId
+
+    /** Reads identity and its fingerprint in one call, without retaining authentication fields. */
+    fun accountInfo(): DopplerAccountInfo {
         val me = runJson(listOf("me")) as? JsonObject
             ?: throw DopplerCliException("The Doppler CLI returned invalid account information.")
         val workplace = me.get("workplace") as? JsonObject
@@ -67,7 +76,14 @@ class DopplerCli(private val executablePath: String) {
         }
         val bytes = MessageDigest.getInstance("SHA-256")
             .digest(identity.joinToString("\u0000").toByteArray(StandardCharsets.UTF_8))
-        return bytes.joinToString("") { "%02x".format(it) }
+        return DopplerAccountInfo(
+            authContextId = bytes.joinToString("") { "%02x".format(it) },
+            slug = requireNotNull(identity[0]),
+            type = requireNotNull(identity[1]),
+            workplaceSlug = requireNotNull(identity[3]),
+            workplaceName = workplace.string("name")?.takeIf { it.isNotBlank() },
+            name = me.string("name")?.takeIf { it.isNotBlank() },
+        )
     }
 
     fun listProjects(): List<DopplerProject> {
@@ -169,6 +185,12 @@ class DopplerCli(private val executablePath: String) {
                 parameters.addAll(terminatorIndex, jsonFlags)
             }
         }
+        return traceCliCall(parameters, DopplerSettings.getInstance().logCliCalls, { thisLogger().info(it) }, operation, logContext, relatedConfigs) { reportExit ->
+            executeRaw(parameters, stdin, reportExit)
+        }
+    }
+
+    private fun executeRaw(parameters: List<String>, stdin: String?, reportExit: (Int, Boolean) -> Unit): String {
         val commandLine = GeneralCommandLine(executablePath)
             .withParameters(parameters)
             .withCharset(StandardCharsets.UTF_8)
@@ -203,6 +225,7 @@ class DopplerCli(private val executablePath: String) {
         }
 
         val output = handler.runProcess(DEFAULT_TIMEOUT_MS, true)
+        reportExit(output.exitCode, output.isTimeout)
         stdinFailure.get()?.let { e ->
             thisLogger().warn("Failed to write the secret value to the Doppler CLI stdin", e)
             throw DopplerCliException("Could not pass the secret value to the Doppler CLI.", cause = e)

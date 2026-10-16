@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.viacheslavkudinov.doppler</id>
     <name>Doppler Secrets Manager (Unofficial)</name>
-    <vendor url="https://kudinov.tech">Viacheslav Kudinov</vendor>
+    <vendor url="https://github.com/ViacheslavKudinov/doppler-plugin/issues">Viacheslav Kudinov</vendor>
 
     <description><![CDATA[
         <p><b>Unofficial, independently developed plugin.</b> Not affiliated with, endorsed by,
@@ -53,4 +53,9 @@
 
         <notificationGroup id="Doppler" displayType="BALLOON"/>
     </extensions>
+    <projectListeners>
+        <listener class="com.vk.doppler.completion.SecretReferenceClickSelection"
+                  activeInTestMode="true"
+                  topic="com.intellij.codeInsight.lookup.LookupManagerListener"/>
+    </projectListeners>
 </idea-plugin>

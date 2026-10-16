@@ -39,7 +39,7 @@ class DopplerSecretNamesLoaderTest {
             return configs[projectSlug].orEmpty()
         }
 
-        override fun listSecretNames(authContextId: String, projectSlug: String, configName: String): Set<String> {
+        override fun listSecretNames(authContextId: String, projectSlug: String, configName: String, environment: String): Set<String> {
             requestedAuthContexts += authContextId
             secretReads.incrementAndGet()
             readOrder += projectSlug to configName

@@ -101,9 +101,16 @@ Both issue a `doppler secrets delete`, and both work for restricted secrets too.
 (`MY_SECRET:`) is distinct from the literal `MY_SECRET: null`, and from `MY_SECRET: ""` which stores
 an empty string.
 
-Open configs are re-read from Doppler every 5 seconds, so dashboard edits show up on their own. A
-refresh is skipped while you have unsaved changes or a rejected/failed sync, so it never overwrites
-your work. A rejected/failed save stays in the editor; correct the document and save it again,
+Selected config tabs are re-read from Doppler every 5 seconds while their IDE window is active,
+so dashboard edits show up on their own. Switching to another application or an ordinary editor
+tab pauses automatic secret-value refresh. A
+refresh is paused while you edit and resumes on the next interval after you undo all unsaved edits
+or successfully save to Doppler. Pending or rejected/failed syncs also pause refresh. When all open
+configs are paused, account-only validation still runs every 30 seconds while configs are open,
+including when value refresh is disabled. This clears cached documents on logout or account change.
+Normal value refresh already validates the account and postpones the standalone check, avoiding
+an extra request. Standalone checks are logged as `ACCOUNT_VALIDATION`.
+A rejected/failed save stays in the editor; correct the document and save it again,
 or click the config again to explicitly discard it and reload. Change or
 disable the interval in **Settings | Tools | Doppler**.
 
@@ -114,6 +121,22 @@ wipe a config. To discard local edits, click the config in the tree again to re-
 Malformed CLI snapshots are rejected instead of being treated as empty configs.
 
 ## Building
+
+To inspect CLI activity, enable **Settings | Tools | Doppler | Log CLI calls** and apply.
+Open **Help | Show Log in Finder/Explorer** and search `idea.log` for `Doppler CLI`.
+Each invocation has matching `START` and `END` entries with a call ID, operation label,
+duration, exit code, and outcome. Count `START` entries to count CLI invocations (the CLI
+may make multiple HTTP requests internally). Tree events are labeled `TREE_STARTUP`,
+`TREE_PANEL_FOCUS`, `TREE_WINDOW_FOCUS`, `TREE_REFRESH_BUTTON`, `TREE_RETRY`, or `TREE_EXPAND`.
+Config fetches caused by a tree reload keep that reload's label. Other labels include
+`AUTO_REFRESH` (periodic secret refresh), `CONFIG_OPEN`, `CONFIG_RELOAD`, `SAVE`,
+`SAVE_RECOVERY`, `AUTOCOMPLETE`, and `TEST_CONNECTION`.
+Each automatic config refresh runs `me`, `secrets`, then `me` to check the account before
+and after the read. All three calls include masked project/config/environment context.
+Logging is off by default. Project, config, and known environment names show their first 60%
+(rounded down) followed by `....`; at least one character is always hidden. Unknown environments
+are omitted without extra requests. Secret names and other arguments remain redacted; stdin,
+CLI output, and tokens are not included in these trace entries.
 
 The project uses the [IntelliJ Platform Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html).
 
@@ -179,5 +202,4 @@ src/main/kotlin/com/vk/doppler/
 
 ## Not yet implemented
 
-Autocomplete of environment variable names, hover enrichment, and run-configuration injection are not part
-of this version.
+Run-configuration injection are not part of this version.

@@ -60,6 +60,9 @@ class DopplerSecretsFile(
 
     override fun getName(): String = fileName(configName)
 
+    /** Navigation labels show the config name; the underlying name retains YAML detection. */
+    override fun getPresentableName(): String = configName
+
     override fun getFileSystem(): VirtualFileSystem = fileSystem
 
     override fun getPath(): String = pathFor(projectSlug, configName, authContextId)

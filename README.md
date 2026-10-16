@@ -172,8 +172,11 @@ so assets can only be attached while a release is a draft.
 2. In the same run, the plugin zip and a CycloneDX SBOM are built from the released commit,
    together with a `SHA256SUMS` file. Build provenance is attested for all three files, and the
    SBOM is attested against the zip. The files are then attached to the draft, which is published.
-3. The manual Publish workflow builds and signs the selected tag, then uploads the plugin to
-   JetBrains Marketplace.
+3. The manual Publish workflow downloads the plugin zip from the selected published release.
+   It verifies GitHub build provenance against the Release workflow and the validated tag commit,
+   then signs that archive and uploads it to JetBrains Marketplace without rebuilding.
+   Signing changes the archive bytes: the release attestation covers the downloaded unsigned zip,
+   not the signed Marketplace zip. Publishing fails if the release asset or its attestation is missing.
 
 Verify a downloaded release asset with the GitHub CLI:
 

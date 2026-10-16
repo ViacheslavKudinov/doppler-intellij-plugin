@@ -2,6 +2,14 @@
 
 # Doppler-plugin Changelog
 
+## [1.5.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.4.0...v1.5.0) (2026-10-16)
+
+
+### Features
+
+* Add secret reference completion and loading hint functionality ([#51](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/51)) ([4f98993](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/4f98993fadfca678b00bc5d4874894b47e00007f))
+* **workflows:** enhance publish workflow to verify and sign release archives ([#49](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/49)) ([d08b47e](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/d08b47ee33c893b8ff8b432c896d6231587d002d))
+
 ## [1.4.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.3.0...v1.4.0) (2026-10-15)
 
 

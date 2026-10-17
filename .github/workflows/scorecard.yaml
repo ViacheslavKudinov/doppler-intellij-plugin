@@ -15,7 +15,6 @@ on:
   push:
     branches: [ main ]
 
-# Declare default permissions as read only.
 permissions: {}
 
 jobs:
@@ -74,7 +73,7 @@ jobs:
         with:
           name: SARIF file
           path: results.sarif
-          retention-days: 5
+          retention-days: 1
 
       # Upload the results to GitHub's code scanning dashboard (optional).
       # Commenting out will disable upload of results to your repo's Code Scanning dashboard

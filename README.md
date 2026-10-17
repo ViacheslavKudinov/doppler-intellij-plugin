@@ -203,6 +203,13 @@ The CI workflow declares `cache-mode: read`, and the release build and signing j
    verifies the plugin signature, then uploads the exact zip to Marketplace without rebuilding or
    signing again. No signing credentials are needed by the Publish workflow.
 
+To recover a deleted release, dispatch the Release workflow from `main` with the tag whose version
+matches both `gradle.properties` and `.release-please-manifest.json`. The workflow creates a draft
+for the selected `main` commit and runs the same build, signing, attestation, and publishing jobs.
+For example, run `gh workflow run release-please.yaml --ref main -f tag=v1.6.0`. The tag must not
+already exist. If the build fails after creating the draft, delete that draft release and its tag
+before dispatching the recovery again.
+
 Configure `CERTIFICATE_CHAIN`, `PRIVATE_KEY`, and `PRIVATE_KEY_PASSWORD` as secrets in the GitHub
 `release` environment, with any desired approval and branch protection rules. Keep `PUBLISH_TOKEN`
 in the separate `publish` environment. The public certificate is included in the release so users

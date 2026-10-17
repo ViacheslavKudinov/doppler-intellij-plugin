@@ -2,6 +2,19 @@
 
 # Doppler-plugin Changelog
 
+## [1.6.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.5.0...v1.6.0) (2026-10-17)
+
+
+### Features
+
+* workflows tuning and default project ([#54](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/54)) ([c91bddf](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/c91bddfafb3ce0ef99fc19c862b7b95c42eae2ee))
+
+
+### Maintenance
+
+* **deps:** bump ossf/scorecard-action from 2.4.1 to 2.4.4 in the minor-patch-updates group ([#53](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/53)) ([addff15](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/addff1556bdfe04a92b9f6c1d4c2ca59e9f631e3))
+* **deps:** bump the minor-patch-updates group with 2 updates ([#52](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/52)) ([8e6fdcf](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/8e6fdcf6c594f379dd664c3b58b87ff308e1f368))
+
 ## [1.5.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.4.0...v1.5.0) (2026-10-16)
 
 

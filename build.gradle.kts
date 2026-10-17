@@ -1,3 +1,4 @@
+import java.util.Base64
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
@@ -57,7 +58,12 @@ intellijPlatform {
     }
 
     signing {
-        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        // Signing accepts base64, but signature verification expects a PEM certificate file.
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN").map { value ->
+            val certificate = value.trim()
+            if (certificate.contains("-----BEGIN CERTIFICATE-----")) certificate
+            else String(Base64.getDecoder().decode(certificate.filterNot(Char::isWhitespace)), Charsets.UTF_8)
+        }
         privateKey = providers.environmentVariable("PRIVATE_KEY")
         password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
     }

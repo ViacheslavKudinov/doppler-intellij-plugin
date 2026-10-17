@@ -163,7 +163,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
             object : Task.Backgroundable(project, "Loading Doppler projects…", true) {
                 private lateinit var report: DopplerStatusReport
                 private var projects: List<DopplerProject> = emptyList()
-                private var folderSetup = DopplerFolderSetup()
+                private var folderSetup: DopplerFolderSetup? = null
 
                 override fun run(indicator: ProgressIndicator) {
                     val service = DopplerService.getInstance()
@@ -174,7 +174,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                             folderSetup = try {
                                 service.folderSetup(folder)
                             } catch (_: DopplerCliException) {
-                                DopplerFolderSetup()
+                                null
                             }
                         }
                     }
@@ -186,7 +186,9 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                         report.authContextId.takeIf { report.status == DopplerStatus.READY },
                     )
                     SecretReferenceService.getInstance().invalidate()
-                    DopplerFolderSetupState.getInstance(project).update(folderSetup)
+                    val setupState = DopplerFolderSetupState.getInstance(project)
+                    if (report.status != DopplerStatus.READY) setupState.update(DopplerFolderSetup())
+                    else folderSetup?.let(setupState::update)
                     if (report.status == DopplerStatus.READY) {
                         populate(projects, operation)
                     } else {

@@ -41,7 +41,8 @@ class DopplerFolderSetupState(private val project: Project) : Disposable {
     internal fun refreshFromCli() {
         val folder = project.basePath ?: return
         if (disposed || project.isDisposed) return
-        val expectedRevision = revision.get()
+        // Newer reads supersede older queued results, even while the EDT is busy.
+        val expectedRevision = revision.incrementAndGet()
         val setup = try {
             DopplerService.getInstance().folderSetup(folder, CliOperation.FOLDER_SETUP_POLL)
         } catch (_: DopplerCliException) {

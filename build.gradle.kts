@@ -6,7 +6,7 @@ import org.cyclonedx.model.Component
 import org.gradle.api.file.RegularFile
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 import org.jetbrains.intellij.platform.gradle.tasks.PublishPluginTask
-import org.jetbrains.intellij.platform.gradle.tasks.SignPluginTask
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginSignatureTask
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -67,14 +67,16 @@ intellijPlatform {
   }
 }
 
-// Publishing a release must sign the verified release asset, never rebuild it.
+// Verify and upload the signed release asset without rebuilding or signing again.
 providers.gradleProperty("releaseArchive").orNull?.let { archive ->
-    val signRelease = tasks.named<SignPluginTask>("signPlugin") {
-        archiveFile.set(layout.projectDirectory.file(archive))
+    val verifyRelease = tasks.named<VerifyPluginSignatureTask>("verifyPluginSignature") {
+        setDependsOn(emptyList<Any>())
+        inputArchiveFile.set(layout.projectDirectory.file(archive))
+        certificateChainFile.set(layout.projectDirectory.file(archive).asFile.resolveSibling("chain.crt"))
     }
     tasks.named<PublishPluginTask>("publishPlugin") {
-        setDependsOn(listOf(signRelease))
-        archiveFiles.setFrom(signRelease.flatMap { it.signedArchiveFile })
+        setDependsOn(listOf(verifyRelease))
+        archiveFiles.setFrom(layout.projectDirectory.file(archive))
     }
 }
 

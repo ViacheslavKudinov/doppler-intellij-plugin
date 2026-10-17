@@ -5,6 +5,21 @@ import org.junit.Test
 
 class CliCallLogTest {
     @Test
+    fun `folder setup logs reads writes and clears without exposing scope or values`() {
+        for (action in listOf("get", "set", "unset")) {
+            val logs = mutableListOf<String>()
+            traceCliCall(listOf("configure", action, "--scope", "/private/example-folder", "--json", "--", "project=private-project", "config=private-config"),
+                true, logs::add, CliOperation.FOLDER_SETUP) { report -> report(0, false) }
+            assertTrue(logs.first().contains("START doppler configure $action"))
+            assertTrue(logs.last().contains("END durationMs="))
+            assertTrue(logs.last().contains("exit=0 timeout=false result=success"))
+            for (value in listOf("/private/example-folder", "private-project", "private-config")) {
+                assertFalse(logs.joinToString().contains(value))
+            }
+        }
+    }
+
+    @Test
     fun `refresh account check includes all open config contexts with masked names`() {
         val logs = mutableListOf<String>()
         traceCliCall(listOf("me"), true, logs::add, CliOperation.AUTO_REFRESH,
@@ -27,7 +42,8 @@ class CliCallLogTest {
     fun `event labels are included in both start and finish entries`() {
         for (operation in listOf(CliOperation.TREE_STARTUP, CliOperation.TREE_PANEL_FOCUS,
             CliOperation.TREE_WINDOW_FOCUS, CliOperation.TREE_REFRESH_BUTTON, CliOperation.TREE_RETRY,
-            CliOperation.TREE_EXPAND, CliOperation.AUTO_REFRESH, CliOperation.CONFIG_RELOAD)) {
+            CliOperation.TREE_EXPAND, CliOperation.AUTO_REFRESH, CliOperation.CONFIG_RELOAD,
+            CliOperation.FOLDER_SETUP, CliOperation.FOLDER_SETUP_POLL)) {
             val logs = mutableListOf<String>()
             traceCliCall(listOf("me"), true, logs::add, operation) { report -> report(0, false) }
             assertEquals(2, logs.size)

@@ -22,9 +22,10 @@ Browse and edit your [Doppler](https://doppler.com) secrets without leaving the 
 
 ## Compatibility
 
-Works on **IntelliJ IDEA 2025.3 (build 253) and all later versions**, Community or Ultimate. The plugin
-only depends on `com.intellij.modules.platform`, so it also runs in the other JetBrains IDEs
-(PyCharm, WebStorm, GoLand, PhpStorm, RubyMine, CLion, Rider…).
+Targets **IntelliJ IDEA 2025.3 (build 253) and later**, Community or Ultimate. The plugin depends on
+both `com.intellij.modules.platform` and the **Terminal plugin** (`org.jetbrains.plugins.terminal`),
+which must be installed and enabled. Other JetBrains IDEs must satisfy both dependencies and the
+minimum platform build requirement; compatibility is not guaranteed solely by using the IntelliJ Platform.
 
 This is achieved by compiling against the *oldest* supported release and leaving `untilBuild` unset —
 plugin binaries are forward-compatible, not backward-compatible, so the lowest target gives the widest
@@ -49,6 +50,22 @@ doppler login
 
 The CLI is auto-detected on `PATH` and in common install locations. If your IDE was launched from the GUI
 with a minimal `PATH`, set the binary location explicitly in **Settings | Tools | Doppler**.
+
+Global CLI settings are available even without an open project.
+
+To associate the current IDE project folder with a Doppler project and config, click
+**Folder Setup…** at the top of **Settings | Tools | Doppler**, or open its **Folder Setup**
+child page. Select a project and config,
+then click **Apply** or **OK**. If you change the CLI login while Settings is open,
+click **Reload** before applying folder setup changes. The plugin uses the Doppler CLI's folder configuration,
+so this setup also applies to CLI commands run from that folder. **Clear folder setup**
+removes this folder's override when applied; a parent folder's defaults may still apply.
+Use **Reload** to read changes made with `doppler setup` outside the IDE.
+The configured project and config are marked with a bookmark icon in the Doppler tree.
+Folder setup is checked in the background every 30 seconds so CLI changes update the bookmark
+and any unchanged Settings selections. Setup operations use the existing CLI call logging;
+background checks appear as `FOLDER_SETUP_POLL` when **Log CLI calls** is enabled.
+
 
 ## How secrets are handled
 
@@ -167,24 +184,89 @@ restart because its in-memory secret editors cannot be reliably unloaded while t
 GitHub releases are [immutable](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases),
 so assets can only be attached while a release is a draft.
 
-1. The Release workflow runs CI checks and Release Please. Merging the release PR makes Release
-   Please create the tag and a **draft** GitHub release.
-2. In the same run, the plugin zip and a CycloneDX SBOM are built from the released commit,
-   together with a `SHA256SUMS` file. Build provenance is attested for all three files, and the
-   SBOM is attested against the zip. The files are then attached to the draft, which is published.
-3. The manual Publish workflow downloads the plugin zip from the selected published release.
-   It verifies GitHub build provenance against the Release workflow and the validated tag commit,
-   then signs that archive and uploads it to JetBrains Marketplace without rebuilding.
-   Signing changes the archive bytes: the release attestation covers the downloaded unsigned zip,
-   not the signed Marketplace zip. Publishing fails if the release asset or its attestation is missing.
+The [Release workflow](.github/workflows/release-please.yaml) runs on pushes to `main` and uses
+Release Please to create or update the release PR. Pull-request builds use `-SNAPSHOT` versions;
+release builds use the version committed in `gradle.properties`.
 
-Verify a downloaded release asset with the GitHub CLI:
+The CI workflow declares `cache-mode: read`, and the release build and signing job declares
+`cache-mode: write`. The Publish workflow has no cache-mode override and uses GitHub's
+[trigger-based default](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#cache-mode).
+
+1. Merging the release PR makes Release Please create the tag and a **draft** GitHub release.
+2. The `release` environment job builds the plugin and CycloneDX SBOM from the released commit,
+   signs the plugin, and verifies its signature. Only the signed `doppler-plugin-<version>-signed.zip`
+   is released, alongside the public `chain.crt`, SBOM, and `SHA256SUMS`.
+3. Build provenance is attested for all four files, and the SBOM is attested against the signed
+   zip. The files are attached to the draft before the immutable release is published.
+4. The manual Publish workflow downloads the signed zip and certificate from the selected release.
+   It verifies both files' GitHub provenance against the Release workflow and validated tag commit,
+   verifies the plugin signature, then uploads the exact zip to Marketplace without rebuilding or
+   signing again. No signing credentials are needed by the Publish workflow.
+
+Configure `CERTIFICATE_CHAIN`, `PRIVATE_KEY`, and `PRIVATE_KEY_PASSWORD` as secrets in the GitHub
+`release` environment, with any desired approval and branch protection rules. Keep `PUBLISH_TOKEN`
+in the separate `publish` environment. The public certificate is included in the release so users
+can verify signatures; the private key and password remain secrets. The workflow exports the
+`CERTIFICATE_CHAIN` value as PEM-encoded `chain.crt`, includes it in `SHA256SUMS`, attests it,
+and attaches it to the GitHub release. Bash and `base64 --decode` handle either PEM or
+Base64-encoded PEM in the secret; OpenSSL validates the exported certificate. Private-key material
+in the certificate file is rejected.
+All `upload-artifact` steps retain their temporary Actions artifacts for one day, including the
+release handoff and Scorecard SARIF. Published GitHub release assets remain available afterward.
+
+To upload a completed release to Marketplace, run the
+[Publish workflow](.github/workflows/publish.yaml) manually from `main`, supplying its existing
+semantic-version tag, for example:
 
 ```bash
-gh attestation verify doppler-plugin-<version>.zip --repo ViacheslavKudinov/doppler-plugin
-gh attestation verify doppler-plugin-<version>.zip --repo ViacheslavKudinov/doppler-plugin \
-  --predicate-type https://cyclonedx.org/bom   # the SBOM attestation
+gh workflow run publish.yaml --ref main -f tag=v1.5.0
 ```
+
+The tag must belong to `main` history and have a published release. The `publish` environment's
+protection rules apply before the upload job runs. Verification or signature failures stop the
+upload; the Publish workflow does not generate a second attestation.
+
+This publishing flow requires a release containing a signed zip and an attested `chain.crt`.
+Earlier releases without those assets cannot be published through this workflow.
+
+To verify a release later, install the GitHub CLI and Java, and authenticate with `gh auth login`.
+Download the signed zip, public certificate, SBOM, and checksums from the **same release**.
+Replace `1.5.0` below with the version you want to verify:
+
+```bash
+version=1.5.0
+gh release download "v$version" --repo ViacheslavKudinov/doppler-plugin \
+  --pattern '*-signed.zip' --pattern 'chain.crt' --pattern '*.cdx.json' \
+  --pattern 'SHA256SUMS' --dir "verify-$version"
+cd "verify-$version"
+shasum -a 256 -c SHA256SUMS
+```
+
+Verify the signed zip and certificate's provenance with the GitHub CLI, and the SBOM attestation:
+
+```bash
+gh attestation verify "doppler-plugin-$version-signed.zip" --repo ViacheslavKudinov/doppler-plugin \
+  --signer-workflow ViacheslavKudinov/doppler-plugin/.github/workflows/release-please.yaml \
+  --deny-self-hosted-runners
+gh attestation verify "doppler-plugin-$version-signed.zip" --repo ViacheslavKudinov/doppler-plugin \
+  --predicate-type https://cyclonedx.org/bom   # the SBOM attestation
+gh attestation verify chain.crt --repo ViacheslavKudinov/doppler-plugin \
+  --signer-workflow ViacheslavKudinov/doppler-plugin/.github/workflows/release-please.yaml \
+  --deny-self-hosted-runners
+```
+
+After verifying the certificate's provenance, obtain the
+[JetBrains ZIP Signer CLI](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html#plugin-signature-verification)
+and save its CLI JAR as `marketplace-zip-signer-cli.jar` in the download directory. Verify the ZIP
+signature against the released public certificate:
+
+```bash
+java -jar marketplace-zip-signer-cli.jar verify \
+  -in "doppler-plugin-$version-signed.zip" -cert chain.crt
+```
+
+A successful signature check confirms that the archive matches the signing certificate and has
+not been modified since signing. No private key or password is needed for verification.
 
 Generate a local dependency SBOM with `./gradlew cyclonedxBom`.
 

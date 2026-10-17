@@ -1,12 +1,15 @@
 package com.vk.doppler.settings
 
 import com.intellij.openapi.options.BoundConfigurable
+import com.intellij.ide.DataManager
+import com.intellij.openapi.options.ex.Settings
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.RightGap
@@ -22,12 +25,34 @@ class DopplerConfigurable : BoundConfigurable("Doppler") {
 
     private val settings = DopplerSettings.getInstance()
 
+    private var cliPathField: TextFieldWithBrowseButton? = null
+
+    override fun disposeUIResources() {
+        cliPathField = null
+        super.disposeUIResources()
+    }
+
     override fun createPanel(): DialogPanel = panel {
+        group("Project folder setup") {
+            row {
+                link("Folder Setup…") { event ->
+                    val component = event.source as java.awt.Component
+                    val dialog = Settings.KEY.getData(DataManager.getInstance().getDataContext(component))
+                    val folderSettings = dialog?.find(DopplerFolderSetupConfigurable::class.java)
+                    if (folderSettings != null) {
+                        dialog.select(folderSettings)
+                    } else {
+                        Messages.showInfoMessage(component, "Open an IDE project to configure its Doppler folder setup.", "Doppler")
+                    }
+                }.comment("Choose the Doppler project and config associated with this IDE project folder.")
+            }
+        }
         row("Doppler CLI path:") {
             textFieldWithBrowseButton(
                 fileChooserDescriptor = FileChooserDescriptor(true, false, false, false, false, false)
                     .withTitle("Select Doppler CLI Executable"),
             )
+                .applyToComponent { cliPathField = this }
                 .bindText(settings::cliPath)
                 .align(AlignX.FILL)
                 .comment(
@@ -55,7 +80,7 @@ class DopplerConfigurable : BoundConfigurable("Doppler") {
     }
 
     private fun testConnection() {
-        apply()
+        cliPathField?.let { settings.cliPath = it.text }
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(null, "Checking Doppler CLI…", false) {
                 private lateinit var report: DopplerStatusReport

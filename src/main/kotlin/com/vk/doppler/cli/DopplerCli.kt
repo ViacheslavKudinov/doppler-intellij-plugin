@@ -111,6 +111,32 @@ class DopplerCli(
         }.sortedBy { it.name.lowercase() }
     }
 
+    /** Reads only the two non-sensitive settings, including inherited folder defaults. */
+    fun folderSetup(folder: String): DopplerFolderSetup = parseFolderSetup(
+        runJson(listOf("configure", "get", "project", "config", "--scope", folder)),
+    )
+
+    fun setFolderSetup(folder: String, projectSlug: String, configName: String) {
+        for (value in listOf(projectSlug, configName)) {
+            require(value.isNotBlank() && value.none { it == '=' || it.isISOControl() }) {
+                "Invalid Doppler project or config name"
+            }
+        }
+        runRaw(
+            listOf("configure", "set", "--scope", folder, "--silent", "--", "project=$projectSlug", "config=$configName"),
+            stdin = null,
+            json = true,
+        )
+    }
+
+    fun clearFolderSetup(folder: String) {
+        runRaw(
+            listOf("configure", "unset", "--scope", folder, "--silent", "--", "project", "config"),
+            stdin = null,
+            json = true,
+        )
+    }
+
     /** Reads all non-reserved secrets for a config. */
     fun listSecrets(projectSlug: String, configName: String): List<DopplerSecret> {
         // Without --raw the CLI omits the `raw` field entirely and only returns interpolated
@@ -277,6 +303,23 @@ class DopplerCli(
         val value = get(key) ?: return null
         return if (value.isJsonPrimitive) value.asString else null
     }
+}
+
+data class DopplerFolderSetup(val projectSlug: String? = null, val configName: String? = null) {
+    fun matchesProject(slug: String): Boolean = projectSlug == slug
+    fun matchesConfig(slug: String, name: String): Boolean = projectSlug == slug && configName == name
+}
+
+internal fun parseFolderSetup(element: JsonElement): DopplerFolderSetup {
+    val root = element as? JsonObject ?: throw DopplerCliException("Expected Doppler folder configuration.")
+    fun option(key: String): String? {
+        val value = root.get("enclave.$key") ?: root.get(key) ?: return null
+        if (!value.isJsonPrimitive || !value.asJsonPrimitive.isString) {
+            throw DopplerCliException("Invalid Doppler folder configuration.")
+        }
+        return value.asString.takeIf { it.isNotBlank() }
+    }
+    return DopplerFolderSetup(option("project"), option("config"))
 }
 
 /**

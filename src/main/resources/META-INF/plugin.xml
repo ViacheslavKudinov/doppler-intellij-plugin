@@ -5,19 +5,33 @@
     <vendor url="https://github.com/ViacheslavKudinov/doppler-plugin/issues">Viacheslav Kudinov</vendor>
 
     <description><![CDATA[
-        <p><b>Unofficial, independently developed plugin.</b> Not affiliated with, endorsed by,
-        or supported by Doppler. Doppler's name, trademarks, and copyrighted materials belong to <b>Doppler Technologies, Inc</b>.
-        The plugin uses an original icon, not the official Doppler logo.<br></p>
-        <p>Browse and edit your <a href="https://doppler.com">Doppler</a> secrets without leaving the IDE.</p>
+        <p>Browse, edit, and synchronize your <a href="https://doppler.com">Doppler</a> secrets without leaving your IDE.</p>
+
+        <p><b>Unofficial, independently developed plugin.</b> Not affiliated with, endorsed by, or supported by Doppler.
+        Doppler's name and trademarks belong to Doppler Technologies, Inc. The plugin uses an original icon.</p>
+
+        <h3>Features</h3>
         <ul>
-            <li><b>Projects tree</b> &mdash; browse projects, environments and configs in a dedicated tool window.</li>
-            <li><b>Edit secrets</b> &mdash; open a config to edit its secrets in a virtual editor tab.
-                Secrets are held in memory only and are never written to disk.</li>
-            <li><b>Two-way sync</b> &mdash; saving the tab pushes a minimal diff back to Doppler;
-                reload at any time to pull the latest values.</li>
+            <li><b>Browse secrets</b> &mdash; explore projects, environments, and configs in the Doppler tool window.</li>
+            <li><b>Edit as YAML</b> &mdash; open a config in an editor tab, including multiline values and restricted-secret placeholders.</li>
+            <li><b>Save to synchronize</b> &mdash; saving pushes a minimal set of changes to Doppler.
+                Reload or use automatic refresh to retrieve remote changes.</li>
+            <li><b>Secret-reference completion</b> &mdash; get completion suggestions for Doppler secret references while editing.</li>
+            <li><b>Setup guidance</b> &mdash; detect a missing CLI or login and access installation and authentication instructions.</li>
         </ul>
-        Requires the <a href="https://docs.doppler.com/docs/install-cli">Doppler CLI</a> to be installed and
-        authenticated via <code>doppler login</code>. The plugin never stores or transmits your token.
+
+        <h3>Secret handling</h3>
+        <p>Opened secret documents are held in memory rather than saved as local project files.
+        Secret values are passed to the Doppler CLI through standard input, not command-line arguments.</p>
+        <p>Authentication is managed by the Doppler CLI through <code>doppler login</code>.
+        The plugin does not store your authentication token.</p>
+
+        <h3>Requirements</h3>
+        <ul>
+            <li>IntelliJ Platform <b>2025.3 (build 253) or later</b>.</li>
+            <li>The <b>Terminal plugin</b> installed and enabled.</li>
+            <li>The <a href="https://docs.doppler.com/docs/install-cli">Doppler CLI</a> installed and authenticated.</li>
+        </ul>
         ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

@@ -68,15 +68,20 @@ intellijPlatform {
 }
 
 // Verify and upload the signed release asset without rebuilding or signing again.
-providers.gradleProperty("releaseArchive").orNull?.let { archive ->
+val releaseArchive = providers.gradleProperty("releaseArchive").orNull
+if (releaseArchive != null) {
     val verifyRelease = tasks.named<VerifyPluginSignatureTask>("verifyPluginSignature") {
         setDependsOn(emptyList<Any>())
-        inputArchiveFile.set(layout.projectDirectory.file(archive))
-        certificateChainFile.set(layout.projectDirectory.file(archive).asFile.resolveSibling("chain.crt"))
+        inputArchiveFile.set(layout.projectDirectory.file(releaseArchive))
+        certificateChainFile.set(layout.projectDirectory.file(releaseArchive).asFile.resolveSibling("chain.crt"))
     }
     tasks.named<PublishPluginTask>("publishPlugin") {
         setDependsOn(listOf(verifyRelease))
-        archiveFiles.setFrom(layout.projectDirectory.file(archive))
+        archiveFiles.setFrom(layout.projectDirectory.file(releaseArchive))
+    }
+} else {
+    tasks.named<VerifyPluginSignatureTask>("verifyPluginSignature") {
+        dependsOn(tasks.named("signPlugin"))
     }
 }
 

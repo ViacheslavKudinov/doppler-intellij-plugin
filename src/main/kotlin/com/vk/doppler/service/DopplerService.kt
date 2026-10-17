@@ -26,6 +26,13 @@ data class DopplerStatusReport(
 
 data class DopplerSecretsSnapshot(val authContextId: String, val secrets: List<DopplerSecret>)
 
+data class DopplerFolderSetupSnapshot(
+    val authContextId: String,
+    val setup: DopplerFolderSetup,
+    val projects: List<DopplerProject>,
+    val configs: List<DopplerConfig>,
+)
+
 /**
  * Entry point for all Doppler access. Every method performs blocking I/O and must be
  * called off the EDT.
@@ -87,10 +94,45 @@ class DopplerService {
     fun folderSetup(folder: String, operation: CliOperation = CliOperation.FOLDER_SETUP): DopplerFolderSetup =
         cli(operation).folderSetup(folder)
 
-    fun setFolderSetup(folder: String, projectSlug: String, configName: String) =
-        cli(CliOperation.FOLDER_SETUP, CliLogContext(projectSlug, configName)).setFolderSetup(folder, projectSlug, configName)
+    /** Bind all initial choices to one account, checking once around the complete read batch. */
+    fun loadFolderSetup(folder: String): DopplerFolderSetupSnapshot {
+        val cli = cli(CliOperation.FOLDER_SETUP)
+        val account = cli.authContextId()
+        val setup = cli.folderSetup(folder)
+        val projects = cli.listProjects()
+        val configs = setup.projectSlug?.let(cli::listConfigs).orEmpty()
+        requireFolderSetupAccount(cli, account)
+        return DopplerFolderSetupSnapshot(account, setup, projects, configs)
+    }
 
-    fun clearFolderSetup(folder: String) = cli(CliOperation.FOLDER_SETUP).clearFolderSetup(folder)
+    fun folderSetupConfigs(expectedAuthContextId: String, projectSlug: String): List<DopplerConfig> {
+        val cli = cli(CliOperation.FOLDER_SETUP, CliLogContext(project = projectSlug))
+        requireFolderSetupAccount(cli, expectedAuthContextId)
+        val configs = cli.listConfigs(projectSlug)
+        requireFolderSetupAccount(cli, expectedAuthContextId)
+        return configs
+    }
+
+    fun setFolderSetup(folder: String, projectSlug: String, configName: String, expectedAuthContextId: String) {
+        val cli = cli(CliOperation.FOLDER_SETUP, CliLogContext(projectSlug, configName))
+        requireFolderSetupAccount(cli, expectedAuthContextId)
+        cli.setFolderSetup(folder, projectSlug, configName)
+    }
+
+    fun clearFolderSetup(folder: String, expectedAuthContextId: String) {
+        val cli = cli(CliOperation.FOLDER_SETUP)
+        requireFolderSetupAccount(cli, expectedAuthContextId)
+        cli.clearFolderSetup(folder)
+    }
+
+    private fun requireFolderSetupAccount(cli: DopplerCli, expected: String) {
+        if (cli.authContextId() != expected) {
+            throw DopplerCliException(
+                "The Doppler account changed. Reload folder setup before applying changes.",
+                DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
+            )
+        }
+    }
 
     fun listConfigs(expectedAuthContextId: String, projectSlug: String): List<DopplerConfig> {
         val cli = cli(context = CliLogContext(project = projectSlug))

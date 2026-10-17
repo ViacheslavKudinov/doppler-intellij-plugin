@@ -47,6 +47,7 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
         Files.writeString(executable, """
             #!/bin/sh
             case "${'$'}1" in
+              me) printf '%s' '{"slug":"test","type":"personal","token_preview":"synthetic","workplace":{"slug":"test"}}' ;;
               configure)
                 case "${'$'}2" in
                   get) cat '$state' ;;
@@ -153,7 +154,9 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
             assertEquals(replacement.toString(), settings.cliPath)
             val setArguments = listOf("configure", "set", "--scope", requireNotNull(project.basePath),
                 "--silent", "--json", "--no-check-version", "--", "project=example", "config=stg")
-            assertEquals(setArguments, Files.readAllLines(replacementCalls).take(setArguments.size))
+            val preflightArguments = listOf("me", "--json", "--no-check-version")
+            assertEquals(preflightArguments + setArguments,
+                Files.readAllLines(replacementCalls).take(preflightArguments.size + setArguments.size))
             val arguments = Files.readAllLines(calls)
             assertTrue(arguments.containsAll(listOf("set", "--scope", project.basePath, "--", "project=example", "config=stg")))
 

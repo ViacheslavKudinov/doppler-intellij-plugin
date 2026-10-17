@@ -16,8 +16,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
+import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.cli.DopplerFolderSetup
-import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.service.DopplerService
 import java.awt.BorderLayout
 import javax.swing.DefaultComboBoxModel
@@ -38,6 +38,8 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
     private val reload = JButton("Reload")
     internal val clear = JButton("Clear folder setup")
     private var baseline = DopplerFolderSetup()
+    private var loadedAuthContextId: String? = null
+    private var accountInvalidated = false
     private var loaded = false
     private var started = false
     private var busy = false
@@ -84,7 +86,7 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
                 else "No folder setup. Choose a project and config."
         }
         project.messageBus.connect(this).subscribe(DopplerFolderSetupState.TOPIC, DopplerFolderSetupListener {
-            if (loaded && !busy && !isModified()) {
+            if (loaded && !busy && !accountInvalidated && !isModified()) {
                 baseline = DopplerFolderSetupState.getInstance(project).current
                 resetSetup()
                 status.text = "Folder setup changed in the CLI."
@@ -156,24 +158,32 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
     fun applySetup() {
         if (!isModified()) return
         if (busy) throw ConfigurationException("Wait for Doppler configs to finish loading.")
+        if (accountInvalidated) throw ConfigurationException(ACCOUNT_CHANGED_MESSAGE)
         val selected = selection()
         if (!clearPending && (selected.projectSlug.isNullOrBlank() || selected.configName.isNullOrBlank())) {
             showValidationMessage()
             // Abort Apply/OK without handing the IDE a persistent Settings error banner.
             throw ProcessCanceledException()
         }
+        val expectedAccount = loadedAuthContextId ?: throw ConfigurationException("Reload Doppler folder setup before applying changes.")
         val scope = folder ?: return
         var failure: Exception? = null
         var effective = selected
         val completed = ProgressManager.getInstance().runProcessWithProgressSynchronously({
             try {
                 val service = DopplerService.getInstance()
-                if (clearPending) service.clearFolderSetup(scope)
-                else service.setFolderSetup(scope, requireNotNull(selected.projectSlug), requireNotNull(selected.configName))
+                if (clearPending) service.clearFolderSetup(scope, expectedAccount)
+                else service.setFolderSetup(scope, requireNotNull(selected.projectSlug), requireNotNull(selected.configName), expectedAccount)
                 effective = service.folderSetup(scope)
             } catch (error: Exception) { failure = error }
         }, "Saving Doppler folder setup…", false, project)
-        failure?.let { throw ConfigurationException(it.message ?: "Could not save Doppler folder setup.") }
+        failure?.let {
+            if (it is DopplerCliException && it.kind == DopplerCliException.Kind.AUTH_CONTEXT_CHANGED) {
+                invalidateAccount()
+                throw ConfigurationException(ACCOUNT_CHANGED_MESSAGE)
+            }
+            throw ConfigurationException(it.message ?: "Could not save Doppler folder setup.")
+        }
         if (!completed) throw ConfigurationException("Doppler folder setup was not saved.")
         baseline = effective
         busy = true
@@ -190,12 +200,13 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
     private fun load() {
         val scope = folder ?: return
         background("Loading Doppler folder setup…", {
-            val service = DopplerService.getInstance()
-            val setup = service.folderSetup(scope)
-            val projects = service.listTreeProjects(CliOperation.FOLDER_SETUP).map { it.slug }
-            val configs = setup.projectSlug?.let { service.listConfigs(it, CliOperation.FOLDER_SETUP).map { config -> config.name } }.orEmpty()
-            Triple(setup, projects, configs)
-        }) { (setup, projects, configs) ->
+            DopplerService.getInstance().loadFolderSetup(scope)
+        }) { snapshot ->
+            val setup = snapshot.setup
+            val projects = snapshot.projects.map { it.slug }
+            val configs = snapshot.configs.map { it.name }
+            loadedAuthContextId = snapshot.authContextId
+            accountInvalidated = false
             baseline = setup
             loaded = true
             clearPending = false
@@ -215,9 +226,10 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
         configChoice.model = DefaultComboBoxModel(listOfNotNull(selected).toTypedArray())
         configChoice.selectedItem = selected
         updating = false
-        if (slug == null) return
+        if (slug == null || accountInvalidated) return
+        val expectedAccount = loadedAuthContextId ?: return
         background("Loading Doppler configs…", {
-            DopplerService.getInstance().listConfigs(slug, CliOperation.FOLDER_SETUP).map { it.name }
+            DopplerService.getInstance().folderSetupConfigs(expectedAccount, slug).map { it.name }
         }) { names ->
             updating = true
             configChoice.model = DefaultComboBoxModel((names + listOfNotNull(selected)).distinct().toTypedArray())
@@ -228,13 +240,20 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
     }
 
     private fun enableControls(enabled: Boolean) {
-        projectChoice.isEnabled = enabled && loaded
-        configChoice.isEnabled = enabled && loaded
-        clear.isEnabled = enabled && loaded
+        projectChoice.isEnabled = enabled && loaded && !accountInvalidated
+        configChoice.isEnabled = enabled && loaded && !accountInvalidated
+        clear.isEnabled = enabled && loaded && !accountInvalidated
         reload.isEnabled = enabled && folder != null
     }
 
+    private fun invalidateAccount() {
+        accountInvalidated = true
+        status.text = ACCOUNT_CHANGED_MESSAGE
+        enableControls(!busy)
+    }
+
     private companion object {
+        const val ACCOUNT_CHANGED_MESSAGE = "The Doppler account changed. Reload folder setup before applying changes."
         const val INCOMPLETE_SETUP_MESSAGE = "Choose both a Doppler project and config, or clear the folder setup."
     }
 
@@ -254,7 +273,11 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
             }
             override fun onThrowable(error: Throwable) {
                 if (!disposed && !project.isDisposed && request == generation) {
-                    status.text = "Could not load Doppler setup. Check the CLI path and login, then Reload."
+                    if (error is DopplerCliException && error.kind == DopplerCliException.Kind.AUTH_CONTEXT_CHANGED) {
+                        invalidateAccount()
+                    } else {
+                        status.text = "Could not load Doppler setup. Check the CLI path and login, then Reload."
+                    }
                 }
             }
             override fun onFinished() {

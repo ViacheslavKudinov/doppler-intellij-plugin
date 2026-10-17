@@ -22,9 +22,10 @@ Browse and edit your [Doppler](https://doppler.com) secrets without leaving the 
 
 ## Compatibility
 
-Works on **IntelliJ IDEA 2025.3 (build 253) and all later versions**, Community or Ultimate. The plugin
-only depends on `com.intellij.modules.platform`, so it also runs in the other JetBrains IDEs
-(PyCharm, WebStorm, GoLand, PhpStorm, RubyMine, CLion, Rider…).
+Targets **IntelliJ IDEA 2025.3 (build 253) and later**, Community or Ultimate. The plugin depends on
+both `com.intellij.modules.platform` and the **Terminal plugin** (`org.jetbrains.plugins.terminal`),
+which must be installed and enabled. Other JetBrains IDEs must satisfy both dependencies and the
+minimum platform build requirement; compatibility is not guaranteed solely by using the IntelliJ Platform.
 
 This is achieved by compiling against the *oldest* supported release and leaving `untilBuild` unset —
 plugin binaries are forward-compatible, not backward-compatible, so the lowest target gives the widest
@@ -55,7 +56,8 @@ Global CLI settings are available even without an open project.
 To associate the current IDE project folder with a Doppler project and config, click
 **Folder Setup…** at the top of **Settings | Tools | Doppler**, or open its **Folder Setup**
 child page. Select a project and config,
-then click **Apply** or **OK**. The plugin uses the Doppler CLI's folder configuration,
+then click **Apply** or **OK**. If you change the CLI login while Settings is open,
+click **Reload** before applying folder setup changes. The plugin uses the Doppler CLI's folder configuration,
 so this setup also applies to CLI commands run from that folder. **Clear folder setup**
 removes this folder's override when applied; a parent folder's defaults may still apply.
 Use **Reload** to read changes made with `doppler setup` outside the IDE.

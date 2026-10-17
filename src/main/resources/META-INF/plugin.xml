@@ -35,7 +35,7 @@
         <applicationService serviceImplementation="com.vk.doppler.service.DopplerService"/>
         <projectService serviceImplementation="com.vk.doppler.editor.DopplerSecretsEditorService"/>
 
-        <applicationConfigurable parentId="tools"
+        <projectConfigurable parentId="tools"
                                  instance="com.vk.doppler.settings.DopplerConfigurable"
                                  id="com.vk.doppler.settings.DopplerConfigurable"
                                  displayName="Doppler"/>

@@ -21,6 +21,31 @@ import javax.swing.event.TreeModelListener
 
 class DopplerTreeStateTest {
     @Test
+    fun `folder bookmark follows setup and does not leak to other tree rows`() {
+        SwingUtilities.invokeAndWait {
+            var setup = com.vk.doppler.cli.DopplerFolderSetup("backend", "dev")
+            val renderer = DopplerTreeCellRenderer { setup }
+            val tree = JTree()
+            fun render(node: Any) = renderer.getTreeCellRendererComponent(tree, node, false, false, true, 0, false)
+            val project = ProjectNode(DopplerProject("backend", "Backend", null))
+            val config = ConfigNode("backend", DopplerConfig("dev", "dev"))
+            render(project)
+            assertTrue(renderer.icon is com.intellij.ui.RowIcon)
+            render(config)
+            assertTrue(renderer.icon is com.intellij.ui.RowIcon)
+            assertTrue(renderer.toolTipText.contains("Configured for this project folder"))
+            render(ConfigNode("other", DopplerConfig("dev", "dev")))
+            assertFalse(renderer.icon is com.intellij.ui.RowIcon)
+            assertEquals(null, renderer.toolTipText)
+            setup = com.vk.doppler.cli.DopplerFolderSetup()
+            render(config)
+            assertFalse(renderer.icon is com.intellij.ui.RowIcon)
+            render(project)
+            assertFalse(renderer.icon is com.intellij.ui.RowIcon)
+        }
+    }
+
+    @Test
     fun `consecutive clicks toggle selected project and environment labels every time`() {
         SwingUtilities.invokeAndWait {
             val root = DefaultMutableTreeNode()

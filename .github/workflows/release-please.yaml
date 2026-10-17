@@ -73,8 +73,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
-      - name: Build plugin and SBOM
-        run: ./gradlew buildPlugin cyclonedxBom --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+      - name: Build and verify plugin and SBOM
+        run: ./gradlew buildPlugin cyclonedxBom check verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
       - name: Sign plugin and export public certificate
         env:

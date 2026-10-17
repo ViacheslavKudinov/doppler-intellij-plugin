@@ -79,8 +79,9 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
             projectChoice.selectedItem = null
             configChoice.model = DefaultComboBoxModel()
             updating = false
-            clearPending = true
-            status.text = "This folder's setup will be cleared when you apply settings."
+            clearPending = baseline != DopplerFolderSetup()
+            status.text = if (clearPending) "This folder's setup will be cleared when you apply settings."
+                else "No folder setup. Choose a project and config."
         }
         project.messageBus.connect(this).subscribe(DopplerFolderSetupState.TOPIC, DopplerFolderSetupListener {
             if (loaded && !busy && !isModified()) {
@@ -138,7 +139,7 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
         if (status.text == INCOMPLETE_SETUP_MESSAGE) status.text = "Choose a config, then apply settings."
     }
 
-    fun isModified(): Boolean = loaded && (clearPending || selection() != baseline)
+    fun isModified(): Boolean = loaded && selection() != baseline
 
     fun resetSetup() {
         if (!loaded) return

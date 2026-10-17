@@ -9,6 +9,33 @@ import org.junit.Assume.assumeFalse
 import java.nio.file.Files
 
 class DopplerConfigurableTest : BasePlatformTestCase() {
+    fun `test global settings are discoverable without a project and folder setup requires a project`() {
+        val globalId = DopplerConfigurable::class.java.name
+        val folderId = DopplerFolderSetupConfigurable::class.java.name
+        fun ids(context: com.intellij.openapi.project.Project?) =
+            com.intellij.openapi.options.ex.ConfigurableExtensionPointUtil.getConfigurables(context, true)
+                .filterIsInstance<com.intellij.openapi.options.SearchableConfigurable>().map { it.id }
+
+        val withoutProject = ids(null)
+        assertTrue(withoutProject.contains(globalId))
+        assertFalse(withoutProject.contains(folderId))
+        val withProject = ids(project)
+        assertTrue(withProject.contains(globalId))
+        assertTrue(withProject.contains(folderId))
+        val defaults = ids(com.intellij.openapi.project.ProjectManager.getInstance().defaultProject)
+        assertTrue(defaults.contains(globalId))
+        assertFalse(defaults.contains(folderId))
+
+        val configurable = DopplerConfigurable()
+        try {
+            val panel = configurable.createPanel()
+            assertNotNull(UIUtil.findComponentOfType(panel, TextFieldWithBrowseButton::class.java))
+            assertNull(UIUtil.findComponentOfType(panel, DopplerFolderSetupPanel::class.java))
+        } finally {
+            configurable.disposeUIResources()
+        }
+    }
+
     fun `test folder setup loads stages applies resets and clears through settings`() {
         assumeFalse(SystemInfo.isWindows)
         val directory = Files.createTempDirectory("doppler-folder-settings-")
@@ -41,10 +68,13 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
         assertTrue(executable.toFile().setExecutable(true))
         val settings = DopplerSettings.getInstance()
         val originalPath = settings.cliPath
-        val configurable = DopplerConfigurable(project)
+        val configurable = DopplerConfigurable()
+        val folderConfigurable = DopplerFolderSetupConfigurable(project)
         try {
             settings.cliPath = executable.toString()
-            val panel = configurable.createPanel()
+            val globalPanel = configurable.createPanel()
+            globalPanel.reset()
+            val panel = folderConfigurable.createPanel()
             panel.reset()
             val setup = requireNotNull(UIUtil.findComponentOfType(panel, DopplerFolderSetupPanel::class.java))
             UIUtil.uiTraverser(setup).filter(JButton::class.java).first { it.text == "Reload" }.doClick()
@@ -110,11 +140,12 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
                 exec '$executable' "${'$'}@"
             """.trimIndent())
             assertTrue(replacement.toFile().setExecutable(true))
-            val cliPath = requireNotNull(UIUtil.findComponentOfType(panel, TextFieldWithBrowseButton::class.java))
+            val cliPath = requireNotNull(UIUtil.findComponentOfType(globalPanel, TextFieldWithBrowseButton::class.java))
             cliPath.text = replacement.toString()
             assertEquals(executable.toString(), settings.cliPath)
             assertEquals("stg", setup.configChoice.selectedItem)
             assertFalse(Files.exists(replacementCalls))
+            globalPanel.apply()
             panel.apply()
             awaitEnabled(setup)
             assertEquals("stg", DopplerFolderSetupState.getInstance(project).current.configName)
@@ -158,7 +189,29 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
             assertEquals("parent", cache.current.projectSlug)
             assertEquals("stg", setup.configChoice.selectedItem)
             assertTrue(panel.isModified())
+
+            Files.writeString(state, "{}")
+            UIUtil.uiTraverser(setup).filter(JButton::class.java).first { it.text == "Reload" }.doClick()
+            awaitEnabled(setup)
+            assertNull(setup.projectChoice.selectedItem)
+            assertNull(setup.configChoice.selectedItem)
+            val savedCalls = Files.readAllLines(calls)
+            repeat(2) {
+                setup.clear.doClick()
+                assertFalse("Clearing an empty setup must not mark Settings modified", panel.isModified())
+                panel.apply()
+                assertEquals(savedCalls, Files.readAllLines(calls))
+            }
+            setup.projectChoice.selectedItem = "example"
+            awaitEnabled(setup)
+            setup.configChoice.selectedItem = "dev"
+            assertTrue(panel.isModified())
+            setup.clear.doClick()
+            assertFalse("Clearing unsaved choices must return to the empty baseline", panel.isModified())
+            panel.apply()
+            assertEquals(savedCalls, Files.readAllLines(calls))
         } finally {
+            folderConfigurable.disposeUIResources()
             configurable.disposeUIResources()
             settings.cliPath = originalPath
             Files.walk(directory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) } }
@@ -177,7 +230,7 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
     fun `test CLI browse field preserves manual entry apply reset and automatic detection`() {
         val settings = DopplerSettings.getInstance()
         val originalPath = settings.cliPath
-        val configurable = DopplerConfigurable(project)
+        val configurable = DopplerConfigurable()
         try {
             settings.cliPath = "/usr/local/bin/doppler"
             val panel = configurable.createPanel()

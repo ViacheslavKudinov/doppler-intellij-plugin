@@ -8,6 +8,7 @@ import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.CliLogContext
 import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.cli.DopplerConfig
+import com.vk.doppler.cli.DopplerFolderSetup
 import com.vk.doppler.cli.DopplerExecutableLocator
 import com.vk.doppler.cli.DopplerProject
 import com.vk.doppler.cli.DopplerSecret
@@ -82,6 +83,14 @@ class DopplerService {
 
     fun listConfigs(projectSlug: String, operation: CliOperation = CliOperation.TREE_CONFIGS): List<DopplerConfig> =
         cli(operation, CliLogContext(project = projectSlug)).listConfigs(projectSlug)
+
+    fun folderSetup(folder: String, operation: CliOperation = CliOperation.FOLDER_SETUP): DopplerFolderSetup =
+        cli(operation).folderSetup(folder)
+
+    fun setFolderSetup(folder: String, projectSlug: String, configName: String) =
+        cli(CliOperation.FOLDER_SETUP, CliLogContext(projectSlug, configName)).setFolderSetup(folder, projectSlug, configName)
+
+    fun clearFolderSetup(folder: String) = cli(CliOperation.FOLDER_SETUP).clearFolderSetup(folder)
 
     fun listConfigs(expectedAuthContextId: String, projectSlug: String): List<DopplerConfig> {
         val cli = cli(context = CliLogContext(project = projectSlug))

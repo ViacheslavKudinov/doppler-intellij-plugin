@@ -18,6 +18,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.ColoredTreeCellRenderer
@@ -28,6 +29,8 @@ import com.intellij.ui.treeStructure.Tree
 import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTabsManager
 import com.vk.doppler.DopplerIcons
 import com.vk.doppler.cli.DopplerConfig
+import com.vk.doppler.cli.DopplerFolderSetup
+import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.DopplerProject
 import com.vk.doppler.completion.SecretReferenceService
@@ -36,6 +39,8 @@ import com.vk.doppler.service.DopplerService
 import com.vk.doppler.service.DopplerStatus
 import com.vk.doppler.service.DopplerStatusReport
 import com.vk.doppler.settings.DopplerConfigurable
+import com.vk.doppler.settings.DopplerFolderSetupState
+import com.vk.doppler.settings.DopplerFolderSetupListener
 import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.Component
@@ -88,6 +93,9 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
     init {
         configureTree()
+        project.messageBus.connect(this).subscribe(DopplerFolderSetupState.TOPIC, DopplerFolderSetupListener {
+            tree.repaint()
+        })
         cards.add(statusPanel, CARD_STATUS)
         cards.add(JBScrollPane(tree), CARD_TREE)
         setContent(cards)
@@ -125,7 +133,8 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
     private fun configureTree() {
         tree.isRootVisible = false
         tree.showsRootHandles = true
-        tree.cellRenderer = DopplerTreeCellRenderer()
+        tree.setExpandableItemsEnabled(false)
+        tree.cellRenderer = DopplerTreeCellRenderer { DopplerFolderSetupState.getInstance(project).current }
 
         tree.addTreeWillExpandListener(object : TreeWillExpandListener {
             override fun treeWillExpand(event: TreeExpansionEvent) {
@@ -154,12 +163,20 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
             object : Task.Backgroundable(project, "Loading Doppler projects…", true) {
                 private lateinit var report: DopplerStatusReport
                 private var projects: List<DopplerProject> = emptyList()
+                private var folderSetup = DopplerFolderSetup()
 
                 override fun run(indicator: ProgressIndicator) {
                     val service = DopplerService.getInstance()
                     report = service.checkStatus(includeVersion = false, operation = operation)
                     if (report.status == DopplerStatus.READY) {
                         projects = service.listTreeProjects(operation)
+                        project.basePath?.let { folder ->
+                            folderSetup = try {
+                                service.folderSetup(folder)
+                            } catch (_: DopplerCliException) {
+                                DopplerFolderSetup()
+                            }
+                        }
                     }
                 }
 
@@ -169,6 +186,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                         report.authContextId.takeIf { report.status == DopplerStatus.READY },
                     )
                     SecretReferenceService.getInstance().invalidate()
+                    DopplerFolderSetupState.getInstance(project).update(folderSetup)
                     if (report.status == DopplerStatus.READY) {
                         populate(projects, operation)
                     } else {
@@ -468,7 +486,9 @@ internal class DopplerFocusRefreshListener(
     }
 }
 
-private class DopplerTreeCellRenderer : ColoredTreeCellRenderer() {
+internal class DopplerTreeCellRenderer(
+    private val folderSetup: () -> DopplerFolderSetup = { DopplerFolderSetup() },
+) : ColoredTreeCellRenderer() {
     override fun customizeCellRenderer(
         tree: JTree,
         value: Any?,
@@ -478,12 +498,17 @@ private class DopplerTreeCellRenderer : ColoredTreeCellRenderer() {
         row: Int,
         hasFocus: Boolean,
     ) {
+        toolTipText = null
         when (value) {
             is ProjectNode -> {
                 icon = DopplerIcons.Project
                 append(value.dopplerProject.displayName)
+                if (folderSetup().matchesProject(value.dopplerProject.slug)) markFolderSetup()
                 value.dopplerProject.description?.takeIf { it.isNotBlank() }?.let {
                     append("  $it", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                    val details = listOfNotNull(toolTipText, it)
+                        .joinToString("<br><br>") { text -> StringUtil.escapeXmlEntities(text) }
+                    toolTipText = "<html><div width='320'>$details</div></html>"
                 }
             }
 
@@ -495,9 +520,19 @@ private class DopplerTreeCellRenderer : ColoredTreeCellRenderer() {
             is ConfigNode -> {
                 icon = if (selected) DopplerIcons.ConfigSelected else DopplerIcons.Config
                 append(value.config.name)
+                if (folderSetup().matchesConfig(value.projectSlug, value.config.name)) markFolderSetup()
             }
 
             else -> append(value?.toString().orEmpty(), SimpleTextAttributes.GRAYED_ATTRIBUTES)
         }
+    }
+
+    private fun markFolderSetup() {
+        val nodeIcon = icon
+        icon = com.intellij.ui.RowIcon(2).apply {
+            setIcon(nodeIcon, 0)
+            setIcon(AllIcons.Nodes.Bookmark, 1)
+        }
+        toolTipText = "Configured for this project folder in the Doppler CLI (may be inherited from a parent folder)"
     }
 }

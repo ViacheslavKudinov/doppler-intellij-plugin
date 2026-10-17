@@ -50,6 +50,18 @@ doppler login
 The CLI is auto-detected on `PATH` and in common install locations. If your IDE was launched from the GUI
 with a minimal `PATH`, set the binary location explicitly in **Settings | Tools | Doppler**.
 
+To associate the current IDE project folder with a Doppler project and config, open
+**Settings | Tools | Doppler | Folder setup (doppler setup)**. Select a project and config,
+then click **Apply** or **OK**. The plugin uses the Doppler CLI's folder configuration,
+so this setup also applies to CLI commands run from that folder. **Clear folder setup**
+removes this folder's override when applied; a parent folder's defaults may still apply.
+Use **Reload** to read changes made with `doppler setup` outside the IDE.
+The configured project and config are marked with a bookmark icon in the Doppler tree.
+Folder setup is checked in the background every 30 seconds so CLI changes update the bookmark
+and any unchanged Settings selections. Setup operations use the existing CLI call logging;
+background checks appear as `FOLDER_SETUP_POLL` when **Log CLI calls** is enabled.
+
+
 ## How secrets are handled
 
 - Secrets live **in memory only**. The editor tab is backed by a custom in-memory virtual file system, so

@@ -5,8 +5,11 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.ui.TextFieldWithBrowseButton
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.RightGap
@@ -18,9 +21,19 @@ import com.vk.doppler.service.DopplerService
 import com.vk.doppler.service.DopplerStatus
 import com.vk.doppler.service.DopplerStatusReport
 
-class DopplerConfigurable : BoundConfigurable("Doppler") {
+class DopplerConfigurable(private val project: Project) : BoundConfigurable("Doppler") {
 
     private val settings = DopplerSettings.getInstance()
+
+    private var cliPathField: TextFieldWithBrowseButton? = null
+    private var folderSetupPanel: DopplerFolderSetupPanel? = null
+
+    override fun disposeUIResources() {
+        folderSetupPanel?.let { Disposer.dispose(it) }
+        folderSetupPanel = null
+        cliPathField = null
+        super.disposeUIResources()
+    }
 
     override fun createPanel(): DialogPanel = panel {
         row("Doppler CLI path:") {
@@ -28,6 +41,7 @@ class DopplerConfigurable : BoundConfigurable("Doppler") {
                 fileChooserDescriptor = FileChooserDescriptor(true, false, false, false, false, false)
                     .withTitle("Select Doppler CLI Executable"),
             )
+                .applyToComponent { cliPathField = this }
                 .bindText(settings::cliPath)
                 .align(AlignX.FILL)
                 .comment(
@@ -46,6 +60,14 @@ class DopplerConfigurable : BoundConfigurable("Doppler") {
         row {
             button("Test Connection") { testConnection() }
         }
+        group("Folder setup (doppler setup)") {
+            val setupPanel = DopplerFolderSetupPanel(project)
+            folderSetupPanel = setupPanel
+            row { cell(setupPanel).align(AlignX.FILL) }
+            onIsModified { setupPanel.isModified() }
+            onApply { setupPanel.applySetup() }
+            onReset { setupPanel.resetSetup() }
+        }
         row {
             checkBox("Log CLI calls")
                 .bindSelected(settings::logCliCalls)
@@ -55,7 +77,7 @@ class DopplerConfigurable : BoundConfigurable("Doppler") {
     }
 
     private fun testConnection() {
-        apply()
+        cliPathField?.let { settings.cliPath = it.text }
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(null, "Checking Doppler CLI…", false) {
                 private lateinit var report: DopplerStatusReport

@@ -242,7 +242,7 @@ Replace `1.5.0` below with the version you want to verify:
 
 ```bash
 version=1.5.0
-gh release download "v$version" --repo ViacheslavKudinov/doppler-plugin \
+gh release download "v$version" --repo ViacheslavKudinov/doppler-intellij-plugin \
   --pattern '*-signed.zip' --pattern 'chain.crt' --pattern '*.cdx.json' \
   --pattern 'SHA256SUMS' --dir "verify-$version"
 cd "verify-$version"
@@ -252,13 +252,13 @@ shasum -a 256 -c SHA256SUMS
 Verify the signed zip and certificate's provenance with the GitHub CLI, and the SBOM attestation:
 
 ```bash
-gh attestation verify "doppler-plugin-$version-signed.zip" --repo ViacheslavKudinov/doppler-plugin \
-  --signer-workflow ViacheslavKudinov/doppler-plugin/.github/workflows/release-please.yaml \
+gh attestation verify "doppler-plugin-$version-signed.zip" --repo ViacheslavKudinov/doppler-intellij-plugin \
+  --signer-workflow ViacheslavKudinov/doppler-intellij-plugin/.github/workflows/release-please.yaml \
   --deny-self-hosted-runners
-gh attestation verify "doppler-plugin-$version-signed.zip" --repo ViacheslavKudinov/doppler-plugin \
+gh attestation verify "doppler-plugin-$version-signed.zip" --repo ViacheslavKudinov/doppler-intellij-plugin \
   --predicate-type https://cyclonedx.org/bom   # the SBOM attestation
-gh attestation verify chain.crt --repo ViacheslavKudinov/doppler-plugin \
-  --signer-workflow ViacheslavKudinov/doppler-plugin/.github/workflows/release-please.yaml \
+gh attestation verify chain.crt --repo ViacheslavKudinov/doppler-intellij-plugin \
+  --signer-workflow ViacheslavKudinov/doppler-intellij-plugin/.github/workflows/release-please.yaml \
   --deny-self-hosted-runners
 ```
 

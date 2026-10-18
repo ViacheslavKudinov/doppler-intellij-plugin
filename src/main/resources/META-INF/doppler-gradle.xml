@@ -1,0 +1,5 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
+        <executionHelperExtension implementation="com.vk.doppler.injection.DopplerGradleEnvironmentExtension"/>
+    </extensions>
+</idea-plugin>

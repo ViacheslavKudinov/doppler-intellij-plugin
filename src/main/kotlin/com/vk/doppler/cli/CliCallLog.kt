@@ -8,6 +8,7 @@ private val callIds = AtomicLong()
 enum class CliOperation {
     TREE_RELOAD, TREE_CONFIGS, CONFIG_OPEN, AUTO_REFRESH, ACCOUNT_VALIDATION, SAVE, SAVE_RECOVERY, AUTOCOMPLETE, TEST_CONNECTION, OTHER,
     TREE_STARTUP, TREE_PANEL_FOCUS, TREE_WINDOW_FOCUS, TREE_REFRESH_BUTTON, TREE_RETRY, TREE_EXPAND, CONFIG_RELOAD, FOLDER_SETUP, FOLDER_SETUP_POLL,
+    RUN_INJECTION,
 }
 
 /** Reveals at most 60% of a name, measured in Unicode code points, as a quoted log field. */
@@ -42,7 +43,7 @@ data class CliLogContext(val project: String? = null, val config: String? = null
 /** Only project/config operands may be partially shown. All other operands stay redacted. */
 internal fun sanitizedCliCommand(args: List<String>): String {
     val commands = setOf("me", "projects", "configs", "secrets", "configure", "--version")
-    val switches = setOf("--json", "--no-check-version", "--raw", "--only-names", "--yes", "--silent")
+    val switches = setOf("--json", "--no-check-version", "--raw", "--only-names", "--yes", "--silent", "--no-file", "--no-fallback", "--name-transformer")
     val options = setOf("--project", "--config")
     var operand = false
     var terminated = false
@@ -51,8 +52,10 @@ internal fun sanitizedCliCommand(args: List<String>): String {
             terminated -> "<redacted>"
             operand -> { operand = false; maskedCliName(arg) }
             index == 0 -> if (arg in commands) arg else "<redacted>"
-            index == 1 && args.firstOrNull() == "secrets" && arg in setOf("set", "delete") -> arg
+            index == 1 && args.firstOrNull() == "secrets" && arg in setOf("set", "delete", "download") -> arg
             index == 1 && args.firstOrNull() == "configure" && arg in setOf("get", "set", "unset") -> arg
+            index > 0 && args[index - 1] == "--name-transformer" &&
+                DopplerNameTransformer.entries.any { it.cliName == arg } -> arg
             arg == "--" -> { terminated = true; "--" }
             arg in options -> { operand = true; arg }
             arg in switches -> arg

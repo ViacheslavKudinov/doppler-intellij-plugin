@@ -18,6 +18,9 @@
                 Reload or use automatic refresh to retrieve remote changes.</li>
             <li><b>Secret-reference completion</b> &mdash; get completion suggestions for Doppler secret references while editing.</li>
             <li><b>Setup guidance</b> &mdash; detect a missing CLI or login and access installation and authentication instructions.</li>
+            <li><b>Run and Debug injection</b> &mdash; automatically load the default config into Java, Python,
+                Node.js, Maven, Gradle, and Docker launch environments, fetching fresh secrets for every launch.
+                Running processes retain their environment for their lifetime.</li>
         </ul>
 
         <h3>Secret handling</h3>
@@ -36,6 +39,11 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>org.jetbrains.plugins.terminal</depends>
+    <depends optional="true" config-file="doppler-java.xml">com.intellij.java</depends>
+    <depends optional="true" config-file="doppler-gradle.xml">com.intellij.gradle</depends>
+    <depends optional="true" config-file="doppler-node.xml">JavaScript</depends>
+    <depends optional="true" config-file="doppler-python.xml">PythonCore</depends>
+    <depends optional="true" config-file="doppler-docker.xml">Docker</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <ide.dynamicPluginVetoer implementation="com.vk.doppler.DopplerPluginUnloadVetoer"/>
@@ -57,6 +65,11 @@
                              instance="com.vk.doppler.settings.DopplerFolderSetupConfigurable"
                              id="com.vk.doppler.settings.DopplerFolderSetupConfigurable"
                              displayName="Folder Setup"
+                             nonDefaultProject="true"/>
+        <projectConfigurable parentId="com.vk.doppler.settings.DopplerConfigurable"
+                             instance="com.vk.doppler.settings.DopplerInjectionConfigurable"
+                             id="com.vk.doppler.settings.DopplerInjectionConfigurable"
+                             displayName="Run and Debug"
                              nonDefaultProject="true"/>
 
         <virtualFileSystem key="doppler"

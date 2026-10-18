@@ -25,6 +25,7 @@ class DopplerCli(
     private val operation: CliOperation = CliOperation.OTHER,
     private val logContext: CliLogContext = CliLogContext(),
     private val relatedConfigs: List<CliLogContext> = emptyList(),
+    private val scope: String? = null,
 ) {
 
     companion object {
@@ -147,6 +148,26 @@ class DopplerCli(
         return parseSecrets(element)
     }
 
+    /** Downloads fresh computed values to stdout without output files or fallback storage. */
+    internal fun downloadEnvironment(
+        projectSlug: String,
+        configName: String,
+        nameTransformer: DopplerNameTransformer = DopplerNameTransformer.NONE,
+    ): Map<String, String> {
+        val args = mutableListOf("secrets", "download", "--no-file", "--no-fallback", "--format", "json", "--project", projectSlug, "--config", configName)
+        nameTransformer.cliName?.let { args.addAll(listOf("--name-transformer", it)) }
+        val result = runJson(args)
+        val values = result as? JsonObject ?: throw DopplerCliException("Invalid Doppler environment response.")
+        return values.entrySet().associate { (name, value) ->
+            if (name.isEmpty() || '=' in name || '\u0000' in name || !value.isJsonPrimitive || !value.asJsonPrimitive.isString) {
+                throw DopplerCliException("Doppler returned an invalid environment variable.")
+            }
+            val text = value.asString
+            if ('\u0000' in text) throw DopplerCliException("Doppler returned an invalid environment value.")
+            name to text
+        }
+    }
+
     /** Reads only the secret names of a config; the CLI never returns the values. */
     fun listSecretNames(projectSlug: String, configName: String): Set<String> {
         val element = runJson(
@@ -202,6 +223,7 @@ class DopplerCli(
 
     private fun runRaw(args: List<String>, stdin: String?, json: Boolean): String {
         val parameters = args.toMutableList()
+        scope?.let { parameters.addAll(listOf("--scope", it)) }
         if (json) {
             val jsonFlags = listOf("--json", "--no-check-version")
             val terminatorIndex = parameters.indexOf("--")

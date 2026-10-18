@@ -19,6 +19,8 @@ Browse and edit your [Doppler](https://doppler.com) secrets without leaving the 
 - **Two-way sync** — saving the tab (`⌘S` / `Ctrl+S`) pushes your changes to Doppler; click the config
   again to pull the latest values.
 - **Setup guidance** — the tool window detects a missing CLI or missing login and links to the fix.
+- **Run and Debug** — automatically inject the default config's secrets into Java, Python, Node.js,
+  Maven, Gradle, and Docker launches, fetching fresh secrets for every launch.
 
 ## Compatibility
 
@@ -67,13 +69,71 @@ and any unchanged Settings selections. Setup operations use the existing CLI cal
 background checks appear as `FOLDER_SETUP_POLL` when **Log CLI calls** is enabled.
 
 
+## Run and Debug environment injection
+
+Choose your default project and config in **Settings | Tools | Doppler | Folder Setup**.
+Then click **Run and Debug…** on the main Doppler settings page and enable **Automatically inject Doppler
+secrets into Run and Debug**. Injection is automatic on every launch; there is no Inject button.
+The setting is local to the current IDE project and starts disabled.
+
+**Name transformation** defaults to **None**, which keeps secret names unchanged. Optionally choose
+one of [Doppler's name transformers](https://docs.doppler.com/docs/accessing-secrets#name-transformers):
+`camel`, `upper-camel`, `lower-snake`, `tf-var`, `dotnet-env`, or `lower-kebab`. The CLI transforms
+only the injected secret names; values and saved Doppler secrets are unchanged. For example,
+`camel` injects `API_KEY` as `apiKey`. Existing run configuration variables still take precedence
+when their names match the transformed names. If Doppler reports conflicting transformed names,
+the launch fails rather than injecting a partial environment.
+
+**Every Run or Debug launch fetches fresh secrets**, so changes saved in the plugin, CLI, or
+Doppler dashboard apply to the next launch. The injection service does not cache secret values.
+Launched processes keep their inherited environment for their lifetime; changes apply on the
+next launch rather than updating an already running process.
+Every launch checks the current CLI account and folder defaults so an account or config change
+does not reuse another config's values.
+With **Log CLI calls** enabled on the main Doppler settings page, every injection CLI call is
+logged as `RUN_INJECTION`, including the folder lookup, account checks, and secrets download.
+Logs contain sanitized command metadata, duration, and exit status; secret values and CLI output
+are never logged.
+
+Values are fetched with `doppler secrets download --no-file --no-fallback --format json`, so references
+are resolved by Doppler without creating an `.env` file or reading/writing CLI fallback storage.
+If Doppler is unavailable, injection fails instead of using stored secrets. Explicit environment
+variables already set in the run configuration take precedence. Missing folder defaults leave the launch unchanged;
+failure to read a configured environment stops the launch with a message that contains no CLI output.
+
+Supported launch paths (with the corresponding IDE plugins enabled):
+
+| Runtime | Injection point |
+| --- | --- |
+| Java and Maven | JVM launch parameters, including Run and Debug |
+| Python | An execution-only profile passed to Python's native Run/Debug runner, including target-based launches |
+| Node.js | Node target launch sessions, including npm-based configurations |
+| Gradle | Task execution through the Tooling API, including delegated runs and debugging; project sync is excluded |
+| Docker image / Dockerfile | An execution-only copy of the container deployment settings |
+| Docker Compose | The Compose process environment, for substitution into the Compose file |
+
+For Compose, declare the names each service needs; secret values remain outside the YAML file:
+
+```yaml
+services:
+  api:
+    image: my-api
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+```
+
+The plugin never saves injected values in run configurations and does not change the IDE's own
+process environment. An application or container already running keeps its inherited environment;
+the plugin cannot remove variables from that process.
+Docker's execution-only command preview is disabled to avoid showing injected values.
+
 ## How secrets are handled
 
 - Secrets live **in memory only**. The editor tab is backed by a custom in-memory virtual file system, so
   secret values are never written to disk, to the IDE's local history, or to the project directory.
 - Secret **values are passed to the CLI over stdin**, never as command-line arguments, so they cannot be
   read from the process table by other local users.
-- The plugin **never stores or transmits your Doppler token**. Only the optional CLI path is persisted.
+- The plugin **never stores or transmits your Doppler token**. Only non-sensitive preferences are persisted.
 - `DOPPLER_PROJECT`, `DOPPLER_CONFIG` and `DOPPLER_ENVIRONMENT` are managed by Doppler and are hidden from
   the editor and excluded from writes.
 - YAML syntax errors report only a location, never document excerpts that could expose secret values
@@ -196,8 +256,10 @@ The CI workflow declares `cache-mode: read`, and the release build and signing j
 2. The `release` environment job builds the plugin and CycloneDX SBOM from the released commit,
    signs the plugin, and verifies its signature. Only the signed `doppler-plugin-<version>-signed.zip`
    is released, alongside the public `chain.crt`, SBOM, and `SHA256SUMS`.
-3. Build provenance is attested for all four files, and the SBOM is attested against the signed
-   zip. The files are attached to the draft before the immutable release is published.
+3. Build provenance is attested for all four files and every JAR extracted from the signed zip,
+   including bundled dependencies. The SBOM is attested against the signed zip. The four release
+   files are attached to the draft before the immutable release is published; the extracted JARs
+   are attestation subjects only, not separate release assets.
 4. The manual Publish workflow downloads the signed zip and certificate from the selected release.
    It verifies both files' GitHub provenance against the Release workflow and validated tag commit,
    verifies the plugin signature, then uploads the exact zip to Marketplace without rebuilding or
@@ -235,6 +297,8 @@ upload; the Publish workflow does not generate a second attestation.
 
 This publishing flow requires a release containing a signed zip and an attested `chain.crt`.
 Earlier releases without those assets cannot be published through this workflow.
+
+### Verify a GitHub release download
 
 To verify a release later, install the GitHub CLI and Java, and authenticate with `gh auth login`.
 Download the signed zip, public certificate, SBOM, and checksums from the **same release**.
@@ -275,6 +339,47 @@ java -jar marketplace-zip-signer-cli.jar verify \
 A successful signature check confirms that the archive matches the signing certificate and has
 not been modified since signing. No private key or password is needed for verification.
 
+### Verify a Marketplace download
+
+Marketplace can modify the ZIP container, so its checksum and ZIP provenance may differ from
+the GitHub release. Verify the JARs inside the downloaded ZIP against their GitHub build
+provenance instead. This requires a release produced after JAR attestation was added; older
+releases do not have these attestations.
+
+Install the GitHub CLI and `unzip`, authenticate with `gh auth login`, and download the plugin
+ZIP from Marketplace. Run the following in **Bash**, replacing the version and ZIP path with
+your download's values:
+
+```bash
+(
+  set -euo pipefail
+  version=1.6.0
+  marketplace_zip=/path/to/doppler-plugin.zip
+  repo=ViacheslavKudinov/doppler-intellij-plugin
+  release_commit="$(gh api "repos/$repo/commits/v$version" --jq .sha)"
+  extracted="$(mktemp -d)"
+  trap 'rm -rf "$extracted"' EXIT
+
+  # A ZIP containing no JARs makes unzip fail and stops verification.
+  unzip -q "$marketplace_zip" '*.jar' -d "$extracted"
+  while IFS= read -r -d '' jar; do
+    gh attestation verify "$jar" --repo "$repo" \
+      --signer-workflow "$repo/.github/workflows/release-please.yaml" \
+      --source-digest "$release_commit" \
+      --deny-self-hosted-runners
+  done < <(find "$extracted" -type f -name '*.jar' -print0)
+)
+```
+
+Every JAR must pass. The [GitHub CLI verification options](https://cli.github.com/manual/gh_attestation_verify)
+restrict provenance to this repository, the Release workflow, the selected release commit,
+and GitHub-hosted runners. Attestations are fetched from GitHub automatically; no separate
+attestation file or signing certificate is needed for this check.
+
+Success confirms that each extracted JAR matches bytes attested by the release workflow.
+It does not verify ZIP metadata, non-JAR files, or whether JARs were removed from the archive.
+The SBOM attestation remains bound to the original GitHub release ZIP.
+
 Generate a local dependency SBOM with `./gradlew cyclonedxBom`.
 
 ## Project layout
@@ -288,7 +393,3 @@ src/main/kotlin/com/vk/doppler/
 ├── settings/       Persisted settings and the settings UI
 └── toolwindow/     Projects / environments / configs tree
 ```
-
-## Not yet implemented
-
-Run-configuration injection are not part of this version.

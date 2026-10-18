@@ -37,6 +37,13 @@ dependencies {
         // Build against the OLDEST supported IDE: plugin binaries are forward-compatible, not backward.
         intellijIdea("2025.3.6.1")
         bundledPlugin("org.jetbrains.plugins.terminal")
+        bundledPlugin("com.intellij.java")
+        bundledPlugin("com.intellij.gradle")
+        bundledPlugin("JavaScript")
+        bundledPlugin("NodeJS")
+        bundledPlugin("Docker")
+        bundledPlugin("org.jetbrains.idea.maven")
+        plugin("PythonCore", "253.33813.55")
         testFramework(TestFrameworkType.Platform)
     }
 }

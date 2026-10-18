@@ -76,7 +76,8 @@ class DopplerInjectionTest : BasePlatformTestCase() {
               configure)
                 printf '%s\n' "${'$'}*" >> '$directory/setups'
                 printf '{"project":"%s","config":"%s"}' "${'$'}(cat '$directory/project')" "${'$'}(cat '$directory/config')"
-                if [ -f '$directory/switch-account-on-setup' ]; then printf 'two' > '$directory/account'; fi
+                if [ -f '$directory/switch-account-on-setup' ] && [ "${'$'}(wc -l < '$directory/setups')" -eq 2 ]; then printf 'two' > '$directory/account'; fi
+                if [ -f '$directory/switch-config-on-preflight' ]; then printf 'stg' > '$directory/config'; fi
                 ;;
               me)
                 printf '%s\n' "${'$'}*" >> '$directory/accounts'
@@ -247,10 +248,16 @@ class DopplerInjectionTest : BasePlatformTestCase() {
         assertEquals("resolved-two-dev", background { service.mergeEnvironment(emptyMap()) }["KEY"])
     }
 
-    fun `test account switch after initial folder lookup aborts injection`() {
+    fun `test account switch after validated folder lookup aborts injection`() {
         Files.createFile(directory.resolve("switch-account-on-setup"))
         assertSafeFailure()
-        assertEquals(2, Files.readAllLines(directory.resolve("setups")).size)
+        assertEquals(3, Files.readAllLines(directory.resolve("setups")).size)
+    }
+
+    fun `test defaults changed after preflight abort before downloading secrets`() {
+        Files.createFile(directory.resolve("switch-config-on-preflight"))
+        assertSafeFailure()
+        assertFalse(Files.exists(directory.resolve("downloads")))
     }
 
     fun `test changing project or config during download aborts injection`() {
@@ -274,10 +281,16 @@ class DopplerInjectionTest : BasePlatformTestCase() {
         assertFalse(Files.exists(directory.resolve("setups")))
     }
 
-    fun `test missing folder defaults skip injection without downloading secrets`() {
-        Files.writeString(directory.resolve("config"), "")
+    fun `test missing project or config skips logged out launches without account checks`() {
+        Files.createFile(directory.resolve("logged-out"))
         val existing = mapOf("LOCAL" to "value")
-        assertSame(existing, background { service.mergeEnvironment(existing) })
+        for (missing in listOf("project", "config")) {
+            Files.writeString(directory.resolve("project"), "example")
+            Files.writeString(directory.resolve("config"), "dev")
+            Files.writeString(directory.resolve(missing), "")
+            assertSame(existing, background { service.mergeEnvironment(existing) })
+        }
+        assertFalse(Files.exists(directory.resolve("accounts")))
         assertFalse(Files.exists(directory.resolve("downloads")))
     }
 

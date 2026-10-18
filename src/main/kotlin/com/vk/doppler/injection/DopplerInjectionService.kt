@@ -41,13 +41,18 @@ class DopplerInjectionService(private val project: Project) {
         try {
             val folder = project.basePath ?: return existing
             val service = DopplerService.getInstance()
-            // Bracket folder resolution and the download with the same CLI account identity.
-            val account = service.injectionAccount(folder)
+            // Local preflight: an unconfigured project needs no login or secret access.
             val setup = service.folderSetup(folder, CliOperation.RUN_INJECTION)
             val slug = setup.projectSlug
             val config = setup.configName
             if (slug.isNullOrBlank() || config.isNullOrBlank()) {
                 return existing
+            }
+            // Re-read defaults inside the account checks so the preflight cannot become a stale snapshot.
+            val account = service.injectionAccount(folder)
+            val validatedSetup = service.folderSetup(folder, CliOperation.RUN_INJECTION)
+            if (validatedSetup.projectSlug != slug || validatedSetup.configName != config) {
+                throw DopplerCliException("Doppler account or folder setup changed during environment loading.")
             }
             val settings = DopplerInjectionSettings.getInstance(project)
             val secrets = service.downloadEnvironment(folder, slug, config, settings.nameTransformer)

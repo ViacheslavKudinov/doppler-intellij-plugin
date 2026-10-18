@@ -22,6 +22,7 @@ class CliCallLogTest {
         val logs = mutableListOf<String>()
         val scope = listOf("--scope", "/private/injection-folder", "--json", "--no-check-version")
         val calls = listOf(
+            listOf("configure", "get", "project", "config") + scope,
             listOf("me") + scope,
             listOf("configure", "get", "project", "config") + scope,
             listOf("secrets", "download", "--no-file", "--no-fallback", "--format", "json",
@@ -35,13 +36,14 @@ class CliCallLogTest {
                 "synthetic-secret-output"
             }
         }
-        assertEquals(10, logs.size)
+        assertEquals(12, logs.size)
         assertTrue(logs.all { it.contains("operation=RUN_INJECTION ") })
-        assertTrue(logs[0].contains("START doppler me"))
-        assertTrue(logs[2].contains("START doppler configure get"))
-        assertTrue(logs[4].contains("START doppler secrets download --no-file --no-fallback"))
-        assertTrue(logs[6].contains("START doppler configure get"))
-        assertTrue(logs[8].contains("START doppler me"))
+        assertTrue(logs[0].contains("START doppler configure get"))
+        assertTrue(logs[2].contains("START doppler me"))
+        assertTrue(logs[4].contains("START doppler configure get"))
+        assertTrue(logs[6].contains("START doppler secrets download --no-file --no-fallback"))
+        assertTrue(logs[8].contains("START doppler configure get"))
+        assertTrue(logs[10].contains("START doppler me"))
         assertTrue(logs.filterIndexed { index, _ -> index % 2 == 1 }
             .all { it.contains("END durationMs=") && it.contains("exit=0 timeout=false result=success") })
         for (sensitive in listOf("/private/injection-folder", "private-project", "private-config", "synthetic-secret-output")) {

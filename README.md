@@ -43,6 +43,14 @@ To widen or shift the range, edit `sinceBuild` and the verified IDEs in `build.g
 
 ## Requirements
 
+Required dependencies for browsing and editing secrets:
+
+| Dependency | Requirement |
+| --- | --- |
+| IntelliJ Platform | Build 253 (2025.3) or later; `com.intellij.modules.platform` |
+| Terminal IDE plugin | Installed and enabled; `org.jetbrains.plugins.terminal` |
+| Doppler CLI | Installed locally and authenticated with `doppler login` |
+
 The plugin drives the [Doppler CLI](https://docs.doppler.com/docs/install-cli), which owns authentication:
 
 ```bash
@@ -54,6 +62,27 @@ The CLI is auto-detected on `PATH` and in common install locations. If your IDE 
 with a minimal `PATH`, set the binary location explicitly in **Settings | Tools | Doppler**.
 
 Global CLI settings are available even without an open project.
+
+### Optional integration dependencies
+
+Run and Debug injection requires the IDE plugins for the configurations you launch:
+
+| Integration | IDE plugins / modules |
+| --- | --- |
+| Java | Java support (`com.intellij.java`) |
+| Maven | Java support (`com.intellij.java`) and Maven (`org.jetbrains.idea.maven`) |
+| Gradle | Gradle (`com.intellij.gradle`) |
+| Node.js and npm | JavaScript support (`JavaScript`) and Node.js (`NodeJS`) |
+| Python | Python support (`PythonCore`) |
+| Docker image, Dockerfile, and Compose | Docker (`Docker`) |
+
+These integrations are optional: missing language or Docker plugins do not prevent browsing and
+editing Doppler secrets. Their availability depends on your JetBrains IDE and edition. Enable
+the relevant plugins under **Settings | Plugins**. Doppler does not bundle these IDE plugins or
+install language runtimes, build tools, Docker Engine, or Docker Compose; configure those as you
+would for the corresponding native Run configuration.
+
+### Default project and config
 
 To associate the current IDE project folder with a Doppler project and config, click
 **Folder Setup…** at the top of **Settings | Tools | Doppler**, or open its **Folder Setup**

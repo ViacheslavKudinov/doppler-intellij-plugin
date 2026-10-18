@@ -9,10 +9,10 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.vk.doppler.cli.DopplerNameTransformer
 
-/** Only preferences are persisted; no secret values or run configuration environments. */
+/** Workspace preferences alone cannot enable injection; user-local approval is also required. */
 @Service(Service.Level.PROJECT)
 @State(name = "DopplerInjectionSettings", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
-class DopplerInjectionSettings : PersistentStateComponent<DopplerInjectionSettings.State> {
+class DopplerInjectionSettings(private val project: Project) : PersistentStateComponent<DopplerInjectionSettings.State> {
     data class State(var enabled: Boolean = false, var nameTransformer: DopplerNameTransformer = DopplerNameTransformer.NONE)
     private var settings = State()
     override fun getState(): State = settings
@@ -21,8 +21,11 @@ class DopplerInjectionSettings : PersistentStateComponent<DopplerInjectionSettin
     }
 
     var enabled: Boolean
-        get() = settings.enabled
-        set(value) { settings.enabled = value }
+        get() = settings.enabled && DopplerInjectionConsent.getInstance().isGranted(project.basePath)
+        set(value) {
+            DopplerInjectionConsent.getInstance().setGranted(project.basePath, value)
+            settings.enabled = value
+        }
 
     var nameTransformer: DopplerNameTransformer
         get() = settings.nameTransformer

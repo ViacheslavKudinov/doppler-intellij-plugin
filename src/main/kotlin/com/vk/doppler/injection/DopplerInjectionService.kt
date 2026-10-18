@@ -41,19 +41,23 @@ class DopplerInjectionService(private val project: Project) {
         try {
             val folder = project.basePath ?: return existing
             val service = DopplerService.getInstance()
+            // Bracket folder resolution and the download with the same CLI account identity.
+            val account = service.injectionAccount(folder)
             val setup = service.folderSetup(folder, CliOperation.RUN_INJECTION)
             val slug = setup.projectSlug
             val config = setup.configName
             if (slug.isNullOrBlank() || config.isNullOrBlank()) {
                 return existing
             }
-            val account = service.injectionAccount(folder)
             val settings = DopplerInjectionSettings.getInstance(project)
             val secrets = service.downloadEnvironment(folder, slug, config, settings.nameTransformer)
-            if (service.injectionAccount(folder) != account) {
-                throw DopplerCliException("Doppler account changed during environment loading.")
+            val currentSetup = service.folderSetup(folder, CliOperation.RUN_INJECTION)
+            if (service.injectionAccount(folder) != account ||
+                currentSetup.projectSlug != slug || currentSetup.configName != config
+            ) {
+                throw DopplerCliException("Doppler account or folder setup changed during environment loading.")
             }
-            if (project.isDisposed || !settings.enabled) {
+            if (project.isDisposed || !settings.enabled || !TrustedProjects.isProjectTrusted(project)) {
                 return existing
             }
             return mergeInjectionEnvironment(existing, secrets)

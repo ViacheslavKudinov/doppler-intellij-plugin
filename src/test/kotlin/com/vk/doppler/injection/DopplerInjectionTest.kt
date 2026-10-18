@@ -38,6 +38,7 @@ import com.jetbrains.python.run.PythonConfigurationType
 import com.jetbrains.python.run.AbstractPythonRunConfiguration
 import com.vk.doppler.settings.DopplerInjectionSettings
 import com.vk.doppler.settings.DopplerSettings
+import com.vk.doppler.settings.DopplerInjectionConsent
 import com.vk.doppler.cli.DopplerNameTransformer
 import org.gradle.tooling.LongRunningOperation
 import org.jetbrains.idea.maven.execution.MavenRunConfigurationType
@@ -53,6 +54,7 @@ import java.util.concurrent.TimeUnit
 class DopplerInjectionTest : BasePlatformTestCase() {
     private lateinit var directory: Path
     private lateinit var previousCli: String
+    private lateinit var previousConsent: DopplerInjectionConsent.State
     private lateinit var previousSettings: DopplerInjectionSettings.State
     private val service get() = DopplerInjectionService.getInstance(project)
 
@@ -62,14 +64,20 @@ class DopplerInjectionTest : BasePlatformTestCase() {
         directory = Files.createTempDirectory("doppler-injection-test-")
         previousCli = DopplerSettings.getInstance().cliPath
         previousSettings = DopplerInjectionSettings.getInstance(project).state.copy()
+        previousConsent = DopplerInjectionConsent.getInstance().state
         TrustedProjects.setProjectTrusted(project, true)
         Files.writeString(directory.resolve("account"), "one")
         Files.writeString(directory.resolve("config"), "dev")
+        Files.writeString(directory.resolve("project"), "example")
         val script = directory.resolve("doppler")
         Files.writeString(script, """
             #!/bin/sh
             case "${'$'}1" in
-              configure) printf '{"project":"example","config":"%s"}' "${'$'}(cat '$directory/config')" ;;
+              configure)
+                printf '%s\n' "${'$'}*" >> '$directory/setups'
+                printf '{"project":"%s","config":"%s"}' "${'$'}(cat '$directory/project')" "${'$'}(cat '$directory/config')"
+                if [ -f '$directory/switch-account-on-setup' ]; then printf 'two' > '$directory/account'; fi
+                ;;
               me)
                 printf '%s\n' "${'$'}*" >> '$directory/accounts'
                 if [ -f '$directory/logged-out' ]; then printf '{"error":"unauthorized"}'; exit 1; fi
@@ -89,6 +97,8 @@ class DopplerInjectionTest : BasePlatformTestCase() {
                 if [ -f '$directory/xml-control' ]; then printf '%s' '{"KEY":"synthetic\u0001sensitive"}'; exit 0; fi
                 if [ -f '$directory/remote' ]; then cat '$directory/remote'; exit 0; fi
                 if [ -f '$directory/switch-account' ]; then printf 'two' > '$directory/account'; fi
+                if [ -f '$directory/switch-config' ]; then printf 'stg' > '$directory/config'; fi
+                if [ -f '$directory/switch-project' ]; then printf 'other-project' > '$directory/project'; fi
                 printf '{"KEY":"resolved-%s-%s","EMPTY":"","MULTILINE":"one\ntwo","DOPPLER_CONFIG":"%s"}' "${'$'}(cat '$directory/account')" "${'$'}(cat '$directory/config')" "${'$'}(cat '$directory/config')" ;;
               *) exit 1 ;;
             esac
@@ -103,6 +113,7 @@ class DopplerInjectionTest : BasePlatformTestCase() {
             if (::directory.isInitialized) {
                 DopplerSettings.getInstance().cliPath = previousCli
                 DopplerInjectionSettings.getInstance(project).loadState(previousSettings)
+                DopplerInjectionConsent.getInstance().loadState(previousConsent)
                 Files.walk(directory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
             }
         } finally { super.tearDown() }
@@ -234,6 +245,33 @@ class DopplerInjectionTest : BasePlatformTestCase() {
         assertSafeFailure()
         Files.delete(directory.resolve("invalid"))
         assertEquals("resolved-two-dev", background { service.mergeEnvironment(emptyMap()) }["KEY"])
+    }
+
+    fun `test account switch after initial folder lookup aborts injection`() {
+        Files.createFile(directory.resolve("switch-account-on-setup"))
+        assertSafeFailure()
+        assertEquals(2, Files.readAllLines(directory.resolve("setups")).size)
+    }
+
+    fun `test changing project or config during download aborts injection`() {
+        for (marker in listOf("switch-config", "switch-project")) {
+            Files.writeString(directory.resolve("config"), "dev")
+            Files.writeString(directory.resolve("project"), "example")
+            Files.createFile(directory.resolve(marker))
+            assertSafeFailure()
+            Files.delete(directory.resolve(marker))
+        }
+    }
+
+    fun `test injected workspace opt in cannot invoke CLI without user local approval`() {
+        val settings = DopplerInjectionSettings.getInstance(project)
+        settings.enabled = false
+        settings.loadState(DopplerInjectionSettings.State(enabled = true))
+        val existing = mapOf("LOCAL" to "value")
+        assertSame(existing, background { service.mergeEnvironment(existing) })
+        assertFalse(Files.exists(directory.resolve("downloads")))
+        assertFalse(Files.exists(directory.resolve("accounts")))
+        assertFalse(Files.exists(directory.resolve("setups")))
     }
 
     fun `test missing folder defaults skip injection without downloading secrets`() {

@@ -75,6 +75,9 @@ Choose your default project and config in **Settings | Tools | Doppler | Folder 
 Then click **Run and Debug…** on the main Doppler settings page and enable **Automatically inject Doppler
 secrets into Run and Debug**. Injection is automatic on every launch; there is no Inject button.
 The setting is local to the current IDE project and starts disabled.
+Enabling it also records approval for this project in this IDE's user settings, outside the project
+and without settings synchronization. Workspace files cannot grant approval. After upgrading from
+a version without this approval check, enable injection once again on this settings page.
 
 **Name transformation** defaults to **None**, which keeps secret names unchanged. Optionally choose
 one of [Doppler's name transformers](https://docs.doppler.com/docs/accessing-secrets#name-transformers):
@@ -89,7 +92,8 @@ Doppler dashboard apply to the next launch. The injection service does not cache
 Launched processes keep their inherited environment for their lifetime; changes apply on the
 next launch rather than updating an already running process.
 Every launch checks the current CLI account and folder defaults so an account or config change
-does not reuse another config's values.
+does not reuse another config's values. The launch aborts if the account or folder defaults change
+while secrets are being loaded.
 With **Log CLI calls** enabled on the main Doppler settings page, every injection CLI call is
 logged as `RUN_INJECTION`, including the folder lookup, account checks, and secrets download.
 Logs contain sanitized command metadata, duration, and exit status; secret values and CLI output

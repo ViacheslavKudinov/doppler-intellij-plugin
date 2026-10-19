@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
+    name: Build and analyze (${{ matrix.language }})
     # Runner size impacts CodeQL analysis time. To learn more, please see:
     #   - https://gh.io/recommended-hardware-resources-for-running-codeql
     #   - https://gh.io/supported-runners-and-hardware-resources
@@ -25,13 +25,9 @@ jobs:
     # Consider using larger runners or machines with greater resources for possible analysis time improvements.
     runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
     permissions:
-      # required for all workflows
-      security-events: write
-      # required to fetch internal or private CodeQL packs
-      packages: read
-      # only required for workflows in private repositories
-      actions: read
+      # PR-controlled Gradle code runs here; this job must have no repository write permissions.
       contents: read
+      actions: read
 
     strategy:
       fail-fast: false
@@ -94,3 +90,55 @@ jobs:
       uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
       with:
         category: "/language:${{matrix.language}}"
+        output: ${{ runner.temp }}/codeql-results
+        upload: never
+        upload-database: false
+
+    - name: Store SARIF results
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: codeql-sarif-${{ matrix.language }}
+        path: ${{ runner.temp }}/codeql-results/*.sarif
+        if-no-files-found: error
+        retention-days: 1
+
+  upload:
+    # Preserve the existing check names for branch protection, covering the entire pipeline.
+    name: Analyze (${{ matrix.language }})
+    needs: analyze
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, java-kotlin]
+    steps:
+    - name: Require successful analysis
+      if: needs.analyze.result != 'success'
+      run: exit 1
+
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      with:
+        egress-policy: audit
+
+    # No checkout or project commands in this privileged job. SARIF is untrusted data,
+    # not proof of analysis integrity; the boundary isolates the upload credentials.
+    - name: Download SARIF results from this workflow run
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: codeql-sarif-${{ matrix.language }}
+        path: ${{ runner.temp }}/codeql-sarif
+
+    - name: Upload SARIF to code scanning
+      uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+      with:
+        sarif_file: ${{ runner.temp }}/codeql-sarif
+        checkout_path: ${{ github.workspace }}
+        category: "/language:${{matrix.language}}"
+        ref: ${{ github.ref }}
+        sha: ${{ github.sha }}

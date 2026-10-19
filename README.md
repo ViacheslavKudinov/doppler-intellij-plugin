@@ -279,6 +279,20 @@ Install the built archive via **Settings | Plugins | ⚙ | Install Plugin from D
 Restart the IDE when prompted after installation, updates, or removal. The plugin requires
 restart because its in-memory secret editors cannot be reliably unloaded while the IDE is running.
 
+## CodeQL analysis
+
+The [CodeQL workflow](.github/workflows/codeql.yaml) builds and analyzes Actions and Kotlin in a
+job with read-only repository permissions. It stores only SARIF results as temporary artifacts;
+automatic SARIF and database uploads are disabled in that job.
+
+A separate job on a fresh runner uploads the reports with `security-events: write`. It does not
+check out the repository or execute project code. Reports come from the same workflow run, and
+the upload uses the workflow's commit and ref. The final jobs retain the `Analyze (actions)` and
+`Analyze (java-kotlin)` check names and fail if analysis or upload fails.
+
+This boundary isolates upload credentials. SARIF produced by PR-controlled build code remains
+untrusted and can still be manipulated; the job split does not guarantee analysis integrity.
+
 ## Releases
 
 GitHub releases are [immutable](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases),
@@ -321,7 +335,7 @@ and attaches it to the GitHub release. Bash and `base64 --decode` handle either 
 Base64-encoded PEM in the secret; OpenSSL validates the exported certificate. Private-key material
 in the certificate file is rejected.
 All `upload-artifact` steps retain their temporary Actions artifacts for one day, including the
-release handoff and Scorecard SARIF. Published GitHub release assets remain available afterward.
+release handoff, CodeQL SARIF, and Scorecard SARIF. Published GitHub release assets remain available afterward.
 
 To upload a completed release to Marketplace, run the
 [Publish workflow](.github/workflows/publish.yaml) manually from `main`, supplying its existing

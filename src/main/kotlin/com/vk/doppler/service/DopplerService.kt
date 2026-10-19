@@ -3,6 +3,7 @@ package com.vk.doppler.service
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.vk.doppler.cli.DopplerCli
+import com.vk.doppler.cli.DopplerNameTransformer
 import com.vk.doppler.cli.DopplerAccountInfo
 import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.CliLogContext
@@ -44,6 +45,7 @@ class DopplerService {
         operation: CliOperation = CliOperation.AUTOCOMPLETE,
         context: CliLogContext = CliLogContext(),
         relatedConfigs: List<CliLogContext> = emptyList(),
+        scope: String? = null,
     ): DopplerCli {
         val path = DopplerExecutableLocator.find(DopplerSettings.getInstance().cliPath)
             ?: throw DopplerCliException(
@@ -51,7 +53,7 @@ class DopplerService {
                     "or set its path in Settings | Tools | Doppler.",
                 DopplerCliException.Kind.CLI_NOT_FOUND,
             )
-        return DopplerCli(path, operation, context, relatedConfigs)
+        return DopplerCli(path, operation, context, relatedConfigs, scope)
     }
 
     fun checkStatus(
@@ -152,6 +154,19 @@ class DopplerService {
         requireAuthContext(cli, expectedAuthContextId)
         return names
     }
+
+    /** Resolve the CLI login scoped to the launched IDE project, rather than the IDE process directory. */
+    internal fun injectionAccount(folder: String): String = cli(CliOperation.RUN_INJECTION, scope = folder).authContextId()
+
+    /** Injection reads computed values without persisting a dotenv file. Account validation is owned by the caller. */
+    internal fun downloadEnvironment(
+        folder: String,
+        projectSlug: String,
+        configName: String,
+        nameTransformer: DopplerNameTransformer = DopplerNameTransformer.NONE,
+    ): Map<String, String> =
+        cli(CliOperation.RUN_INJECTION, CliLogContext(projectSlug, configName), scope = folder)
+            .downloadEnvironment(projectSlug, configName, nameTransformer)
 
     fun loadSecrets(
         projectSlug: String,

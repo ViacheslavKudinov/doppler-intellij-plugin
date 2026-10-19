@@ -12,6 +12,7 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
     fun `test global settings are discoverable without a project and folder setup requires a project`() {
         val globalId = DopplerConfigurable::class.java.name
         val folderId = DopplerFolderSetupConfigurable::class.java.name
+        val injectionId = DopplerInjectionConfigurable::class.java.name
         fun ids(context: com.intellij.openapi.project.Project?) =
             com.intellij.openapi.options.ex.ConfigurableExtensionPointUtil.getConfigurables(context, true)
                 .filterIsInstance<com.intellij.openapi.options.SearchableConfigurable>().map { it.id }
@@ -19,18 +20,23 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
         val withoutProject = ids(null)
         assertTrue(withoutProject.contains(globalId))
         assertFalse(withoutProject.contains(folderId))
+        assertFalse(withoutProject.contains(injectionId))
         val withProject = ids(project)
         assertTrue(withProject.contains(globalId))
         assertTrue(withProject.contains(folderId))
+        assertTrue(withProject.contains(injectionId))
         val defaults = ids(com.intellij.openapi.project.ProjectManager.getInstance().defaultProject)
         assertTrue(defaults.contains(globalId))
         assertFalse(defaults.contains(folderId))
+        assertFalse(defaults.contains(injectionId))
 
         val configurable = DopplerConfigurable()
         try {
             val panel = configurable.createPanel()
             assertNotNull(UIUtil.findComponentOfType(panel, TextFieldWithBrowseButton::class.java))
             assertNull(UIUtil.findComponentOfType(panel, DopplerFolderSetupPanel::class.java))
+            val links = UIUtil.uiTraverser(panel).filter(com.intellij.ui.components.ActionLink::class.java).map { it.text }.toList()
+            assertContainsElements(links, "Folder Setup…", "Run and Debug…")
         } finally {
             configurable.disposeUIResources()
         }

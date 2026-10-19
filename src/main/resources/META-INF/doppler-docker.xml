@@ -1,0 +1,5 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <programRunner implementation="com.vk.doppler.injection.DopplerDockerEnvironmentRunner" order="first"/>
+    </extensions>
+</idea-plugin>

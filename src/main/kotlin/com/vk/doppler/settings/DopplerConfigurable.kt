@@ -33,7 +33,7 @@ class DopplerConfigurable : BoundConfigurable("Doppler") {
     }
 
     override fun createPanel(): DialogPanel = panel {
-        group("Project folder setup") {
+        group("Project settings") {
             row {
                 link("Folder Setup…") { event ->
                     val component = event.source as java.awt.Component
@@ -45,6 +45,18 @@ class DopplerConfigurable : BoundConfigurable("Doppler") {
                         Messages.showInfoMessage(component, "Open an IDE project to configure its Doppler folder setup.", "Doppler")
                     }
                 }.comment("Choose the Doppler project and config associated with this IDE project folder.")
+            }
+            row {
+                link("Run and Debug…") { event ->
+                    val component = event.source as java.awt.Component
+                    val dialog = Settings.KEY.getData(DataManager.getInstance().getDataContext(component))
+                    val injectionSettings = dialog?.find(DopplerInjectionConfigurable::class.java)
+                    if (injectionSettings != null) {
+                        dialog.select(injectionSettings)
+                    } else {
+                        Messages.showInfoMessage(component, "Open an IDE project to configure its Doppler Run and Debug injection.", "Doppler")
+                    }
+                }.comment("Configure automatic environment injection for Run and Debug.")
             }
         }
         row("Doppler CLI path:") {

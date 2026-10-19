@@ -5,7 +5,8 @@
     <vendor url="https://github.com/ViacheslavKudinov/doppler-plugin/issues">Viacheslav Kudinov</vendor>
 
     <description><![CDATA[
-        <p>Browse, edit, and synchronize your <a href="https://doppler.com">Doppler</a> secrets without leaving your IDE.</p>
+        <p>Browse, edit, and synchronize your <a href="https://doppler.com">Doppler</a> secrets,
+        and inject them into Run and Debug launches without leaving your IDE.</p>
 
         <p><b>Unofficial, independently developed plugin.</b> Not affiliated with, endorsed by, or supported by Doppler.
         Doppler's name and trademarks belong to Doppler Technologies, Inc. The plugin uses an original icon.</p>
@@ -17,12 +18,35 @@
             <li><b>Save to synchronize</b> &mdash; saving pushes a minimal set of changes to Doppler.
                 Reload or use automatic refresh to retrieve remote changes.</li>
             <li><b>Secret-reference completion</b> &mdash; get completion suggestions for Doppler secret references while editing.</li>
+            <li><b>Folder Setup</b> &mdash; choose the default Doppler project and config for your IDE project,
+                including inherited folder defaults. A bookmark marks the selected config in the tree;
+                background checks reflect changes made through the CLI.</li>
             <li><b>Setup guidance</b> &mdash; detect a missing CLI or login and access installation and authentication instructions.</li>
+            <li><b>Run and Debug injection</b> &mdash; automatically load the default config into Java, Python,
+                Node.js and npm, Maven, Gradle, and Docker launch environments, including Docker images,
+                Dockerfiles, and Compose. Each launch fetches fresh secrets; explicit run configuration
+                variables take precedence.</li>
+            <li><b>Optional name transformation</b> &mdash; keep original secret names with <b>None</b> (the default),
+                or use Doppler's <code>camel</code>, <code>upper-camel</code>, <code>lower-snake</code>,
+                <code>tf-var</code>, <code>dotnet-env</code>, or <code>lower-kebab</code> transformer.</li>
+            <li><b>CLI diagnostics</b> &mdash; optionally log sanitized command metadata, durations, and exit status,
+                without secret values or CLI output.</li>
         </ul>
+
+        <h3>Run and Debug setup</h3>
+        <p>Open <b>Settings &rarr; Tools &rarr; Doppler</b>, use <b>Folder Setup</b> to select your defaults,
+        then enable injection on the <b>Run and Debug</b> page. Injection starts disabled and requires
+        approval for each project in this IDE; workspace files alone cannot enable it.</p>
+        <p>For Docker Compose, reference the injected variables in your Compose file to pass them to services.
+        Running applications and containers keep their inherited environment for their lifetime;
+        secret changes apply to the next launch.</p>
 
         <h3>Secret handling</h3>
         <p>Opened secret documents are held in memory rather than saved as local project files.
-        Secret values are passed to the Doppler CLI through standard input, not command-line arguments.</p>
+        Secret values being saved are passed to the Doppler CLI through standard input, not command-line arguments.</p>
+        <p>Injection does not save values in run configurations, create dotenv files, or use CLI fallback storage.
+        Downloads fail rather than reuse stored secrets when Doppler is unavailable. Account and folder defaults
+        are checked during loading to prevent injection after a detected account or config change.</p>
         <p>Authentication is managed by the Doppler CLI through <code>doppler login</code>.
         The plugin does not store your authentication token.</p>
 
@@ -32,10 +56,20 @@
             <li>The <b>Terminal plugin</b> installed and enabled.</li>
             <li>The <a href="https://docs.doppler.com/docs/install-cli">Doppler CLI</a> installed and authenticated.</li>
         </ul>
+        <p>Run and Debug integrations additionally require the corresponding IDE plugins: Java;
+        Java and Maven for Maven configurations; Gradle; JavaScript and Node.js; Python; or Docker.
+        These integrations are optional and depend on your IDE and edition. Browsing and editing
+        secrets do not require the language or Docker plugins. Configure the relevant runtimes,
+        build tools, and Docker tooling as you would for native Run configurations.</p>
         ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>org.jetbrains.plugins.terminal</depends>
+    <depends optional="true" config-file="doppler-java.xml">com.intellij.java</depends>
+    <depends optional="true" config-file="doppler-gradle.xml">com.intellij.gradle</depends>
+    <depends optional="true" config-file="doppler-node.xml">JavaScript</depends>
+    <depends optional="true" config-file="doppler-python.xml">PythonCore</depends>
+    <depends optional="true" config-file="doppler-docker.xml">Docker</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <ide.dynamicPluginVetoer implementation="com.vk.doppler.DopplerPluginUnloadVetoer"/>
@@ -57,6 +91,11 @@
                              instance="com.vk.doppler.settings.DopplerFolderSetupConfigurable"
                              id="com.vk.doppler.settings.DopplerFolderSetupConfigurable"
                              displayName="Folder Setup"
+                             nonDefaultProject="true"/>
+        <projectConfigurable parentId="com.vk.doppler.settings.DopplerConfigurable"
+                             instance="com.vk.doppler.settings.DopplerInjectionConfigurable"
+                             id="com.vk.doppler.settings.DopplerInjectionConfigurable"
+                             displayName="Run and Debug"
                              nonDefaultProject="true"/>
 
         <virtualFileSystem key="doppler"

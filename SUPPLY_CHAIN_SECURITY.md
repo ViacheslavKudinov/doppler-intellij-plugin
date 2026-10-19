@@ -212,6 +212,8 @@ original GitHub release even when its packaged JARs are unchanged.
 
 This project attests the JARs individually so you can extract a Marketplace download and verify
 each JAR's digest against the intended repository, release workflow, and commit.
+Marketplace JAR attestation verification is supported starting with **version 1.7.0**; earlier
+releases do not have the required JAR attestations.
 
 **Successful JAR verification covers those JARs only.** It does not prove that non-JAR files or
 ZIP metadata are unchanged, that no JAR was removed, or that the complete package has the same

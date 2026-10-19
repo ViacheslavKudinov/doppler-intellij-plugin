@@ -259,7 +259,7 @@ The project uses the [IntelliJ Platform Gradle Plugin](https://plugins.jetbrains
 
 ```bash
 ./gradlew test         # run the test suite
-./gradlew buildPlugin  # produce build/distributions/doppler-plugin-<version>.zip
+./gradlew buildPlugin  # produce build/distributions/doppler-plugin-1.7.0.zip
 ./gradlew cyclonedxBom # produce a full Gradle dependency SBOM in build/distributions
 ./gradlew verifyPlugin # JetBrains Plugin Verifier across the supported IDE range
 ./gradlew runIde       # launch a sandbox IDE with the plugin installed
@@ -326,7 +326,7 @@ The CI workflow declares `cache-mode: read`, and the release build and signing j
 To recover a deleted release, dispatch the Release workflow from `main` with the tag whose version
 matches both `gradle.properties` and `.release-please-manifest.json`. The workflow creates a draft
 for the selected `main` commit and runs the same build, signing, attestation, and publishing jobs.
-For example, run `gh workflow run release-please.yaml --ref main -f tag=v1.6.0`. The tag must not
+For example, run `gh workflow run release-please.yaml --ref main -f tag=v1.7.0`. The tag must not
 already exist. If the build fails after creating the draft, delete that draft release and its tag
 before dispatching the recovery again.
 
@@ -346,7 +346,7 @@ To upload a completed release to Marketplace, run the
 semantic-version tag, for example:
 
 ```bash
-gh workflow run publish.yaml --ref main -f tag=v1.5.0
+gh workflow run publish.yaml --ref main -f tag=v1.7.0
 ```
 
 The tag must belong to `main` history and have a published release. The `publish` environment's
@@ -360,10 +360,10 @@ Earlier releases without those assets cannot be published through this workflow.
 
 To verify a release later, install the GitHub CLI and Java, and authenticate with `gh auth login`.
 Download the signed zip, public certificate, SBOM, and checksums from the **same release**.
-Replace `1.5.0` below with the version you want to verify:
+Replace `1.7.0` below with the version you want to verify:
 
 ```bash
-version=1.5.0
+version=1.7.0
 gh release download "v$version" --repo ViacheslavKudinov/doppler-intellij-plugin \
   --pattern '*-signed.zip' --pattern 'chain.crt' --pattern '*.cdx.json' \
   --pattern 'SHA256SUMS' --dir "verify-$version"
@@ -401,8 +401,8 @@ not been modified since signing. No private key or password is needed for verifi
 
 Marketplace can modify the ZIP container, so its checksum and ZIP provenance may differ from
 the GitHub release. Verify the JARs inside the downloaded ZIP against their GitHub build
-provenance instead. This requires a release produced after JAR attestation was added; older
-releases do not have these attestations.
+provenance instead. Marketplace JAR attestation verification is supported starting with
+**version 1.7.0**; earlier releases do not have the required JAR attestations.
 
 Install the GitHub CLI and `unzip`, authenticate with `gh auth login`, and download the plugin
 ZIP from Marketplace. Run the following in **Bash**, replacing the version and ZIP path with
@@ -411,8 +411,8 @@ your download's values:
 ```bash
 (
   set -euo pipefail
-  version=1.6.0
-  marketplace_zip=/path/to/doppler-plugin.zip
+  version=1.7.0
+  marketplace_zip=/path/to/doppler-plugin-1.7.0.zip
   repo=ViacheslavKudinov/doppler-intellij-plugin
   release_commit="$(gh api "repos/$repo/commits/v$version" --jq .sha)"
   extracted="$(mktemp -d)"

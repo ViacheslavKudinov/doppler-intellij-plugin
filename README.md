@@ -49,15 +49,35 @@ To widen or shift the range, edit `sinceBuild` and the verified IDEs in `build.g
 
 ## Requirements
 
-Required dependencies for browsing and editing secrets:
+Requires **IntelliJ Platform 2025.3 (build 253) or later** and an installed, authenticated
+[Doppler CLI](https://docs.doppler.com/docs/install-cli).
 
-| Dependency | Requirement |
-| --- | --- |
-| IntelliJ Platform | Build 253 (2025.3) or later; `com.intellij.modules.platform` |
-| Terminal IDE plugin | Installed and enabled; `org.jetbrains.plugins.terminal` |
-| Doppler CLI | Installed locally and authenticated with `doppler login` |
+### Dependencies defined in plugin.xml
 
-The plugin drives the [Doppler CLI](https://docs.doppler.com/docs/install-cli), which owns authentication:
+| Dependency ID | Required / optional | Plugin |
+| --- | --- | --- |
+| `org.jetbrains.plugins.terminal` | Required | [Terminal](https://plugins.jetbrains.com/plugin/13123-terminal) |
+| `com.intellij.modules.platform` | Required | IntelliJ Platform module |
+| `com.intellij.java` | Optional | [Java](https://plugins.jetbrains.com/plugin/27368-java) |
+| `com.intellij.gradle` | Optional | [Gradle](https://plugins.jetbrains.com/plugin/13112-gradle) |
+| `PythonCore` | Optional | [Python Community Edition](https://plugins.jetbrains.com/plugin/7322-python-community-edition) |
+| `JavaScript` | Optional | [JavaScript and TypeScript](https://plugins.jetbrains.com/plugin/22069-javascript-and-typescript) |
+| `Docker` | Optional | [Docker](https://plugins.jetbrains.com/plugin/7724-docker) |
+
+For more information, see the
+[Plugin Compatibility Guide](https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html).
+
+The Terminal plugin must be installed and enabled. Optional dependencies enable the corresponding
+Run and Debug integrations; missing language or Docker plugins do not prevent browsing and editing
+Doppler secrets. Plugin availability depends on your IDE and edition. Enable the relevant plugins
+under **Settings | Plugins**.
+
+Configure language runtimes, Maven, Gradle, Node.js/npm, Docker Engine, and Docker Compose as needed
+for your native Run configurations. Doppler does not install these tools or bundle the IDE plugins.
+
+### Doppler CLI
+
+The plugin drives the Doppler CLI, which owns authentication:
 
 ```bash
 brew install dopplerhq/cli/doppler   # or see the install docs for your platform
@@ -68,25 +88,6 @@ The CLI is auto-detected on `PATH` and in common install locations. If your IDE 
 with a minimal `PATH`, set the binary location explicitly in **Settings | Tools | Doppler**.
 
 Global CLI settings are available even without an open project.
-
-### Optional integration dependencies
-
-Run and Debug injection requires the IDE plugins for the configurations you launch:
-
-| Integration | IDE plugins / modules |
-| --- | --- |
-| Java | Java support (`com.intellij.java`) |
-| Maven | Java support (`com.intellij.java`) and Maven (`org.jetbrains.idea.maven`) |
-| Gradle | Gradle (`com.intellij.gradle`) |
-| Node.js and npm | JavaScript support (`JavaScript`) and Node.js (`NodeJS`) |
-| Python | Python support (`PythonCore`) |
-| Docker image, Dockerfile, and Compose | Docker (`Docker`) |
-
-These integrations are optional: missing language or Docker plugins do not prevent browsing and
-editing Doppler secrets. Their availability depends on your JetBrains IDE and edition. Enable
-the relevant plugins under **Settings | Plugins**. Doppler does not bundle these IDE plugins or
-install language runtimes, build tools, Docker Engine, or Docker Compose; configure those as you
-would for the corresponding native Run configuration.
 
 ### Default project and config
 

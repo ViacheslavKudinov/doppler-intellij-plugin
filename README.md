@@ -7,6 +7,9 @@
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=ViacheslavKudinov_doppler-intellij-plugin&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=ViacheslavKudinov_doppler-intellij-plugin)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=ViacheslavKudinov_doppler-intellij-plugin&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=ViacheslavKudinov_doppler-intellij-plugin)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=ViacheslavKudinov_doppler-intellij-plugin&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=ViacheslavKudinov_doppler-intellij-plugin)
+<a href="https://app.aikido.dev/audit-report/external/V4RyMEgJX2I1ghlnmzgpbWY8/request" target="_blank">
+    <img src="https://app.aikido.dev/assets/badges/full-light-theme.svg" alt="Aikido Security Audit Report" height="40" />    
+</a>
 
 **This is an unofficial, independently developed plugin. It is not affiliated with, endorsed by,
 or supported by Doppler.** Doppler's name, trademarks, and copyrighted materials belong to Doppler.

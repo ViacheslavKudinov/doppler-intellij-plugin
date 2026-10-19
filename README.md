@@ -295,6 +295,10 @@ untrusted and can still be manipulated; the job split does not guarantee analysi
 
 ## Releases
 
+New to provenance, SBOMs, or attestations? Read the
+[release security guide](SUPPLY_CHAIN_SECURITY.md) for what they mean, why we publish them,
+how verification helps, and what it cannot prove.
+
 GitHub releases are [immutable](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases),
 so assets can only be attached while a release is a draft.
 

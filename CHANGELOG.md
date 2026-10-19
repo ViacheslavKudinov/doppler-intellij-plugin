@@ -2,6 +2,23 @@
 
 # Doppler-plugin Changelog
 
+## [1.7.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.6.0...v1.7.0) (2026-10-19)
+
+
+### Features
+
+* Implement Doppler environment injection for various configurations ([#62](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/62)) ([a6a925b](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/a6a925b9bf39fbd9f29aaa585ba39ab7e2ec81cb))
+
+
+### Bug Fixes
+
+* Update README for consistent repository references ([#61](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/61)) ([41d527e](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/41d527ef98866ae52334f6a6a57649b24670b99e))
+
+
+### Documentation
+
+* correct 1.6.0 changelog ([#60](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/60)) ([78e3586](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/78e358626df647c0a54846a741ac3fbe5ff9f4ef))
+
 ## [1.6.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.5.0...v1.6.0) (2026-10-17)
 
 

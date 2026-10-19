@@ -421,6 +421,12 @@ The SBOM attestation remains bound to the original GitHub release ZIP.
 
 Generate a local dependency SBOM with `./gradlew cyclonedxBom`.
 
+## Contributing
+
+Pull requests are not accepted due to the licensing costs of several security tools used by this
+project. Contributions can be discussed in issues, including changes made in a fork that the
+maintainer may consider applying as a patch. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
 ## Project layout
 
 ```

@@ -30,6 +30,9 @@ class DopplerCli(
 
     companion object {
         private const val DEFAULT_TIMEOUT_MS = 30_000
+        private const val PROJECT_OPTION = "--project"
+        private const val SCOPE_OPTION = "--scope"
+        private const val CONFIG_OPTION = "--config"
 
         /**
          * Doppler returns this (exit 1) when no token is configured for the scope.
@@ -101,7 +104,7 @@ class DopplerCli(
     }
 
     fun listConfigs(projectSlug: String): List<DopplerConfig> {
-        val element = runJson(listOf("configs", "--project", projectSlug))
+        val element = runJson(listOf("configs", PROJECT_OPTION, projectSlug))
         return unwrapArray(element, "configs").mapNotNull { item ->
             val obj = item as? JsonObject ?: return@mapNotNull null
             val name = obj.string("name") ?: return@mapNotNull null
@@ -114,7 +117,7 @@ class DopplerCli(
 
     /** Reads only the two non-sensitive settings, including inherited folder defaults. */
     fun folderSetup(folder: String): DopplerFolderSetup = parseFolderSetup(
-        runJson(listOf("configure", "get", "project", "config", "--scope", folder)),
+        runJson(listOf("configure", "get", "project", "config", SCOPE_OPTION, folder)),
     )
 
     fun setFolderSetup(folder: String, projectSlug: String, configName: String) {
@@ -124,7 +127,7 @@ class DopplerCli(
             }
         }
         runRaw(
-            listOf("configure", "set", "--scope", folder, "--silent", "--", "project=$projectSlug", "config=$configName"),
+            listOf("configure", "set", SCOPE_OPTION, folder, "--silent", "--", "project=$projectSlug", "config=$configName"),
             stdin = null,
             json = true,
         )
@@ -132,7 +135,7 @@ class DopplerCli(
 
     fun clearFolderSetup(folder: String) {
         runRaw(
-            listOf("configure", "unset", "--scope", folder, "--silent", "--", "project", "config"),
+            listOf("configure", "unset", SCOPE_OPTION, folder, "--silent", "--", "project", "config"),
             stdin = null,
             json = true,
         )
@@ -143,7 +146,7 @@ class DopplerCli(
         // Without --raw the CLI omits the `raw` field entirely and only returns interpolated
         // `computed` values, which would discard Doppler's ${REFERENCE} syntax on save.
         val element = runJson(
-            listOf("secrets", "--project", projectSlug, "--config", configName, "--raw")
+            listOf("secrets", PROJECT_OPTION, projectSlug, CONFIG_OPTION, configName, "--raw")
         )
         return parseSecrets(element)
     }
@@ -154,7 +157,7 @@ class DopplerCli(
         configName: String,
         nameTransformer: DopplerNameTransformer = DopplerNameTransformer.NONE,
     ): Map<String, String> {
-        val args = mutableListOf("secrets", "download", "--no-file", "--no-fallback", "--format", "json", "--project", projectSlug, "--config", configName)
+        val args = mutableListOf("secrets", "download", "--no-file", "--no-fallback", "--format", "json", PROJECT_OPTION, projectSlug, CONFIG_OPTION, configName)
         nameTransformer.cliName?.let { args.addAll(listOf("--name-transformer", it)) }
         val result = runJson(args)
         val values = result as? JsonObject ?: throw DopplerCliException("Invalid Doppler environment response.")
@@ -171,7 +174,7 @@ class DopplerCli(
     /** Reads only the secret names of a config; the CLI never returns the values. */
     fun listSecretNames(projectSlug: String, configName: String): Set<String> {
         val element = runJson(
-            listOf("secrets", "--only-names", "--project", projectSlug, "--config", configName)
+            listOf("secrets", "--only-names", PROJECT_OPTION, projectSlug, CONFIG_OPTION, configName)
         )
         return parseSecretNames(element)
     }
@@ -184,7 +187,7 @@ class DopplerCli(
         require(!DopplerReservedSecrets.isReserved(name)) { "Cannot write reserved secret $name" }
         requireValidName(name)
         runRaw(
-            args = listOf("secrets", "set", "--project", projectSlug, "--config", configName, "--", name),
+            args = listOf("secrets", "set", PROJECT_OPTION, projectSlug, CONFIG_OPTION, configName, "--", name),
             stdin = value,
             json = true,
         )
@@ -196,7 +199,7 @@ class DopplerCli(
         if (safeNames.isEmpty()) return
         safeNames.forEach(::requireValidName)
         runRaw(
-            listOf("secrets", "delete", "--yes", "--project", projectSlug, "--config", configName, "--") +
+            listOf("secrets", "delete", "--yes", PROJECT_OPTION, projectSlug, CONFIG_OPTION, configName, "--") +
                 safeNames,
             stdin = null,
             json = true,
@@ -223,7 +226,7 @@ class DopplerCli(
 
     private fun runRaw(args: List<String>, stdin: String?, json: Boolean): String {
         val parameters = args.toMutableList()
-        scope?.let { parameters.addAll(listOf("--scope", it)) }
+        scope?.let { parameters.addAll(listOf(SCOPE_OPTION, it)) }
         if (json) {
             val jsonFlags = listOf("--json", "--no-check-version")
             val terminatorIndex = parameters.indexOf("--")

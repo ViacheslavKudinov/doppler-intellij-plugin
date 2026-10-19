@@ -116,7 +116,7 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
         status.icon = AllIcons.General.Error
         status.foreground = JBColor.RED
         val missingChoice = if ((projectChoice.selectedItem as? String).isNullOrBlank()) projectChoice else configChoice
-        missingChoice.putClientProperty("JComponent.outline", "error")
+        missingChoice.putClientProperty(OUTLINE_PROPERTY, "error")
         missingChoice.requestFocusInWindow()
         if (missingChoice.isShowing) {
             validationBalloon = JBPopupFactory.getInstance()
@@ -134,8 +134,8 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
         validationMessageTimer.stop()
         validationBalloon?.hide()
         validationBalloon = null
-        projectChoice.putClientProperty("JComponent.outline", null)
-        configChoice.putClientProperty("JComponent.outline", null)
+        projectChoice.putClientProperty(OUTLINE_PROPERTY, null)
+        configChoice.putClientProperty(OUTLINE_PROPERTY, null)
         status.icon = null
         status.foreground = normalStatusForeground
         if (status.text == INCOMPLETE_SETUP_MESSAGE) status.text = "Choose a config, then apply settings."
@@ -253,6 +253,7 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
     }
 
     private companion object {
+        const val OUTLINE_PROPERTY = "JComponent.outline"
         const val ACCOUNT_CHANGED_MESSAGE = "The Doppler account changed. Reload folder setup before applying changes."
         const val INCOMPLETE_SETUP_MESSAGE = "Choose both a Doppler project and config, or clear the folder setup."
     }

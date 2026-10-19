@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.TimeUnit
 
 private val callIds = AtomicLong()
+private const val REDACTED_CLI_ARGUMENT = "<redacted>"
 
 enum class CliOperation {
     TREE_RELOAD, TREE_CONFIGS, CONFIG_OPEN, AUTO_REFRESH, ACCOUNT_VALIDATION, SAVE, SAVE_RECOVERY, AUTOCOMPLETE, TEST_CONNECTION, OTHER,
@@ -49,9 +50,9 @@ internal fun sanitizedCliCommand(args: List<String>): String {
     var terminated = false
     return "doppler " + args.mapIndexed { index, arg ->
         when {
-            terminated -> "<redacted>"
+            terminated -> REDACTED_CLI_ARGUMENT
             operand -> { operand = false; maskedCliName(arg) }
-            index == 0 -> if (arg in commands) arg else "<redacted>"
+            index == 0 -> if (arg in commands) arg else REDACTED_CLI_ARGUMENT
             index == 1 && args.firstOrNull() == "secrets" && arg in setOf("set", "delete", "download") -> arg
             index == 1 && args.firstOrNull() == "configure" && arg in setOf("get", "set", "unset") -> arg
             index > 0 && args[index - 1] == "--name-transformer" &&
@@ -59,7 +60,7 @@ internal fun sanitizedCliCommand(args: List<String>): String {
             arg == "--" -> { terminated = true; "--" }
             arg in options -> { operand = true; arg }
             arg in switches -> arg
-            else -> "<redacted>"
+            else -> REDACTED_CLI_ARGUMENT
         }
     }.joinToString(" ")
 }

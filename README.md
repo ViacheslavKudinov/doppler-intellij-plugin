@@ -4,6 +4,9 @@
 [![License: Apache 2.0](https://img.shields.io/badge/license-apache--2.0-green.svg)](LICENSE)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/34961-doppler-secrets-manager-unofficial-.svg)](https://plugins.jetbrains.com/plugin/34961-doppler-secrets-manager-unofficial-)
 [![codecov](https://codecov.io/gh/ViacheslavKudinov/doppler-intellij-plugin/graph/badge.svg?token=4EI6QNLEYR)](https://codecov.io/gh/ViacheslavKudinov/doppler-intellij-plugin)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=ViacheslavKudinov_doppler-intellij-plugin&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=ViacheslavKudinov_doppler-intellij-plugin)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=ViacheslavKudinov_doppler-intellij-plugin&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=ViacheslavKudinov_doppler-intellij-plugin)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=ViacheslavKudinov_doppler-intellij-plugin&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=ViacheslavKudinov_doppler-intellij-plugin)
 
 **This is an unofficial, independently developed plugin. It is not affiliated with, endorsed by,
 or supported by Doppler.** Doppler's name, trademarks, and copyrighted materials belong to Doppler.

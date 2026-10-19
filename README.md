@@ -49,15 +49,35 @@ To widen or shift the range, edit `sinceBuild` and the verified IDEs in `build.g
 
 ## Requirements
 
-Required dependencies for browsing and editing secrets:
+Requires **IntelliJ Platform 2025.3 (build 253) or later** and an installed, authenticated
+[Doppler CLI](https://docs.doppler.com/docs/install-cli).
 
-| Dependency | Requirement |
-| --- | --- |
-| IntelliJ Platform | Build 253 (2025.3) or later; `com.intellij.modules.platform` |
-| Terminal IDE plugin | Installed and enabled; `org.jetbrains.plugins.terminal` |
-| Doppler CLI | Installed locally and authenticated with `doppler login` |
+### Dependencies defined in plugin.xml
 
-The plugin drives the [Doppler CLI](https://docs.doppler.com/docs/install-cli), which owns authentication:
+| Dependency ID | Required / optional | Plugin |
+| --- | --- | --- |
+| `org.jetbrains.plugins.terminal` | Required | [Terminal](https://plugins.jetbrains.com/plugin/13123-terminal) |
+| `com.intellij.modules.platform` | Required | IntelliJ Platform module |
+| `com.intellij.java` | Optional | [Java](https://plugins.jetbrains.com/plugin/27368-java) |
+| `com.intellij.gradle` | Optional | [Gradle](https://plugins.jetbrains.com/plugin/13112-gradle) |
+| `PythonCore` | Optional | [Python Community Edition](https://plugins.jetbrains.com/plugin/7322-python-community-edition) |
+| `JavaScript` | Optional | [JavaScript and TypeScript](https://plugins.jetbrains.com/plugin/22069-javascript-and-typescript) |
+| `Docker` | Optional | [Docker](https://plugins.jetbrains.com/plugin/7724-docker) |
+
+For more information, see the
+[Plugin Compatibility Guide](https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html).
+
+The Terminal plugin must be installed and enabled. Optional dependencies enable the corresponding
+Run and Debug integrations; missing language or Docker plugins do not prevent browsing and editing
+Doppler secrets. Plugin availability depends on your IDE and edition. Enable the relevant plugins
+under **Settings | Plugins**.
+
+Configure language runtimes, Maven, Gradle, Node.js/npm, Docker Engine, and Docker Compose as needed
+for your native Run configurations. Doppler does not install these tools or bundle the IDE plugins.
+
+### Doppler CLI
+
+The plugin drives the Doppler CLI, which owns authentication:
 
 ```bash
 brew install dopplerhq/cli/doppler   # or see the install docs for your platform
@@ -68,25 +88,6 @@ The CLI is auto-detected on `PATH` and in common install locations. If your IDE 
 with a minimal `PATH`, set the binary location explicitly in **Settings | Tools | Doppler**.
 
 Global CLI settings are available even without an open project.
-
-### Optional integration dependencies
-
-Run and Debug injection requires the IDE plugins for the configurations you launch:
-
-| Integration | IDE plugins / modules |
-| --- | --- |
-| Java | Java support (`com.intellij.java`) |
-| Maven | Java support (`com.intellij.java`) and Maven (`org.jetbrains.idea.maven`) |
-| Gradle | Gradle (`com.intellij.gradle`) |
-| Node.js and npm | JavaScript support (`JavaScript`) and Node.js (`NodeJS`) |
-| Python | Python support (`PythonCore`) |
-| Docker image, Dockerfile, and Compose | Docker (`Docker`) |
-
-These integrations are optional: missing language or Docker plugins do not prevent browsing and
-editing Doppler secrets. Their availability depends on your JetBrains IDE and edition. Enable
-the relevant plugins under **Settings | Plugins**. Doppler does not bundle these IDE plugins or
-install language runtimes, build tools, Docker Engine, or Docker Compose; configure those as you
-would for the corresponding native Run configuration.
 
 ### Default project and config
 
@@ -258,7 +259,7 @@ The project uses the [IntelliJ Platform Gradle Plugin](https://plugins.jetbrains
 
 ```bash
 ./gradlew test         # run the test suite
-./gradlew buildPlugin  # produce build/distributions/doppler-plugin-<version>.zip
+./gradlew buildPlugin  # produce build/distributions/doppler-plugin-1.7.0.zip
 ./gradlew cyclonedxBom # produce a full Gradle dependency SBOM in build/distributions
 ./gradlew verifyPlugin # JetBrains Plugin Verifier across the supported IDE range
 ./gradlew runIde       # launch a sandbox IDE with the plugin installed
@@ -278,7 +279,25 @@ Install the built archive via **Settings | Plugins | ⚙ | Install Plugin from D
 Restart the IDE when prompted after installation, updates, or removal. The plugin requires
 restart because its in-memory secret editors cannot be reliably unloaded while the IDE is running.
 
+## CodeQL analysis
+
+The [CodeQL workflow](.github/workflows/codeql.yaml) builds and analyzes Actions and Kotlin in a
+job with read-only repository permissions. It stores only SARIF results as temporary artifacts;
+automatic SARIF and database uploads are disabled in that job.
+
+A separate job on a fresh runner uploads the reports with `security-events: write`. It does not
+check out the repository or execute project code. Reports come from the same workflow run, and
+the upload uses the workflow's commit and ref. The final jobs retain the `Analyze (actions)` and
+`Analyze (java-kotlin)` check names and fail if analysis or upload fails.
+
+This boundary isolates upload credentials. SARIF produced by PR-controlled build code remains
+untrusted and can still be manipulated; the job split does not guarantee analysis integrity.
+
 ## Releases
+
+New to provenance, SBOMs, or attestations? Read the
+[release security guide](SUPPLY_CHAIN_SECURITY.md) for what they mean, why we publish them,
+how verification helps, and what it cannot prove.
 
 GitHub releases are [immutable](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases),
 so assets can only be attached while a release is a draft.
@@ -307,7 +326,7 @@ The CI workflow declares `cache-mode: read`, and the release build and signing j
 To recover a deleted release, dispatch the Release workflow from `main` with the tag whose version
 matches both `gradle.properties` and `.release-please-manifest.json`. The workflow creates a draft
 for the selected `main` commit and runs the same build, signing, attestation, and publishing jobs.
-For example, run `gh workflow run release-please.yaml --ref main -f tag=v1.6.0`. The tag must not
+For example, run `gh workflow run release-please.yaml --ref main -f tag=v1.7.0`. The tag must not
 already exist. If the build fails after creating the draft, delete that draft release and its tag
 before dispatching the recovery again.
 
@@ -320,14 +339,14 @@ and attaches it to the GitHub release. Bash and `base64 --decode` handle either 
 Base64-encoded PEM in the secret; OpenSSL validates the exported certificate. Private-key material
 in the certificate file is rejected.
 All `upload-artifact` steps retain their temporary Actions artifacts for one day, including the
-release handoff and Scorecard SARIF. Published GitHub release assets remain available afterward.
+release handoff, CodeQL SARIF, and Scorecard SARIF. Published GitHub release assets remain available afterward.
 
 To upload a completed release to Marketplace, run the
 [Publish workflow](.github/workflows/publish.yaml) manually from `main`, supplying its existing
 semantic-version tag, for example:
 
 ```bash
-gh workflow run publish.yaml --ref main -f tag=v1.5.0
+gh workflow run publish.yaml --ref main -f tag=v1.7.0
 ```
 
 The tag must belong to `main` history and have a published release. The `publish` environment's
@@ -341,10 +360,10 @@ Earlier releases without those assets cannot be published through this workflow.
 
 To verify a release later, install the GitHub CLI and Java, and authenticate with `gh auth login`.
 Download the signed zip, public certificate, SBOM, and checksums from the **same release**.
-Replace `1.5.0` below with the version you want to verify:
+Replace `1.7.0` below with the version you want to verify:
 
 ```bash
-version=1.5.0
+version=1.7.0
 gh release download "v$version" --repo ViacheslavKudinov/doppler-intellij-plugin \
   --pattern '*-signed.zip' --pattern 'chain.crt' --pattern '*.cdx.json' \
   --pattern 'SHA256SUMS' --dir "verify-$version"
@@ -382,8 +401,8 @@ not been modified since signing. No private key or password is needed for verifi
 
 Marketplace can modify the ZIP container, so its checksum and ZIP provenance may differ from
 the GitHub release. Verify the JARs inside the downloaded ZIP against their GitHub build
-provenance instead. This requires a release produced after JAR attestation was added; older
-releases do not have these attestations.
+provenance instead. Marketplace JAR attestation verification is supported starting with
+**version 1.7.0**; earlier releases do not have the required JAR attestations.
 
 Install the GitHub CLI and `unzip`, authenticate with `gh auth login`, and download the plugin
 ZIP from Marketplace. Run the following in **Bash**, replacing the version and ZIP path with
@@ -392,8 +411,8 @@ your download's values:
 ```bash
 (
   set -euo pipefail
-  version=1.6.0
-  marketplace_zip=/path/to/doppler-plugin.zip
+  version=1.7.0
+  marketplace_zip=/path/to/doppler-plugin-1.7.0.zip
   repo=ViacheslavKudinov/doppler-intellij-plugin
   release_commit="$(gh api "repos/$repo/commits/v$version" --jq .sha)"
   extracted="$(mktemp -d)"
@@ -420,6 +439,12 @@ It does not verify ZIP metadata, non-JAR files, or whether JARs were removed fro
 The SBOM attestation remains bound to the original GitHub release ZIP.
 
 Generate a local dependency SBOM with `./gradlew cyclonedxBom`.
+
+## Contributing
+
+Pull requests are not accepted due to the licensing costs of several security tools used by this
+project. Contributions can be discussed in issues, including changes made in a fork that the
+maintainer may consider applying as a patch. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## Project layout
 

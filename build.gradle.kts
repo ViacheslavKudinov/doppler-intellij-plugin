@@ -9,11 +9,20 @@ import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 import org.jetbrains.intellij.platform.gradle.tasks.PublishPluginTask
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginSignatureTask
 
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        // Patch CycloneDX's transitive Jackson dependencies on the build classpath.
+        classpath(platform("com.fasterxml.jackson:jackson-bom:${providers.gradleProperty("jacksonVersion").get()}"))
+    }
+}
+
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("jacoco")
     id("org.jetbrains.changelog")
-    id("org.jetbrains.qodana")
     id("org.jetbrains.intellij.platform")
     alias(libs.plugins.cyclonedx)
 }
@@ -31,6 +40,8 @@ kotlin {
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
     testImplementation(libs.junit)
+    // Patch the IDE test framework without bundling Jackson in the plugin.
+    add("intellijPlatformTestDependencies", platform("com.fasterxml.jackson:jackson-bom:${providers.gradleProperty("jacksonVersion").get()}"))
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {

@@ -2,6 +2,7 @@
 
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ViacheslavKudinov/doppler-intellij-plugin/badge)](https://scorecard.dev/viewer/?uri=github.com/ViacheslavKudinov/doppler-intellij-plugin)
 [![License: Apache 2.0](https://img.shields.io/badge/license-apache--2.0-green.svg)](LICENSE)
+[![JetBrains Marketplace](https://img.shields.io/jetbrains/plugin/v/34961?label=JetBrains&logo=jetbrains)](https://plugins.jetbrains.com/plugin/34961-doppler-secrets-manager-unofficial-)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/34961-doppler-secrets-manager-unofficial-.svg)](https://plugins.jetbrains.com/plugin/34961-doppler-secrets-manager-unofficial-)
 [![codecov](https://codecov.io/gh/ViacheslavKudinov/doppler-intellij-plugin/graph/badge.svg?token=4EI6QNLEYR)](https://codecov.io/gh/ViacheslavKudinov/doppler-intellij-plugin)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=ViacheslavKudinov_doppler-intellij-plugin&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=ViacheslavKudinov_doppler-intellij-plugin)

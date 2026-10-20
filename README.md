@@ -18,6 +18,69 @@ available under the [Apache License 2.0](LICENSE).
 
 Browse and edit your [Doppler](https://doppler.com) secrets without leaving the IDE.
 
+## Assessing the risk of an unofficial plugin
+
+Installing an IDE plugin means trusting executable code with access to your development
+environment. A plugin can potentially read project files and secrets, start processes, and
+make network requests with the IDE user's permissions. This plugin handles secret values and
+invokes an authenticated Doppler CLI, so a malicious change or compromised dependency could
+expose secrets or modify resources accessible to that CLI account. Independent development
+also means Doppler does not review, maintain, or support this plugin.
+
+If your organization requires additional assurance, review and build a specific release yourself:
+
+1. **Select and record the source.** Check out a release tag such as `v1.7.0`, record its full
+   commit SHA, and compare it with the release evidence or another trusted record. A tag name
+   alone does not prove who authored or reviewed its contents. Reassess changes before each update.
+2. **Assess the code and build tools before running them.** Review the plugin sources, Gradle
+   wrapper, settings, build scripts, dependencies, and release workflows. Gradle configuration
+   and tests execute code too; perform the build in a disposable environment without production
+   credentials or access to sensitive projects.
+3. **Threat model your intended use.** Identify the secrets, source code, and Doppler permissions
+   at risk. Trace how secrets enter the editor and launched processes, where data could be
+   persisted or logged, which executables are invoked, and which network destinations are used.
+   Consider malicious updates, compromised dependencies, and other code running in the same IDE
+   or under the same OS user. Use a test Doppler config and the least privileges your workflow needs.
+4. **Run security checks and inspect the findings.** Combine manual review with static analysis,
+   tests, dependency/SBOM vulnerability scanning, and plugin compatibility verification. Review
+   the actual configuration and results behind repository badges. Scanners have coverage limits;
+   investigate whether a reported dependency is shipped, used only during builds/tests, or
+   provided by the IDE. See the [SBOM scanning example](SUPPLY_CHAIN_SECURITY.md#scan-a-published-sbom-for-vulnerabilities-with-grype).
+5. **Build and install the archive you assessed.** After reviewing the selected checkout, build
+   its ZIP and SBOM, run the tests, and scan the SBOM. Keep the commit SHA, build environment,
+   scan results, and archive checksum with your review record.
+
+For example, start with a separate checkout of version **1.7.0**:
+
+```bash
+git clone --branch v1.7.0 --depth 1 \
+  https://github.com/ViacheslavKudinov/doppler-intellij-plugin.git doppler-plugin-review
+cd doppler-plugin-review
+git rev-parse HEAD
+
+# Review the source and build configuration before executing these commands.
+# Use a disposable build environment without production credentials.
+./gradlew buildPlugin test cyclonedxBom -x patchChangelog --console=plain
+grype sbom:build/distributions/doppler-plugin-1.7.0.cdx.json
+shasum -a 256 build/distributions/doppler-plugin-1.7.0.zip
+```
+
+Install `build/distributions/doppler-plugin-1.7.0.zip` using
+**Settings | Plugins | ⚙ | Install Plugin from Disk…**, then restart the IDE when prompted.
+[JetBrains documents installation from a local ZIP](https://www.jetbrains.com/help/idea/managing-plugins.html#install_plugin_from_disk).
+Start in a separate IDE profile or instance with non-sensitive test data. A separate IDE instance
+under the same OS user does not isolate filesystem access or credentials; use OS-level isolation
+when that boundary is required. Control automatic plugin updates so a later Marketplace update
+does not replace the version you reviewed without another assessment.
+
+Building from reviewed source gives you control over the installed archive and its origin.
+The source, downloaded dependencies, build environment, and tools still require trust. Successful
+tests, clean scans, signatures, and attestations provide evidence with specific limits; they do
+not guarantee that a plugin is safe. A local build may differ from the published signed archive
+and does not inherit its signature or attestation. For published downloads, follow the
+[release verification instructions](#verify-a-github-release-download) and read the
+[supply chain security guide](SUPPLY_CHAIN_SECURITY.md).
+
 ## Features
 
 - **Projects tree** — a `Doppler` tool window listing your projects, grouped into environments and configs.

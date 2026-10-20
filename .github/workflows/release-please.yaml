@@ -32,7 +32,10 @@ jobs:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
 
       - name: Checkout selected release commit
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -112,7 +115,31 @@ jobs:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            api.jetbrains.ai:443
+            artifacts-caching-proxy.aws.intellij.net:443
+            cache-redirector.jetbrains.com:443
+            corretto.aws:443
+            corretto.github.io:443
+            d2cico3c979uwg.cloudfront.net:443
+            d2s4y8xcwt8bet.cloudfront.net:443
+            data.services.jetbrains.com:443
+            download-cdn.jetbrains.com:443
+            download.jetbrains.com:443
+            downloads.gradle.org:443
+            downloads.marketplace.jetbrains.com:443
+            github.com:443
+            jb.gg:443
+            plugins-artifacts.gradle.org:443
+            plugins.gradle.org:443
+            plugins.jetbrains.com:443
+            raw.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            repo.maven.apache.org:443
+            repo1.maven.org:443
+            services.gradle.org:443
+            www.jetbrains.com:443
 
       - name: Checkout released commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -207,7 +234,12 @@ jobs:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
-          egress-policy: audit
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            uploads.github.com:443
 
       - name: Download release assets
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

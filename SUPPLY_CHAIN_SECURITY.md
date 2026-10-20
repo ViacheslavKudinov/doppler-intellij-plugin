@@ -13,7 +13,7 @@ This project publishes release evidence to help answer three questions:
 These checks help detect substituted downloads and support dependency investigations. They work
 alongside source review, tests, vulnerability scanning, and protection of the release process.
 
-## The terms in plain language
+## 📖 The terms in plain language
 
 | Term | Meaning | Example in this project |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ alongside source review, tests, vulnerability scanning, and protection of the re
 | Attestation | A signed statement about a particular artifact, identified by its digest. | A provenance statement or an SBOM statement bound to the plugin ZIP. |
 | Plugin signature | A signature checked against the plugin signing certificate. | The signed ZIP verified with `chain.crt`. |
 
-## Why a checksum alone is not enough
+## 🔢 Why a checksum alone is not enough
 
 A checksum helps catch a corrupted download or a file that differs from a known reference. It
 does not identify who supplied that reference.
@@ -36,7 +36,7 @@ the file and a producer you trust.
 This project publishes checksums for convenient integrity checks and also attests the checksum
 file itself. Verification of the expected producer provides the additional origin check.
 
-## What an SBOM tells you
+## 📋 What an SBOM tells you
 
 An SBOM records components and their versions, and can describe identifiers, licenses, and
 relationships between dependencies. Security tools can use this inventory when investigating
@@ -112,7 +112,7 @@ SBOM's authenticity or its binding to the ZIP; use the attestation checks for th
 
 You can update the database and rescan the same SBOM later to investigate newly published advisories.
 
-## What provenance tells you
+## 🏷️ What provenance tells you
 
 Provenance connects an artifact to its production context. For this project, the verification
 policy checks the repository, release workflow, source commit, and runner type associated with
@@ -127,7 +127,7 @@ Provenance does not mean that the source was reviewed, that the build was reprod
 every dependency has its own verified origin. The workflow and its inputs still need to be
 trusted. This guide does not claim a particular SLSA certification or assurance level.
 
-## What an attestation adds
+## 🛡️ What an attestation adds
 
 An attestation binds a claim to an artifact digest and makes the statement verifiable. Its
 **subject** identifies the artifact; its **predicate** contains the claim. These are two different
@@ -151,7 +151,7 @@ Attesting a JAR copied into the release does not establish its upstream library'
 build process. It establishes that these exact JAR bytes were included in this project's
 attestation process.
 
-## How the plugin signature differs
+## ✍️ How the plugin signature differs
 
 The plugin ZIP is also signed with the project's plugin signing key. The public certificate is
 published as `chain.crt`; verification does not require the private key or its password.
@@ -168,7 +168,7 @@ project's verification flow, verify `chain.crt`'s provenance before using it to 
 The plugin certificate is separate from the workflow identity used for GitHub attestations;
 `gh attestation verify` does not use `chain.crt`.
 
-## What this project publishes
+## 📦 What this project publishes
 
 The [Release workflow](.github/workflows/release-please.yaml) builds the released commit, runs
 checks, generates the SBOM, and signs and verifies the plugin. A separate job receives the release
@@ -205,7 +205,7 @@ that existing archive to Marketplace without rebuilding or signing it again.
 These statements describe the current workflow. Older releases may not contain all of this
 evidence; check the assets and attestations for the version you are evaluating.
 
-## Why Marketplace verification checks JARs
+## 🔍 Why Marketplace verification checks JARs
 
 Marketplace can modify the outer ZIP. Its bytes and checksum can therefore differ from the
 original GitHub release even when its packaged JARs are unchanged.
@@ -221,7 +221,7 @@ contents as the original release. Establishing the complete file set requires co
 a trusted reference. The SBOM attestation remains bound to the original signed ZIP, not to a
 Marketplace-modified ZIP.
 
-## How to use the evidence
+## ✅ How to use the evidence
 
 Start with the README's commands for your download:
 

@@ -18,7 +18,70 @@ available under the [Apache License 2.0](LICENSE).
 
 Browse and edit your [Doppler](https://doppler.com) secrets without leaving the IDE.
 
-## Features
+## 🛡️ Assessing the risk of an unofficial plugin
+
+Installing an IDE plugin means trusting executable code with access to your development
+environment. A plugin can potentially read project files and secrets, start processes, and
+make network requests with the IDE user's permissions. This plugin handles secret values and
+invokes an authenticated Doppler CLI, so a malicious change or compromised dependency could
+expose secrets or modify resources accessible to that CLI account. Independent development
+also means Doppler does not review, maintain, or support this plugin.
+
+If your organization requires additional assurance, review and build a specific release yourself:
+
+1. **Select and record the source.** Check out a release tag such as `v1.7.0`, record its full
+   commit SHA, and compare it with the release evidence or another trusted record. A tag name
+   alone does not prove who authored or reviewed its contents. Reassess changes before each update.
+2. **Assess the code and build tools before running them.** Review the plugin sources, Gradle
+   wrapper, settings, build scripts, dependencies, and release workflows. Gradle configuration
+   and tests execute code too; perform the build in a disposable environment without production
+   credentials or access to sensitive projects.
+3. **Threat model your intended use.** Identify the secrets, source code, and Doppler permissions
+   at risk. Trace how secrets enter the editor and launched processes, where data could be
+   persisted or logged, which executables are invoked, and which network destinations are used.
+   Consider malicious updates, compromised dependencies, and other code running in the same IDE
+   or under the same OS user. Use a test Doppler config and the least privileges your workflow needs.
+4. **Run security checks and inspect the findings.** Combine manual review with static analysis,
+   tests, dependency/SBOM vulnerability scanning, and plugin compatibility verification. Review
+   the actual configuration and results behind repository badges. Scanners have coverage limits;
+   investigate whether a reported dependency is shipped, used only during builds/tests, or
+   provided by the IDE. See the [SBOM scanning example](SUPPLY_CHAIN_SECURITY.md#scan-a-published-sbom-for-vulnerabilities-with-grype).
+5. **Build and install the archive you assessed.** After reviewing the selected checkout, build
+   its ZIP and SBOM, run the tests, and scan the SBOM. Keep the commit SHA, build environment,
+   scan results, and archive checksum with your review record.
+
+For example, start with a separate checkout of version **1.7.0**:
+
+```bash
+git clone --branch v1.7.0 --depth 1 \
+  https://github.com/ViacheslavKudinov/doppler-intellij-plugin.git doppler-plugin-review
+cd doppler-plugin-review
+git rev-parse HEAD
+
+# Review the source and build configuration before executing these commands.
+# Use a disposable build environment without production credentials.
+./gradlew buildPlugin test cyclonedxBom -x patchChangelog --console=plain
+grype sbom:build/distributions/doppler-plugin-1.7.0.cdx.json
+shasum -a 256 build/distributions/doppler-plugin-1.7.0.zip
+```
+
+Install `build/distributions/doppler-plugin-1.7.0.zip` using
+**Settings | Plugins | ⚙ | Install Plugin from Disk…**, then restart the IDE when prompted.
+[JetBrains documents installation from a local ZIP](https://www.jetbrains.com/help/idea/managing-plugins.html#install_plugin_from_disk).
+Start in a separate IDE profile or instance with non-sensitive test data. A separate IDE instance
+under the same OS user does not isolate filesystem access or credentials; use OS-level isolation
+when that boundary is required. Control automatic plugin updates so a later Marketplace update
+does not replace the version you reviewed without another assessment.
+
+Building from reviewed source gives you control over the installed archive and its origin.
+The source, downloaded dependencies, build environment, and tools still require trust. Successful
+tests, clean scans, signatures, and attestations provide evidence with specific limits; they do
+not guarantee that a plugin is safe. A local build may differ from the published signed archive
+and does not inherit its signature or attestation. For published downloads, follow the
+[release verification instructions](#verify-a-github-release-download) and read the
+[supply chain security guide](SUPPLY_CHAIN_SECURITY.md).
+
+## ✨ Features
 
 - **Projects tree** — a `Doppler` tool window listing your projects, grouped into environments and configs.
 - **Edit secrets** — single-click a config to open its secrets in an editor tab.
@@ -28,7 +91,7 @@ Browse and edit your [Doppler](https://doppler.com) secrets without leaving the 
 - **Run and Debug** — automatically inject the default config's secrets into Java, Python, Node.js,
   Maven, Gradle, and Docker launches, fetching fresh secrets for every launch.
 
-## Compatibility
+## 🧩 Compatibility
 
 Targets **IntelliJ IDEA 2025.3 (build 253) and later**, Community or Ultimate. The plugin depends on
 both `com.intellij.modules.platform` and the **Terminal plugin** (`org.jetbrains.plugins.terminal`),
@@ -47,7 +110,7 @@ Compatibility is checked with the JetBrains Plugin Verifier:
 
 To widen or shift the range, edit `sinceBuild` and the verified IDEs in `build.gradle.kts`.
 
-## Requirements
+## 📋 Requirements
 
 Requires **IntelliJ Platform 2025.3 (build 253) or later** and an installed, authenticated
 [Doppler CLI](https://docs.doppler.com/docs/install-cli).
@@ -105,7 +168,7 @@ and any unchanged Settings selections. Setup operations use the existing CLI cal
 background checks appear as `FOLDER_SETUP_POLL` when **Log CLI calls** is enabled.
 
 
-## Run and Debug environment injection
+## ▶️ Run and Debug environment injection
 
 Choose your default project and config in **Settings | Tools | Doppler | Folder Setup**.
 Then click **Run and Debug…** on the main Doppler settings page and enable **Automatically inject Doppler
@@ -167,7 +230,7 @@ process environment. An application or container already running keeps its inher
 the plugin cannot remove variables from that process.
 Docker's execution-only command preview is disabled to avoid showing injected values.
 
-## How secrets are handled
+## 🔐 How secrets are handled
 
 - Secrets live **in memory only**. The editor tab is backed by a custom in-memory virtual file system, so
   secret values are never written to disk, to the IDE's local history, or to the project directory.
@@ -183,7 +246,7 @@ Docker's execution-only command preview is disabled to avoid showing injected va
 - Notification text is HTML-escaped, so project, config and CLI-provided text cannot inject markup.
 - When the last editor tab for a config closes, its secrets are dropped from memory.
 
-## Editing secrets
+## ✏️ Editing secrets
 
 Single-click a config in the tree to open it. Secrets are shown as YAML:
 
@@ -237,7 +300,7 @@ If the document is not valid YAML the save is rejected and nothing is sent, so a
 wipe a config. To discard local edits, click the config in the tree again to re-fetch it.
 Malformed CLI snapshots are rejected instead of being treated as empty configs.
 
-## Building
+## 🛠️ Building
 
 To inspect CLI activity, enable **Settings | Tools | Doppler | Log CLI calls** and apply.
 Open **Help | Show Log in Finder/Explorer** and search `idea.log` for `Doppler CLI`.
@@ -279,7 +342,7 @@ Install the built archive via **Settings | Plugins | ⚙ | Install Plugin from D
 Restart the IDE when prompted after installation, updates, or removal. The plugin requires
 restart because its in-memory secret editors cannot be reliably unloaded while the IDE is running.
 
-## CodeQL analysis
+## 🔍 CodeQL analysis
 
 The [CodeQL workflow](.github/workflows/codeql.yaml) builds and analyzes Actions and Kotlin in a
 job with read-only repository permissions. It stores only SARIF results as temporary artifacts;
@@ -293,7 +356,7 @@ the upload uses the workflow's commit and ref. The final jobs retain the `Analyz
 This boundary isolates upload credentials. SARIF produced by PR-controlled build code remains
 untrusted and can still be manipulated; the job split does not guarantee analysis integrity.
 
-## Releases
+## 📦 Releases
 
 New to provenance, SBOMs, or attestations? Read the
 [release security guide](SUPPLY_CHAIN_SECURITY.md) for what they mean, why we publish them,
@@ -440,13 +503,13 @@ The SBOM attestation remains bound to the original GitHub release ZIP.
 
 Generate a local dependency SBOM with `./gradlew cyclonedxBom`.
 
-## Contributing
+## 🤝 Contributing
 
 Pull requests are not accepted due to the licensing costs of several security tools used by this
 project. Contributions can be discussed in issues, including changes made in a fork that the
 maintainer may consider applying as a patch. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-## Project layout
+## 🗂️ Project layout
 
 ```
 src/main/kotlin/com/vk/doppler/

@@ -52,15 +52,17 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
     fun `test forgotten file presentation does not expose auth context`() {
         val fs = DopplerFileSystem.getInstance()
-        val file = fs.obtain("forgotten", "dev.yaml", "synthetic-auth-fingerprint").apply {
-            environment = "development"
-        }
-        fs.forget(file)
+        for (configName in listOf("dev", "dev.yaml", "team/dev", "team/nested/dev.yaml")) {
+            val file = fs.obtain("forgotten", configName, "synthetic-auth-fingerprint").apply {
+                environment = "development"
+            }
+            fs.forget(file)
 
-        assertNull(fs.findFileByPath(file.path))
-        assertEquals("/forgotten/dev.yaml", fs.extractPresentableUrl(file.path))
-        assertEquals("/forgotten/dev.yaml", file.presentableUrl)
-        assertFalse(file.toString().contains(file.authContextId))
+            assertNull(fs.findFileByPath(file.path))
+            assertEquals("/forgotten/$configName", fs.extractPresentableUrl(file.path))
+            assertEquals("/forgotten/$configName", file.presentableUrl)
+            assertFalse(file.toString().contains(file.authContextId))
+        }
     }
 
     fun `test friendly URLs preserve auth scoped file identity`() {

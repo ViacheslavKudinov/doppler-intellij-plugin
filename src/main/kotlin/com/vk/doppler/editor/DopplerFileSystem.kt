@@ -23,10 +23,9 @@ class DopplerFileSystem : DeprecatedVirtualFileSystem() {
     /** Presents Doppler identities without exposing the internal auth-context path segment. */
     override fun extractPresentableUrl(path: String): String {
         files[path]?.let { return it.displayPath }
-        // Forgotten files still need safe presentation, but their environment metadata is no longer available.
-        val projectPath = path.substringBeforeLast('/').substringBeforeLast('/')
-        val configName = path.substringAfterLast('/').removeSuffix(".yaml")
-        return "$projectPath/$configName"
+        // Auth context is the fixed component after the project; config names may contain slashes.
+        val segments = path.split('/')
+        return (segments.take(2) + segments.drop(3)).joinToString("/").removeSuffix(".yaml")
     }
 
     override fun refresh(asynchronous: Boolean) = Unit

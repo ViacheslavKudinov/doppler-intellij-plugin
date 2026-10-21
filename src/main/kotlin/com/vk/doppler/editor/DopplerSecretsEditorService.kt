@@ -31,6 +31,7 @@ import com.vk.doppler.notifications.DopplerNotifier
 import com.vk.doppler.service.DopplerService
 import com.vk.doppler.service.DopplerSecretsSnapshot
 import com.vk.doppler.service.SecretChanges
+import com.vk.doppler.settings.DopplerFolderSetupState
 import com.vk.doppler.settings.DopplerSettings
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ScheduledFuture
@@ -75,6 +76,14 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
                 }
             },
         )
+        val fileEditorManager = FileEditorManager.getInstance(project)
+        project.messageBus.connect(this).subscribe(
+            DopplerFolderSetupState.TOPIC,
+            DopplerFolderSetupTabIconUpdater(
+                openFiles = { fileEditorManager.openFiles },
+                updatePresentation = fileEditorManager::updateFilePresentation,
+            ),
+        )
         ApplicationManager.getApplication().messageBus.connect(this).subscribe(
             AnActionListener.TOPIC,
             object : AnActionListener {
@@ -107,13 +116,24 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
     }
 
     /** Fetches a config's secrets and opens (or refreshes) its editor tab. */
-    fun openConfig(projectSlug: String, configName: String, environment: String? = null) {
-        runLoad(projectSlug, configName, "Opening /$projectSlug/$configName…", environment) { file ->
+    fun openConfig(
+        projectSlug: String,
+        configName: String,
+        environment: String? = null,
+        treeAuthContextId: String? = null,
+    ) {
+        runLoad(
+            projectSlug,
+            configName,
+            "Opening /$projectSlug/$configName…",
+            environment,
+            treeAuthContextId = treeAuthContextId,
+        ) { file ->
             if (environment != null) file.environment = environment
             openPaths.add(file.path)
-              val descriptor = OpenFileDescriptor(project, file)
-              descriptor.isUsePreviewTab = true
-              descriptor.navigate(true)
+            val descriptor = OpenFileDescriptor(project, file)
+            descriptor.isUsePreviewTab = true
+            descriptor.navigate(true)
         }
     }
 
@@ -130,6 +150,7 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         title: String,
         environment: String?,
         operation: CliOperation = CliOperation.CONFIG_OPEN,
+        treeAuthContextId: String? = null,
         onReady: (DopplerSecretsFile) -> Unit,
     ) {
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, title, true) {
@@ -140,7 +161,18 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
                 indicator.isIndeterminate = true
                 indicator.text = "Loading Doppler secrets for /$projectSlug/$configName…"
                 indicator.text2 = "Waiting for the Doppler CLI to return secret values"
-                snapshot = DopplerService.getInstance().loadSecrets(projectSlug, configName, environment = environment, operation = operation)
+                val service = DopplerService.getInstance()
+                snapshot = if (treeAuthContextId != null) {
+                    service.loadSecretsAfterTreeValidation(
+                        projectSlug,
+                        configName,
+                        treeAuthContextId,
+                        operation,
+                        environment,
+                    )
+                } else {
+                    service.loadSecrets(projectSlug, configName, environment = environment, operation = operation)
+                }
                 text = SecretsDocumentFormat.serialize(snapshot.secrets)
             }
 
@@ -155,7 +187,15 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             }
 
             override fun onThrowable(error: Throwable) {
-                invalidateConfig(projectSlug, configName)
+                if (error is DopplerCliException && error.kind in setOf(
+                        DopplerCliException.Kind.NOT_AUTHENTICATED,
+                        DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
+                    )
+                ) {
+                    invalidateCachedFiles(null)
+                } else {
+                    invalidateConfig(projectSlug, configName)
+                }
                 DopplerNotifier.error(project, "Could not load /$projectSlug/$configName: ${error.message}")
             }
         })

@@ -1,12 +1,20 @@
 package com.vk.doppler.settings
 
+import com.intellij.openapi.util.SystemInfo
+import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.ui.TestDialog
+import com.intellij.openapi.ui.TestDialogManager
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.ui.components.ActionLink
 import com.intellij.util.ui.UIUtil
 import javax.swing.JButton
-import com.intellij.openapi.util.SystemInfo
+import javax.swing.JCheckBox
+import javax.swing.JTextField
 import org.junit.Assume.assumeFalse
 import java.nio.file.Files
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.TimeUnit
 
 class DopplerConfigurableTest : BasePlatformTestCase() {
     fun `test global settings are discoverable without a project and folder setup requires a project`() {
@@ -39,6 +47,113 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
             assertContainsElements(links, "Folder Setup…", "Run and Debug…")
         } finally {
             configurable.disposeUIResources()
+        }
+    }
+
+    fun `test project settings links explain that an IDE project is required outside a settings dialog`() {
+        val messages = CopyOnWriteArrayList<String>()
+        TestDialogManager.setTestDialog(TestDialog { message ->
+            messages += message
+            Messages.OK
+        }, testRootDisposable)
+        val configurable = DopplerConfigurable()
+        try {
+            val panel = configurable.createPanel()
+            val links = UIUtil.uiTraverser(panel).filter(ActionLink::class.java).toList()
+
+            links.single { it.text == "Folder Setup…" }.doClick()
+            links.single { it.text == "Run and Debug…" }.doClick()
+
+            assertEquals(
+                listOf(
+                    "Open an IDE project to configure its Doppler folder setup.",
+                    "Open an IDE project to configure its Doppler Run and Debug injection.",
+                ),
+                messages,
+            )
+        } finally {
+            configurable.disposeUIResources()
+        }
+    }
+
+    fun `test refresh interval and CLI logging apply and reset through the settings panel`() {
+        val settings = DopplerSettings.getInstance()
+        val originalState = settings.state.copy()
+        val configurable = DopplerConfigurable()
+        try {
+            settings.cliPath = "/unique/doppler/path"
+            settings.refreshIntervalSeconds = 17
+            settings.logCliCalls = false
+            val panel = configurable.createPanel()
+            panel.reset()
+            val interval = UIUtil.uiTraverser(panel)
+                .filter(JTextField::class.java)
+                .single { it.text == "17" }
+            val logging = UIUtil.uiTraverser(panel)
+                .filter(JCheckBox::class.java)
+                .single { it.text == "Log CLI calls" }
+
+            interval.text = "42"
+            logging.isSelected = true
+            assertTrue(panel.isModified())
+            panel.apply()
+            assertEquals(42, settings.refreshIntervalSeconds)
+            assertTrue(settings.logCliCalls)
+
+            interval.text = "120"
+            logging.isSelected = false
+            panel.reset()
+            assertEquals("42", interval.text)
+            assertTrue(logging.isSelected)
+            assertFalse(panel.isModified())
+        } finally {
+            configurable.disposeUIResources()
+            settings.loadState(originalState)
+        }
+    }
+
+    fun `test connection button reports successful and failed CLI checks`() {
+        assumeFalse(SystemInfo.isWindows)
+        val executable = Files.createTempFile("doppler-settings-connection-", ".sh")
+        val settings = DopplerSettings.getInstance()
+        val originalState = settings.state.copy()
+        val messages = CopyOnWriteArrayList<String>()
+        TestDialogManager.setTestDialog(TestDialog { message ->
+            messages += message
+            Messages.OK
+        }, testRootDisposable)
+        val configurable = DopplerConfigurable()
+        try {
+            writeExecutable(executable, """
+                case "${'$'}1" in
+                  me) printf '%s' '{"slug":"identity","type":"personal","token_preview":"synthetic","name":"Local User","workplace":{"slug":"team","name":"Example Team"}}' ;;
+                  --version) printf 'test-version' ;;
+                  *) exit 1 ;;
+                esac
+            """)
+            val panel = configurable.createPanel()
+            panel.reset()
+            val cliPath = requireNotNull(UIUtil.findComponentOfType(panel, TextFieldWithBrowseButton::class.java))
+            val testConnection = UIUtil.uiTraverser(panel)
+                .filter(JButton::class.java)
+                .single { it.text == "Test Connection" }
+            cliPath.text = executable.toString()
+
+            testConnection.doClick()
+            val success = awaitMessage(messages, 1)
+            assertTrue(success.contains("Connected to Doppler."))
+            assertTrue(success.contains("Identity: Local User (identity)"))
+            assertTrue(success.contains("Workplace: Example Team (team)"))
+            assertTrue(success.contains("CLI version: test-version"))
+            assertEquals(executable.toString(), settings.cliPath)
+
+            writeExecutable(executable, "printf 'synthetic failure' >&2; exit 1")
+            testConnection.doClick()
+            assertEquals("synthetic failure", awaitMessage(messages, 2))
+        } finally {
+            configurable.disposeUIResources()
+            settings.loadState(originalState)
+            Files.deleteIfExists(executable)
         }
     }
 
@@ -234,6 +349,21 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
             Thread.sleep(10)
         }
         assertTrue("Folder setup should finish loading", setup.projectChoice.isEnabled)
+    }
+
+    private fun awaitMessage(messages: List<String>, count: Int): String {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+        while (messages.size < count && System.nanoTime() < deadline) {
+            UIUtil.dispatchAllInvocationEvents()
+            Thread.sleep(10)
+        }
+        assertEquals("Expected a settings dialog message", count, messages.size)
+        return messages[count - 1]
+    }
+
+    private fun writeExecutable(path: java.nio.file.Path, body: String) {
+        Files.writeString(path, "#!/bin/sh\n${body.trimIndent()}\n")
+        assertTrue(path.toFile().setExecutable(true))
     }
 
     fun `test CLI browse field preserves manual entry apply reset and automatic detection`() {

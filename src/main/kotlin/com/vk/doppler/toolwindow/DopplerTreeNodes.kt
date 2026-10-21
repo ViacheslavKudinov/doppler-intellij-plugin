@@ -14,6 +14,7 @@ class ProjectNode(var dopplerProject: DopplerProject) : DefaultMutableTreeNode(d
     /** Configs are fetched the first time the node is expanded. */
     var loaded: Boolean = false
     var loading: Boolean = false
+    internal var configLoadFailed: Boolean = false
 }
 
 class EnvironmentNode(val environment: String) : DefaultMutableTreeNode(environment)

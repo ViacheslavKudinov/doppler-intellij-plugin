@@ -17,7 +17,7 @@ class DopplerEditorTabTitleProvider : EditorTabTitleProvider {
             it is DopplerSecretsFile && it != config && it.configName == config.configName
         }
         val title = if (duplicate) {
-            "${config.configName} ${fullPath(config)}"
+            "${config.configName} ${config.presentableUrl}"
         } else {
             config.configName
         }
@@ -27,7 +27,4 @@ class DopplerEditorTabTitleProvider : EditorTabTitleProvider {
             (document?.text?.let { it != serverText } ?: config.hasPendingSync)
         return if (editing) "$title *" else title
     }
-
-    private fun fullPath(file: DopplerSecretsFile): String =
-        listOfNotNull(file.projectSlug, file.environment, file.configName).joinToString("/", prefix = "/")
 }

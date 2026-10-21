@@ -180,9 +180,40 @@ class DopplerService {
         if (expectedAuthContextId != null && expectedAuthContextId != authContextId) {
             throw authContextChanged()
         }
-        val secrets = cli.listSecrets(projectSlug, configName)
-        requireAuthContext(cli, authContextId)
-        return DopplerSecretsSnapshot(authContextId, secrets)
+        return loadSecretsAndRevalidate(cli, projectSlug, configName, authContextId)
+    }
+
+    /**
+     * Loads a config after the tree has already authenticated [expectedAuthContextId]. The
+     * snapshot is still withheld until a post-read account check confirms the same identity.
+     */
+    internal fun loadSecretsAfterTreeValidation(
+        projectSlug: String,
+        configName: String,
+        expectedAuthContextId: String,
+        operation: CliOperation = CliOperation.CONFIG_OPEN,
+        environment: String? = null,
+    ): DopplerSecretsSnapshot {
+        val cli = cli(operation, CliLogContext(projectSlug, configName, environment))
+        return loadSecretsAndRevalidate(cli, projectSlug, configName, expectedAuthContextId)
+    }
+
+    private fun loadSecretsAndRevalidate(
+        cli: DopplerCli,
+        projectSlug: String,
+        configName: String,
+        expectedAuthContextId: String,
+    ): DopplerSecretsSnapshot {
+        val secrets = try {
+            cli.listSecrets(projectSlug, configName)
+        } catch (error: DopplerCliException) {
+            // A failed value read can itself be caused by an account switch. Check before
+            // propagating it so callers scrub every cached config when authentication changed.
+            requireAuthContext(cli, expectedAuthContextId)
+            throw error
+        }
+        requireAuthContext(cli, expectedAuthContextId)
+        return DopplerSecretsSnapshot(expectedAuthContextId, secrets)
     }
 
     /**

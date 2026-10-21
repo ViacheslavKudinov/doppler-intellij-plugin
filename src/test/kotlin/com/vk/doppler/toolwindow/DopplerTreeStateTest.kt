@@ -234,6 +234,28 @@ class DopplerTreeStateTest {
     }
 
     @Test
+    fun `focus refresh reuses a recent tree only for the same Doppler account`() {
+        var now = 1_000L
+        val interval = 30_000L
+        val gate = DopplerTreeRefreshGate({ now }, interval)
+
+        assertFalse(gate.canReuseTree(com.vk.doppler.cli.CliOperation.TREE_PANEL_FOCUS, "account-a"))
+        gate.recordTreeReload("account-a")
+        assertTrue(gate.canReuseTree(com.vk.doppler.cli.CliOperation.TREE_PANEL_FOCUS, "account-a"))
+        assertTrue(gate.canReuseTree(com.vk.doppler.cli.CliOperation.TREE_WINDOW_FOCUS, "account-a"))
+        assertFalse(gate.canReuseTree(com.vk.doppler.cli.CliOperation.TREE_PANEL_FOCUS, "account-b"))
+
+        assertFalse(gate.canReuseTree(com.vk.doppler.cli.CliOperation.TREE_REFRESH_BUTTON, "account-a"))
+
+        now += interval
+        assertFalse(gate.canReuseTree(com.vk.doppler.cli.CliOperation.TREE_WINDOW_FOCUS, "account-a"))
+
+        now = 1_000L
+        gate.invalidate()
+        assertFalse(gate.canReuseTree(com.vk.doppler.cli.CliOperation.TREE_PANEL_FOCUS, "account-a"))
+    }
+
+    @Test
     fun `refresh restores config selection after lazy loading with new node instances`() {
         SwingUtilities.invokeAndWait {
             val root = DefaultMutableTreeNode()

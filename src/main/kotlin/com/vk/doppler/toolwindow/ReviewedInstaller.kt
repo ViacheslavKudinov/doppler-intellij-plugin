@@ -1,9 +1,43 @@
 package com.vk.doppler.toolwindow
 
+import java.nio.file.Files
 import java.nio.file.Path
+import java.net.URI
+import java.net.URL
 import java.security.MessageDigest
 
 internal data class ReviewedInstaller(val path: Path, val sha256: String)
+
+private const val INSTALLER_TEMP_PREFIX = "doppler-installer-"
+private const val INSTALLER_TEMP_SUFFIX = ".sh"
+internal const val INSTALL_SCRIPT_URL = "https://cli.doppler.com/install.sh"
+internal const val INSTALL_SCRIPT_SOURCE_URL =
+    "https://raw.githubusercontent.com/DopplerHQ/cli/master/scripts/install.sh"
+
+/** Returns a URL built from a trusted constant, never from the remote redirect value. */
+internal fun trustedInstallerUrl(candidate: URI): URL {
+    val trusted = when (candidate.normalize().toASCIIString()) {
+        INSTALL_SCRIPT_URL -> INSTALL_SCRIPT_URL
+        INSTALL_SCRIPT_SOURCE_URL -> INSTALL_SCRIPT_SOURCE_URL
+        else -> throw IllegalArgumentException("Installer redirects must target an approved Doppler URL.")
+    }
+    return URI(trusted).toURL()
+}
+
+internal fun createInstallerTempFile(): Path = Files.createTempFile(INSTALLER_TEMP_PREFIX, INSTALLER_TEMP_SUFFIX)
+
+/** Deletes only files matching the exact boundary used by [createInstallerTempFile]. */
+internal fun deleteInstallerTempFile(path: Path): Boolean {
+    val normalized = path.toAbsolutePath().normalize()
+    val tempDirectory = Path.of(System.getProperty("java.io.tmpdir")).toAbsolutePath().normalize()
+    val fileName = normalized.fileName?.toString().orEmpty()
+    require(
+        normalized.parent == tempDirectory &&
+            fileName.startsWith(INSTALLER_TEMP_PREFIX) &&
+            fileName.endsWith(INSTALLER_TEMP_SUFFIX),
+    ) { "Refusing to delete a file outside the Doppler installer temporary-file boundary." }
+    return Files.deleteIfExists(normalized)
+}
 
 internal fun installerSha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
     .digest(bytes)

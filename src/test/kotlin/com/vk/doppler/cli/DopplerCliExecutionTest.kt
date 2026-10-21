@@ -14,6 +14,83 @@ import com.vk.doppler.editor.SecretsDocumentFormat
 
 class DopplerCliExecutionTest : BasePlatformTestCase() {
 
+    fun `test tree validated config open skips the redundant account preflight`() {
+        checkTreeValidatedConfigOpen("stable", listOf("secrets", "me"), expectedAuthChange = false)
+    }
+
+    fun `test tree validated config open discards secrets when the account changed`() {
+        checkTreeValidatedConfigOpen("changed", listOf("secrets", "me"), expectedAuthChange = true)
+    }
+
+    fun `test failed tree validated config open still detects an account change`() {
+        checkTreeValidatedConfigOpen("failed-and-changed", listOf("secrets", "me"), expectedAuthChange = true)
+    }
+
+    private fun checkTreeValidatedConfigOpen(
+        mode: String,
+        expectedCalls: List<String>,
+        expectedAuthChange: Boolean,
+    ) {
+        assumeFalse(SystemInfo.isWindows)
+        val executable = Files.createTempFile("doppler-open-test-", ".sh")
+        val calls = Files.createTempFile("doppler-open-calls-", ".txt")
+        Disposer.register(testRootDisposable) {
+            Files.deleteIfExists(executable)
+            Files.deleteIfExists(calls)
+        }
+        Files.writeString(executable, """
+            #!/bin/sh
+            printf '%s\n' "${'$'}1" >> '$calls'
+            case "${'$'}1" in
+              me)
+                account=test
+                if [ '$mode' != stable ]; then account=other; fi
+                printf '{"slug":"%s","type":"personal","token_preview":"synthetic","workplace":{"slug":"test"}}' "${'$'}account"
+                ;;
+              secrets)
+                if [ '$mode' = failed-and-changed ]; then
+                  printf '%s' '{"error":"Config unavailable"}'
+                  exit 1
+                fi
+                printf '{}'
+                ;;
+              *) exit 1 ;;
+            esac
+        """.trimIndent())
+        assertTrue(executable.toFile().setExecutable(true))
+        val settings = DopplerSettings.getInstance()
+        val originalPath = settings.cliPath
+        try {
+            settings.cliPath = executable.toString()
+            val expectedContext = cli(
+                """printf '%s' '{"slug":"test","type":"personal","token_preview":"synthetic","workplace":{"slug":"test"}}'""",
+            ).authContextId()
+            if (expectedAuthChange) {
+                try {
+                    DopplerService.getInstance().loadSecretsAfterTreeValidation(
+                        "open-test",
+                        mode,
+                        expectedContext,
+                    )
+                    fail("Expected changed account to discard the loaded secrets")
+                } catch (error: DopplerCliException) {
+                    assertEquals(DopplerCliException.Kind.AUTH_CONTEXT_CHANGED, error.kind)
+                }
+            } else {
+                val snapshot = DopplerService.getInstance().loadSecretsAfterTreeValidation(
+                    "open-test",
+                    mode,
+                    expectedContext,
+                )
+                assertEquals(expectedContext, snapshot.authContextId)
+                assertEmpty(snapshot.secrets)
+            }
+            assertEquals(expectedCalls, Files.readAllLines(calls))
+        } finally {
+            settings.cliPath = originalPath
+        }
+    }
+
     fun `test auto refresh makes only two account checks and one secrets read`() {
         checkAutoRefreshCalls("stable", listOf("me", "secrets", "me"), false)
     }
@@ -27,7 +104,7 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
     }
 
     fun `test auto refresh reports generic failure without invalidating unrelated configs`() {
-        checkAutoRefreshCalls("generic", listOf("me", "secrets"), true, false)
+        checkAutoRefreshCalls("generic", listOf("me", "secrets", "me"), true, false)
     }
 
     private fun checkAutoRefreshCalls(

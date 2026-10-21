@@ -5,6 +5,7 @@ import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFilePreCloseCheck
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.tabs.TabInfo
@@ -12,6 +13,8 @@ import javax.swing.JPanel
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.LightVirtualFile
 import com.vk.doppler.DopplerIcons
+import com.vk.doppler.cli.DopplerFolderSetup
+import com.vk.doppler.settings.DopplerFolderSetupState
 import java.nio.charset.StandardCharsets
 
 /**
@@ -190,11 +193,46 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
     fun `test registered file icon provider only overrides Doppler files`() {
         val provider = FileIconProvider.EP_NAME.extensionList.filterIsInstance<DopplerFileIconProvider>().single()
         val file = DopplerFileSystem.getInstance().obtain("icons", "dev", "test-context")
+        val setupState = DopplerFolderSetupState.getInstance(project)
+        val originalSetup = setupState.current
 
-        assertSame(DopplerIcons.EditorTab, provider.getIcon(file, 0, project))
-        assertNotNull(DopplerIcons::class.java.getResource("/icons/doppler_tab.svg"))
-        assertEquals("YAML", file.fileType.name)
-        assertNull(provider.getIcon(LightVirtualFile("ordinary.yaml"), 0, project))
+        try {
+            setupState.update(DopplerFolderSetup())
+            assertSame(DopplerIcons.EditorTab, provider.getIcon(file, 0, project))
+
+            setupState.update(DopplerFolderSetup("icons", "prod"))
+            assertSame(DopplerIcons.EditorTab, provider.getIcon(file, 0, project))
+
+            setupState.update(DopplerFolderSetup("icons", "dev"))
+            repeat(3) {
+                val bookmarked = requireNotNull(provider.getIcon(file, 0, project))
+                assertSame(DopplerIcons.BookmarkedEditorTab, bookmarked)
+                assertTrue(bookmarked.iconWidth > 0)
+                assertTrue(bookmarked.iconHeight > 0)
+                assertEquals(DopplerIcons.EditorTab.iconWidth, bookmarked.iconWidth)
+                assertEquals(DopplerIcons.EditorTab.iconHeight, bookmarked.iconHeight)
+            }
+
+            assertNotNull(DopplerIcons::class.java.getResource("/icons/doppler_tab.svg"))
+            assertNotNull(DopplerIcons::class.java.getResource("/icons/doppler_tab_bookmarked.svg"))
+            assertEquals("YAML", file.fileType.name)
+            assertNull(provider.getIcon(LightVirtualFile("ordinary.yaml"), 0, project))
+        } finally {
+            setupState.update(originalSetup)
+        }
+    }
+
+    fun `test folder setup changes refresh open Doppler tab icons`() {
+        val dopplerFile = DopplerFileSystem.getInstance().obtain("icons", "dev", "test-context")
+        val ordinaryFile = LightVirtualFile("ordinary.yaml")
+        val refreshed = mutableListOf<VirtualFile>()
+
+        DopplerFolderSetupTabIconUpdater(
+            openFiles = { arrayOf(dopplerFile, ordinaryFile) },
+            updatePresentation = refreshed::add,
+        ).changed()
+
+        assertEquals(listOf(dopplerFile), refreshed)
     }
 
     fun `test duplicate config tabs include project and environment`() {
@@ -209,6 +247,8 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
         assertEquals("dev /tab-backend/development/dev", provider.getEditorTabTitle(project, first))
         assertEquals("dev /tab-frontend/dev/dev", provider.getEditorTabTitle(project, second))
+        assertEquals("/tab-backend/development/dev", first.presentableUrl)
+        assertEquals("/tab-frontend/dev/dev", second.presentableUrl)
 
         manager.closeFile(second)
         assertEquals("dev", provider.getEditorTabTitle(project, first))
@@ -225,6 +265,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
         val title = DopplerEditorTabTitleProvider().getEditorTabTitle(project, first)
         assertEquals("stg /tab-known/stg", title)
+        assertEquals("/tab-known/stg", first.presentableUrl)
         manager.closeFile(second)
         manager.closeFile(first)
     }

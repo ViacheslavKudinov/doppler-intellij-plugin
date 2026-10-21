@@ -3,6 +3,8 @@ package com.vk.doppler.editor
 import com.intellij.openapi.vfs.DeprecatedVirtualFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -23,9 +25,14 @@ class DopplerFileSystem : DeprecatedVirtualFileSystem() {
     /** Presents Doppler identities without exposing the internal auth-context path segment. */
     override fun extractPresentableUrl(path: String): String {
         files[path]?.let { return it.displayPath }
-        // Auth context is the fixed component after the project; config names may contain slashes.
+        // Each identity component is encoded by pathFor; forgotten files have no environment metadata.
         val segments = path.split('/')
-        return (segments.take(2) + segments.drop(3)).joinToString("/").removeSuffix(".yaml")
+        require(segments.size == 4 && segments[0].isEmpty() && segments[3].endsWith(".yaml")) {
+            "Invalid Doppler file path"
+        }
+        val projectSlug = URLDecoder.decode(segments[1], StandardCharsets.UTF_8)
+        val configName = URLDecoder.decode(segments[3].removeSuffix(".yaml"), StandardCharsets.UTF_8)
+        return "/$projectSlug/$configName"
     }
 
     override fun refresh(asynchronous: Boolean) = Unit

@@ -6,6 +6,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.VirtualFilePreCloseCheck
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.tabs.TabInfo
@@ -52,16 +53,83 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
     fun `test forgotten file presentation does not expose auth context`() {
         val fs = DopplerFileSystem.getInstance()
-        for (configName in listOf("dev", "dev.yaml", "team/dev", "team/nested/dev.yaml")) {
-            val file = fs.obtain("forgotten", configName, "synthetic-auth-fingerprint").apply {
-                environment = "development"
-            }
-            fs.forget(file)
+        val projectSlugs = listOf(
+            "forgotten", "team/backend", "team/nested/backend", "team%2Fbackend", "team +%?#", "\u9879\u76ee/\u540e\u7aef",
+        )
+        val configNames = listOf(
+            "dev", "dev.yaml", "team/dev", "team/nested/dev.yaml", "team%2Fdev +%?#", "\u5f00\u53d1/dev",
+        )
+        for (projectSlug in projectSlugs) {
+            for (configName in configNames) {
+                val file = fs.obtain(projectSlug, configName, "synthetic-auth-fingerprint").apply {
+                    environment = "development"
+                }
+                fs.forget(file)
 
-            assertNull(fs.findFileByPath(file.path))
-            assertEquals("/forgotten/$configName", fs.extractPresentableUrl(file.path))
-            assertEquals("/forgotten/$configName", file.presentableUrl)
-            assertFalse(file.toString().contains(file.authContextId))
+                assertNull(fs.findFileByPath(file.path))
+                assertEquals("/$projectSlug/$configName", fs.extractPresentableUrl(file.path))
+                assertEquals("/$projectSlug/$configName", file.presentableUrl)
+                assertFalse(file.toString().contains(file.authContextId))
+            }
+        }
+    }
+
+    fun `test internal file paths encode each identity component without changing YAML names`() {
+        val fs = DopplerFileSystem.getInstance()
+        val file = fs.obtain("team/sub% +", "nested/dev% +.yaml", "ctx/one% +")
+        try {
+            assertEquals("/team%2Fsub%25%20%2B/ctx%2Fone%25%20%2B/nested%2Fdev%25%20%2B.yaml.yaml", file.path)
+            assertEquals("nested/dev% +.yaml.yaml", file.name)
+            assertEquals("nested/dev% +.yaml", file.presentableName)
+            assertEquals("/team/sub% +/nested/dev% +.yaml", file.presentableUrl)
+            assertSame(file, VirtualFileManager.getInstance().findFileByUrl(file.url))
+        } finally {
+            fs.forget(file)
+        }
+    }
+
+    fun `test slash containing identity components cannot collide in the file cache`() {
+        val fs = DopplerFileSystem.getInstance()
+        val identities = listOf(
+            Triple("team/project", "dev", "ctx"),
+            Triple("team", "dev", "project/ctx"),
+            Triple("team", "ctx/dev", "project"),
+            Triple("team%2Fproject", "dev", "ctx"),
+        )
+        val files = identities.map { (projectSlug, configName, authContextId) ->
+            fs.obtain(projectSlug, configName, authContextId)
+        }
+        try {
+            assertEquals(identities.size, files.map { it.path }.distinct().size)
+            assertEquals(identities.size, files.map { it.url }.distinct().size)
+            identities.zip(files).forEach { (identity, file) ->
+                assertEquals(identity.first, file.projectSlug)
+                assertEquals(identity.second, file.configName)
+                assertEquals(identity.third, file.authContextId)
+                assertSame(file, fs.obtain(identity.first, identity.second, identity.third))
+                assertSame(file, fs.findFileByPath(file.path))
+                assertSame(file, VirtualFileManager.getInstance().findFileByUrl(file.url))
+            }
+        } finally {
+            files.forEach(fs::forget)
+        }
+    }
+
+    fun `test malformed presentation paths fail without exposing their contents`() {
+        val fs = DopplerFileSystem.getInstance()
+        val paths = listOf(
+            "/team/backend/synthetic-auth-fingerprint/dev.yaml",
+            "/team/synthetic-auth-fingerprint/dev",
+            "team/synthetic-auth-fingerprint/dev.yaml",
+            "/",
+        )
+        for (path in paths) {
+            try {
+                fs.extractPresentableUrl(path)
+                fail("Malformed presentation paths must not be displayed")
+            } catch (expected: IllegalArgumentException) {
+                assertEquals("Invalid Doppler file path", expected.message)
+            }
         }
     }
 

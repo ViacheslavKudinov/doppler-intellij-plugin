@@ -6,6 +6,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.URLEncoder
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicBoolean
@@ -139,7 +140,11 @@ class DopplerSecretsFile(
         /** The `.yaml` suffix gives the tab YAML highlighting without a hard plugin dependency. */
         fun fileName(configName: String): String = "$configName.yaml"
 
+        /** Encodes each identity component so names cannot change path boundaries or collide in the cache. */
         fun pathFor(projectSlug: String, configName: String, authContextId: String): String =
-            "/$projectSlug/$authContextId/${fileName(configName)}"
+            "/${encodePathComponent(projectSlug)}/${encodePathComponent(authContextId)}/${fileName(encodePathComponent(configName))}"
+
+        private fun encodePathComponent(value: String): String =
+            URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
     }
 }

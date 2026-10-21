@@ -114,7 +114,11 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
     private fun buildToolbar(): JComponent {
         val group = DefaultActionGroup().apply {
-            add(object : AnAction("Refresh", "Reload Doppler projects", AllIcons.Actions.Refresh) {
+            add(object : AnAction(
+                "Refresh Doppler tree (does not reload open editors)",
+                "Reload Doppler projects, configs, and folder setup",
+                AllIcons.Actions.Refresh,
+            ) {
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
                 override fun actionPerformed(e: AnActionEvent) = refresh(CliOperation.TREE_REFRESH_BUTTON)
             })
@@ -161,53 +165,66 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         if (rootNode.childCount == 0) showStatus("Connecting to Doppler…", null)
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "Loading Doppler projects…", true) {
-                private lateinit var report: DopplerStatusReport
-                private var projects: List<DopplerProject> = emptyList()
-                private var folderSetup: DopplerFolderSetup? = null
+                private lateinit var result: RefreshResult
 
                 override fun run(indicator: ProgressIndicator) {
-                    val service = DopplerService.getInstance()
-                    report = service.checkStatus(includeVersion = false, operation = operation)
-                    if (report.status == DopplerStatus.READY) {
-                        projects = service.listTreeProjects(operation)
-                        project.basePath?.let { folder ->
-                            folderSetup = try {
-                                service.folderSetup(folder)
-                            } catch (_: DopplerCliException) {
-                                null
-                            }
-                        }
-                    }
+                    result = loadRefreshResult(operation)
                 }
 
-                override fun onSuccess() {
-                    if (project.isDisposed || generation != refreshGeneration) return
-                    DopplerSecretsEditorService.invalidateCachedFiles(
-                        report.authContextId.takeIf { report.status == DopplerStatus.READY },
-                    )
-                    SecretReferenceService.getInstance().invalidate()
-                    val setupState = DopplerFolderSetupState.getInstance(project)
-                    if (report.status != DopplerStatus.READY) setupState.update(DopplerFolderSetup())
-                    else folderSetup?.let(setupState::update)
-                    if (report.status == DopplerStatus.READY) {
-                        populate(projects, operation)
-                    } else {
-                        showStatusFor(report)
-                    }
-                }
+                override fun onSuccess() = applyRefreshResult(result, operation, generation)
 
-                override fun onThrowable(error: Throwable) {
-                    if (project.isDisposed || generation != refreshGeneration) return
-                    DopplerSecretsEditorService.invalidateCachedFiles(null)
-                    showStatus("Could not reach Doppler: ${error.message}", "Retry")
-                }
+                override fun onThrowable(error: Throwable) = handleRefreshFailure(error, generation)
 
-                override fun onFinished() {
-                    if (generation == refreshGeneration) refreshing = false
-                }
+                override fun onFinished() = finishRefresh(generation)
             },
         )
     }
+
+    private fun loadRefreshResult(operation: CliOperation): RefreshResult {
+        val service = DopplerService.getInstance()
+        val report = service.checkStatus(includeVersion = false, operation = operation)
+        if (report.status != DopplerStatus.READY) return RefreshResult(report)
+
+        val projects = service.listTreeProjects(operation)
+        val folderSetup = project.basePath?.let { folder ->
+            try {
+                service.folderSetup(folder)
+            } catch (_: DopplerCliException) {
+                null
+            }
+        }
+        return RefreshResult(report, projects, folderSetup)
+    }
+
+    private fun applyRefreshResult(result: RefreshResult, operation: CliOperation, generation: Int) {
+        if (project.isDisposed || generation != refreshGeneration) return
+        val report = result.report
+        DopplerSecretsEditorService.invalidateCachedFiles(
+            report.authContextId.takeIf { report.status == DopplerStatus.READY },
+        )
+        SecretReferenceService.getInstance().invalidate()
+        val setupState = DopplerFolderSetupState.getInstance(project)
+        if (report.status != DopplerStatus.READY) setupState.update(DopplerFolderSetup())
+        else result.folderSetup?.let(setupState::update)
+        if (report.status == DopplerStatus.READY) populate(result.projects, operation)
+        else showStatusFor(report)
+    }
+
+    private fun handleRefreshFailure(error: Throwable, generation: Int) {
+        if (project.isDisposed || generation != refreshGeneration) return
+        DopplerSecretsEditorService.invalidateCachedFiles(null)
+        showStatus("Could not reach Doppler: ${error.message}", "Retry")
+    }
+
+    private fun finishRefresh(generation: Int) {
+        if (generation == refreshGeneration) refreshing = false
+    }
+
+    private data class RefreshResult(
+        val report: DopplerStatusReport,
+        val projects: List<DopplerProject> = emptyList(),
+        val folderSetup: DopplerFolderSetup? = null,
+    )
 
     private fun populate(projects: List<DopplerProject>, operation: CliOperation) {
         val state = DopplerTreeState(tree)

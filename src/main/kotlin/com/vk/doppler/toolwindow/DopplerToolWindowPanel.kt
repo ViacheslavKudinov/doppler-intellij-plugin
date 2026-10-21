@@ -114,14 +114,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
     private fun buildToolbar(): JComponent {
         val group = DefaultActionGroup().apply {
-            add(object : AnAction(
-                "Refresh Doppler tree (does not reload open editors)",
-                "Reload Doppler projects, configs, and folder setup",
-                AllIcons.Actions.Refresh,
-            ) {
-                override fun getActionUpdateThread() = ActionUpdateThread.EDT
-                override fun actionPerformed(e: AnActionEvent) = refresh(CliOperation.TREE_REFRESH_BUTTON)
-            })
+            add(DopplerTreeRefreshAction(::refresh))
             add(object : AnAction("Doppler Settings", "Open Doppler settings", AllIcons.General.Settings) {
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
                 override fun actionPerformed(e: AnActionEvent) {
@@ -483,6 +476,18 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         }
         cardLayout.show(cards, CARD_STATUS)
     }
+}
+
+internal class DopplerTreeRefreshAction(
+    private val refresh: (CliOperation) -> Unit,
+) : AnAction(
+    "Refresh Doppler tree (does not reload open editors)",
+    "Reload Doppler projects, configs, and folder setup",
+    AllIcons.Actions.Refresh,
+) {
+    override fun getActionUpdateThread() = ActionUpdateThread.EDT
+
+    override fun actionPerformed(e: AnActionEvent) = refresh(CliOperation.TREE_REFRESH_BUTTON)
 }
 
 internal class DopplerFocusRefreshListener(

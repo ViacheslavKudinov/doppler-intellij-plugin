@@ -49,12 +49,11 @@ import java.beans.PropertyChangeEvent
 import java.beans.PropertyChangeListener
 import java.net.HttpURLConnection
 import java.net.URI
-import java.net.URL
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
-import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.HttpsURLConnection
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -69,9 +68,9 @@ private const val CARD_STATUS = "status"
 private const val CARD_TREE = "tree"
 private const val DOPPLER_TERMINAL_TAB_NAME = "Doppler CLI"
 private const val INSTALL_DOCS_URL = "https://docs.doppler.com/docs/install-cli"
-private const val INSTALL_SCRIPT_URL = "https://cli.doppler.com/install.sh"
 private const val MAX_INSTALLER_BYTES = 2 * 1024 * 1024
 private const val MAX_INSTALLER_REDIRECTS = 5
+private val AUTOMATIC_REFRESH_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(30)
 
 class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPanel(true, true), Disposable {
 
@@ -83,11 +82,14 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
     private val cardLayout = CardLayout()
     private val cards = JPanel(cardLayout)
     private var refreshGeneration = 0
+    private var configGeneration = 0
+    private var authContextId: String? = null
     private var refreshing = false
     private var refreshOperation = CliOperation.TREE_STARTUP
     private var disposed = false
     private var downloadingInstaller = false
     private var reviewedInstaller: ReviewedInstaller? = null
+    private val refreshGate = DopplerTreeRefreshGate()
     private val focusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager()
     private val focusListener = DopplerFocusRefreshListener(this, ::refresh)
 
@@ -108,6 +110,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
     override fun dispose() {
         disposed = true
         refreshGeneration++
+        configGeneration++
         focusManager.removePropertyChangeListener("focusOwner", focusListener)
         focusManager.removePropertyChangeListener("focusedWindow", focusListener)
     }
@@ -145,7 +148,12 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
         tree.addMouseListener(DopplerTreeClickListener(tree) { node ->
             DopplerSecretsEditorService.getInstance(project)
-                .openConfig(node.projectSlug, node.config.name, node.config.environment)
+                .openConfig(
+                    node.projectSlug,
+                    node.config.name,
+                    node.config.environment,
+                    treeAuthContextId = authContextId,
+                )
         })
     }
 
@@ -177,6 +185,9 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         val service = DopplerService.getInstance()
         val report = service.checkStatus(includeVersion = false, operation = operation)
         if (report.status != DopplerStatus.READY) return RefreshResult(report)
+        if (refreshGate.canReuseTree(operation, requireNotNull(report.authContextId))) {
+            return RefreshResult(report, reuseExistingTree = true)
+        }
 
         val projects = service.listTreeProjects(operation)
         val folderSetup = project.basePath?.let { folder ->
@@ -197,14 +208,29 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         )
         SecretReferenceService.getInstance().invalidate()
         val setupState = DopplerFolderSetupState.getInstance(project)
-        if (report.status != DopplerStatus.READY) setupState.update(DopplerFolderSetup())
-        else result.folderSetup?.let(setupState::update)
-        if (report.status == DopplerStatus.READY) populate(result.projects, operation)
-        else showStatusFor(report)
+        if (report.status != DopplerStatus.READY) {
+            authContextId = null
+            refreshGate.invalidate()
+            invalidateConfigLoads()
+            setupState.update(DopplerFolderSetup())
+            showStatusFor(report)
+        } else {
+            val currentAuthContextId = requireNotNull(report.authContextId)
+            authContextId = currentAuthContextId
+            if (!result.reuseExistingTree) {
+                invalidateConfigLoads()
+                result.folderSetup?.let(setupState::update)
+                populate(result.projects, operation)
+                refreshGate.recordTreeReload(currentAuthContextId)
+            }
+        }
     }
 
     private fun handleRefreshFailure(error: Throwable, generation: Int) {
         if (project.isDisposed || generation != refreshGeneration) return
+        authContextId = null
+        refreshGate.invalidate()
+        invalidateConfigLoads()
         DopplerSecretsEditorService.invalidateCachedFiles(null)
         showStatus("Could not reach Doppler: ${error.message}", "Retry")
     }
@@ -217,6 +243,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         val report: DopplerStatusReport,
         val projects: List<DopplerProject> = emptyList(),
         val folderSetup: DopplerFolderSetup? = null,
+        val reuseExistingTree: Boolean = false,
     )
 
     private fun populate(projects: List<DopplerProject>, operation: CliOperation) {
@@ -228,17 +255,25 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         }
         cardLayout.show(cards, CARD_TREE)
         if (changed) state.restore(tree)
+        val folderSetup = DopplerFolderSetupState.getInstance(project).current
         rootNode.children().toList().filterIsInstance<ProjectNode>().forEach { node ->
-            node.loading = false
-            if (node.loaded || tree.isExpanded(javax.swing.tree.TreePath(node.path))) loadConfigs(node, true, operation)
+            if (node.loaded || tree.isExpanded(javax.swing.tree.TreePath(node.path)) ||
+                folderSetup.matchesProject(node.dopplerProject.slug)) {
+                loadConfigs(node, true, operation)
+            }
         }
+    }
+
+    private fun invalidateConfigLoads() {
+        configGeneration++
+        rootNode.children().toList().filterIsInstance<ProjectNode>().forEach { it.loading = false }
     }
 
     private fun loadConfigs(node: ProjectNode, force: Boolean = false, operation: CliOperation = CliOperation.TREE_EXPAND) {
         if (node.loading || (node.loaded && !force)) return
         node.loading = true
         val slug = node.dopplerProject.slug
-        val generation = refreshGeneration
+        val generation = configGeneration
 
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "Loading configs for $slug…", true) {
@@ -249,7 +284,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                 }
 
                 override fun onSuccess() {
-                    if (project.isDisposed || generation != refreshGeneration || node.parent !== rootNode) return
+                    if (project.isDisposed || generation != configGeneration || node.parent !== rootNode) return
                     val state = DopplerTreeState(tree)
                     val changed = treeUpdater.configs(node, configs)
                     node.loaded = true
@@ -257,7 +292,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                 }
 
                 override fun onThrowable(error: Throwable) {
-                    if (project.isDisposed || generation != refreshGeneration || node.parent !== rootNode) return
+                    if (project.isDisposed || generation != configGeneration || node.parent !== rootNode) return
                     if (node.loaded) return
                     node.loaded = false
                     node.removeAllChildren()
@@ -266,7 +301,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                 }
 
                 override fun onFinished() {
-                    if (generation == refreshGeneration) node.loading = false
+                    if (generation == configGeneration) node.loading = false
                 }
             },
         )
@@ -338,13 +373,13 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
                 override fun onSuccess() {
                     if (project.isDisposed || disposed) {
-                        Files.deleteIfExists(installer.path)
+                        deleteInstallerTempFile(installer.path)
                         return
                     }
                     reviewedInstaller = installer
                     val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(installer.path)
                     if (file == null) {
-                        Files.deleteIfExists(installer.path)
+                        deleteInstallerTempFile(installer.path)
                         reviewedInstaller = null
                         showStatus("Could not open the downloaded installer for review.", null)
                         return
@@ -367,11 +402,8 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
     }
 
     private fun downloadInstaller(): ReviewedInstaller {
-        var url = URI(INSTALL_SCRIPT_URL).toURL()
+        var url = trustedInstallerUrl(URI(INSTALL_SCRIPT_URL))
         for (redirect in 0..MAX_INSTALLER_REDIRECTS) {
-            require(url.protocol.equals("https", ignoreCase = true)) {
-                "Installer redirects must use HTTPS."
-            }
             val connection = url.openConnection() as? HttpsURLConnection
                 ?: error("Installer URL must use HTTPS.")
             connection.instanceFollowRedirects = false
@@ -383,7 +415,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                         require(redirect < MAX_INSTALLER_REDIRECTS) { "Too many installer redirects." }
                         val location = connection.getHeaderField("Location")
                             ?: error("Installer redirect did not include a location.")
-                        url = url.toURI().resolve(location).toURL()
+                        url = trustedInstallerUrl(url.toURI().resolve(location))
                     }
 
                     HttpURLConnection.HTTP_OK -> {
@@ -391,13 +423,13 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                         require(bytes.isNotEmpty()) { "Downloaded installer is empty." }
                         require(bytes.size <= MAX_INSTALLER_BYTES) { "Downloaded installer is too large." }
                         val sha256 = installerSha256(bytes)
-                        val path = Files.createTempFile("doppler-installer-", ".sh")
+                        val path = createInstallerTempFile()
                         try {
                             Files.write(path, bytes)
                             Files.setPosixFilePermissions(path, setOf(PosixFilePermission.OWNER_READ))
                             return ReviewedInstaller(path, sha256)
                         } catch (error: Throwable) {
-                            Files.deleteIfExists(path)
+                            deleteInstallerTempFile(path)
                             throw error
                         }
                     }
@@ -419,7 +451,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         }
         statusPanel.emptyText.appendLine("Discard downloaded installer", SimpleTextAttributes.LINK_ATTRIBUTES) {
             if (reviewedInstaller == installer) {
-                Files.deleteIfExists(installer.path)
+                deleteInstallerTempFile(installer.path)
                 reviewedInstaller = null
                 showStatus("Downloaded installer discarded.", null)
             }
@@ -475,6 +507,34 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
             statusPanel.emptyText.appendLine(actionLabel, SimpleTextAttributes.LINK_ATTRIBUTES) { refresh(CliOperation.TREE_RETRY) }
         }
         cardLayout.show(cards, CARD_STATUS)
+    }
+}
+
+internal class DopplerTreeRefreshGate(
+    private val nanoTime: () -> Long = System::nanoTime,
+    private val intervalNanos: Long = AUTOMATIC_REFRESH_INTERVAL_NANOS,
+) {
+    private var lastTreeReloadAt: Long? = null
+    private var lastAuthContextId: String? = null
+
+    @Synchronized
+    fun canReuseTree(operation: CliOperation, authContextId: String): Boolean {
+        if (operation != CliOperation.TREE_PANEL_FOCUS && operation != CliOperation.TREE_WINDOW_FOCUS) return false
+        val now = nanoTime()
+        return lastAuthContextId == authContextId &&
+            lastTreeReloadAt?.let { now - it < intervalNanos } == true
+    }
+
+    @Synchronized
+    fun recordTreeReload(authContextId: String) {
+        lastAuthContextId = authContextId
+        lastTreeReloadAt = nanoTime()
+    }
+
+    @Synchronized
+    fun invalidate() {
+        lastAuthContextId = null
+        lastTreeReloadAt = null
     }
 }
 
@@ -552,11 +612,7 @@ internal class DopplerTreeCellRenderer(
     }
 
     private fun markFolderSetup() {
-        val nodeIcon = icon
-        icon = com.intellij.ui.RowIcon(2).apply {
-            setIcon(nodeIcon, 0)
-            setIcon(AllIcons.Nodes.Bookmark, 1)
-        }
+        icon = DopplerIcons.withFolderBookmark(icon)
         toolTipText = "Configured for this project folder in the Doppler CLI (may be inherited from a parent folder)"
     }
 }

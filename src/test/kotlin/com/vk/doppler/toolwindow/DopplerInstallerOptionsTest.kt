@@ -4,10 +4,40 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
+import java.net.URI
+import java.nio.file.Files
 import java.nio.file.Path
 
 class DopplerInstallerOptionsTest {
+    @Test
+    fun `installer download accepts only the exact Doppler endpoints`() {
+        assertEquals(INSTALL_SCRIPT_URL, trustedInstallerUrl(URI(INSTALL_SCRIPT_URL)).toString())
+        assertEquals(INSTALL_SCRIPT_SOURCE_URL, trustedInstallerUrl(URI(INSTALL_SCRIPT_SOURCE_URL)).toString())
+    }
+
+    @Test
+    fun `installer download rejects untrusted redirect targets`() {
+        listOf(
+            "http://cli.doppler.com/install.sh",
+            "https://cli.doppler.com:8443/install.sh",
+            "https://attacker.example/install.sh",
+            "https://cli.doppler.com.attacker.example/install.sh",
+            "https://127.0.0.1/install.sh",
+            "https://169.254.169.254/latest/meta-data/",
+            "https://raw.githubusercontent.com/attacker/cli/master/scripts/install.sh",
+            "$INSTALL_SCRIPT_SOURCE_URL?unexpected=true",
+        ).forEach { target ->
+            try {
+                trustedInstallerUrl(URI(target))
+                fail("Expected installer URL to be rejected: $target")
+            } catch (_: IllegalArgumentException) {
+                // Expected.
+            }
+        }
+    }
+
     @Test
     fun `selects documented Alpine apk repository`() {
         val option = requireNotNull(linuxInstallerOption(listOf("ID=alpine", "VERSION_ID=3.20")))
@@ -65,5 +95,44 @@ class DopplerInstallerOptionsTest {
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
             installerSha256("abc".toByteArray()),
         )
+    }
+
+    @Test
+    fun `installer cleanup deletes only plugin-created temporary paths`() {
+        val installer = createInstallerTempFile()
+        assertTrue(Files.exists(installer))
+
+        assertTrue(deleteInstallerTempFile(installer))
+        assertFalse(Files.exists(installer))
+    }
+
+    @Test
+    fun `installer cleanup rejects paths outside its temporary file boundary`() {
+        val unrelated = Files.createTempFile("unrelated-", ".sh")
+        try {
+            try {
+                deleteInstallerTempFile(unrelated)
+                fail("Expected unrelated path cleanup to be rejected")
+            } catch (_: IllegalArgumentException) {
+                // Expected: remote data can never expand cleanup beyond plugin-created temp files.
+            }
+            assertTrue(Files.exists(unrelated))
+        } finally {
+            Files.deleteIfExists(unrelated)
+        }
+    }
+
+    @Test
+    fun `installer cleanup rejects a normalized traversal outside the temp directory`() {
+        val tempDirectory = Path.of(System.getProperty("java.io.tmpdir"))
+        val traversal = tempDirectory.resolve("nested").resolve("..").resolve("..")
+            .resolve("doppler-installer-victim.sh")
+
+        try {
+            deleteInstallerTempFile(traversal)
+            fail("Expected path traversal cleanup to be rejected")
+        } catch (_: IllegalArgumentException) {
+            // Expected.
+        }
     }
 }

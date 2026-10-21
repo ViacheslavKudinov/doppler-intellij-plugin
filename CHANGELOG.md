@@ -2,6 +2,28 @@
 
 # Doppler-plugin Changelog
 
+## [1.7.1](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.7.0...v1.7.1) (2026-10-21)
+
+
+### Documentation
+
+* add risk assessment guidelines for unofficial plugin usage in README.md ([#76](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/76)) ([1bc3faf](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/1bc3faf585fc4d01049827a98a88366947324263))
+
+
+### Maintenance
+
+* Configure Renovate ([#64](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/64)) ([e062fae](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/e062faea3d0f2e1e09840be338342062eafe7677))
+* **deps:** update actions/setup-java action to v6.1.0 ([#69](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/69)) ([e9e200e](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/e9e200e25c2190e6afbced11a7966706ba0efb9d))
+* **deps:** update github/codeql-action action to v4.39.0 ([#70](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/70)) ([a04a2af](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/a04a2af507312345e63715a641b62a422cdb67ad))
+* **deps:** update github/codeql-action action to v4.39.0 ([#71](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/71)) ([892b5e0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/892b5e07e78187f72b818e5e821321137a9e272a))
+* **deps:** update gradle to v9.8.2 ([#66](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/66)) ([313e929](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/313e92933276adf8c1f6add2ae4ad46bcd934ff3))
+* **deps:** update ossf/scorecard-action action to v2.5.0 ([#72](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/72)) ([bd5280f](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/bd5280f66bc558cf244b8ae1961cd2f00c34d107))
+* **deps:** update step-security/harden-runner action to v2.22.2 ([#67](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/67)) ([83cd997](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/83cd9976dc1383e9e72d9860751137dbfc7da98e))
+* **deps:** update zizmorcore/zizmor-action action to v0.7.1 ([#73](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/73)) ([cd88937](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/cd889377778ce9a3a538459e811bf23417d3f09c))
+* **workflows:** update egress policy to block and specify allowed endpoints in publish.yaml ([#74](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/74)) ([276a1e3](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/276a1e3917cec1b67cc2ad709150413299f99736))
+* **workflows:** update egress policy to block and specify allowed endpoints in publish.yaml. Add dependency review workflow. Remove Qodana ([#63](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/63)) ([27035ef](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/27035efcdd3305f8befb59f6eefc531a039557d1))
+* **workflows:** update egress policy to block and specify allowed endpoints in release-please.yaml ([#75](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/75)) ([78114ef](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/78114effefb6c03199a6a6c7dda45ce613f8295a))
+
 ## [1.7.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.6.0...v1.7.0) (2026-10-19)
 
 

@@ -67,9 +67,9 @@ class DopplerSecretsFile(
 
     override fun getPath(): String = pathFor(projectSlug, configName, authContextId)
 
-    /** Editor hovers show the Doppler identity instead of the internal auth-scoped file path. */
-    override fun getPresentableUrl(): String =
-        listOfNotNull(projectSlug, environment, configName).joinToString("/", prefix = "/")
+    /** Editor labels show the Doppler identity instead of the internal auth-scoped file path. */
+    val displayPath: String
+        get() = listOfNotNull(projectSlug, environment, configName).joinToString("/", prefix = "/")
 
     override fun isWritable(): Boolean = !isInvalidated
 

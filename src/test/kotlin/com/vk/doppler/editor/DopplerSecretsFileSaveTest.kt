@@ -205,10 +205,12 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
             setupState.update(DopplerFolderSetup("icons", "dev"))
             repeat(3) {
-                val bookmarked = provider.getIcon(file, 0, project)
+                val bookmarked = requireNotNull(provider.getIcon(file, 0, project))
                 assertSame(DopplerIcons.BookmarkedEditorTab, bookmarked)
-                assertEquals(16, bookmarked?.iconWidth)
-                assertEquals(16, bookmarked?.iconHeight)
+                assertTrue(bookmarked.iconWidth > 0)
+                assertTrue(bookmarked.iconHeight > 0)
+                assertEquals(DopplerIcons.EditorTab.iconWidth, bookmarked.iconWidth)
+                assertEquals(DopplerIcons.EditorTab.iconHeight, bookmarked.iconHeight)
             }
 
             assertNotNull(DopplerIcons::class.java.getResource("/icons/doppler_tab.svg"))

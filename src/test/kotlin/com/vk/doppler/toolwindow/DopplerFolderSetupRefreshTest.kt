@@ -310,6 +310,62 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         }
     }
 
+    fun `test full refresh retries a collapsed config load that fails while projects are loading`() {
+        assumeFalse(SystemInfo.isWindows)
+        withCli("empty-setup") { cli ->
+            val panel = DopplerToolWindowPanel(project)
+            val taskFailure = AtomicReference<Throwable>()
+            fun startTask(name: String, action: () -> Unit) = Thread(action, name).apply {
+                uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> taskFailure.set(error) }
+                start()
+            }
+            var configThread: Thread? = null
+            var refreshThread: Thread? = null
+            try {
+                awaitRefresh(panel)
+                val node = projectNodes(panel).single()
+                val tree = field("tree").get(panel) as JTree
+                tree.collapsePath(TreePath(node.path))
+                cli.clearCalls()
+                cli.setMode("blocked-config-failure")
+                configThread = startTask("Doppler failing config test") { loadConfigs(panel, node) }
+                awaitCall(cli, "configs")
+                assertTrue(node.loading)
+
+                cli.setMode("blocked-projects")
+                refreshThread = startTask("Doppler full refresh test") {
+                    panel.refresh(CliOperation.TREE_REFRESH_BUTTON)
+                }
+                awaitCall(cli, "projects")
+                cli.releaseConfigs()
+                awaitConfigLoads(panel)
+                assertFalse(node.loaded)
+                assertTrue(node.configLoadFailed)
+                assertTrue(node.getChildAt(0).toString().startsWith("Failed to load:"))
+                assertFalse(tree.isExpanded(TreePath(node.path)))
+
+                cli.releaseProjects()
+                awaitRefresh(panel)
+                awaitConfigLoads(panel)
+                assertSame(node, projectNodes(panel).single())
+                assertTrue("A full refresh must replace the stale config error", node.loaded)
+                assertFalse(node.configLoadFailed)
+                assertEquals("dev", ((node.getChildAt(0) as EnvironmentNode).getChildAt(0) as ConfigNode).config.name)
+                assertEquals(2, cli.callCount("configs"))
+                assertFalse(tree.isExpanded(TreePath(node.path)))
+            } finally {
+                cli.releaseConfigs()
+                cli.releaseProjects()
+                listOfNotNull(configThread, refreshThread).forEach { thread ->
+                    thread.join(TimeUnit.SECONDS.toMillis(5))
+                    assertFalse("Task scheduling should return", thread.isAlive)
+                }
+                Disposer.dispose(panel)
+            }
+            taskFailure.get()?.let { throw AssertionError("Could not schedule tree task", it) }
+        }
+    }
+
     private fun withCli(initialMode: String, test: (FakeCli) -> Unit) {
         val cli = FakeCli(initialMode)
         val settings = DopplerSettings.getInstance()
@@ -447,6 +503,7 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         private val modeFile = directory.resolve("mode")
         private val callsFile = directory.resolve("calls")
         private val releaseConfigsFile = directory.resolve("release-configs")
+        private val releaseProjectsFile = directory.resolve("release-projects")
 
         init {
             Files.writeString(modeFile, initialMode)
@@ -468,6 +525,13 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                     fi
                     ;;
                   projects)
+                    if [ "${'$'}mode" = blocked-projects ]; then
+                      attempts=0
+                      while [ ! -f '$releaseProjectsFile' ] && [ "${'$'}attempts" -lt 1500 ]; do
+                        attempts=${'$'}((attempts + 1))
+                        sleep 0.01
+                      done
+                    fi
                     if [ "${'$'}mode" = project-failure ]; then
                       printf '%s' '{"error":"Temporary project read failure"}'
                       exit 1
@@ -481,12 +545,16 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                     fi
                     ;;
                   configs)
-                    if [ "${'$'}mode" = blocked-configs ]; then
+                    if [ "${'$'}mode" = blocked-configs ] || [ "${'$'}mode" = blocked-config-failure ]; then
                       attempts=0
-                      while [ ! -f '$releaseConfigsFile' ] && [ "${'$'}attempts" -lt 200 ]; do
+                      while [ ! -f '$releaseConfigsFile' ] && [ "${'$'}attempts" -lt 1500 ]; do
                         attempts=${'$'}((attempts + 1))
                         sleep 0.01
                       done
+                    fi
+                    if [ "${'$'}mode" = blocked-config-failure ]; then
+                      printf '%s' '{"error":"Temporary config read failure"}'
+                      exit 1
                     fi
                     if [ "${'$'}mode" = other-account ]; then
                       printf '%s' '[{"name":"prod","environment":"production"}]'
@@ -502,7 +570,7 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                       printf '%s' '{"error":"Temporary configuration read failure"}'
                       exit 1
                     fi
-                    if [ "${'$'}mode" = empty-setup ]; then
+                    if [ "${'$'}mode" = empty-setup ] || [ "${'$'}mode" = blocked-projects ]; then
                       printf '{}'
                     elif [ "${'$'}mode" = other-account ]; then
                       printf '%s' '{"project":"replacement","config":"prod"}'
@@ -526,8 +594,11 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
 
         fun releaseConfigs() = Files.writeString(releaseConfigsFile, "")
 
+        fun releaseProjects() = Files.writeString(releaseProjectsFile, "")
+
         override fun close() {
             releaseConfigs()
+            releaseProjects()
             Files.walk(directory).use { paths ->
                 paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) }
             }

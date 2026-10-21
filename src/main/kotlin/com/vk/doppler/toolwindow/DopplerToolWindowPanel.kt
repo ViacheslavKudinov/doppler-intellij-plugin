@@ -257,7 +257,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         if (changed) state.restore(tree)
         val folderSetup = DopplerFolderSetupState.getInstance(project).current
         rootNode.children().toList().filterIsInstance<ProjectNode>().forEach { node ->
-            if (node.loaded || tree.isExpanded(javax.swing.tree.TreePath(node.path)) ||
+            if (node.loaded || node.configLoadFailed || tree.isExpanded(javax.swing.tree.TreePath(node.path)) ||
                 folderSetup.matchesProject(node.dopplerProject.slug)) {
                 loadConfigs(node, true, operation)
             }
@@ -288,6 +288,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                     val state = DopplerTreeState(tree)
                     val changed = treeUpdater.configs(node, configs)
                     node.loaded = true
+                    node.configLoadFailed = false
                     if (changed) state.restore(tree)
                 }
 
@@ -295,6 +296,7 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                     if (project.isDisposed || generation != configGeneration || node.parent !== rootNode) return
                     if (node.loaded) return
                     node.loaded = false
+                    node.configLoadFailed = true
                     node.removeAllChildren()
                     node.add(DefaultMutableTreeNode("Failed to load: ${error.message}"))
                     treeModel.nodeStructureChanged(node)

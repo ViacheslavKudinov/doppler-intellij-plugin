@@ -23,6 +23,7 @@ import java.awt.event.MouseEvent
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JTree
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.TreePath
@@ -275,14 +276,13 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                 cli.clearCalls()
                 cli.setMode("blocked-configs")
 
-                var loadFailure: Throwable? = null
-                val loadThread = Thread({
-                    try {
-                        loadConfigs(panel, configured)
-                    } catch (error: Throwable) {
-                        loadFailure = error
-                    }
-                }, "Doppler config preload test")
+                val loadFailure = AtomicReference<Throwable>()
+                val loadThread = Thread(
+                    { loadConfigs(panel, configured) },
+                    "Doppler config preload test",
+                ).apply {
+                    uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> loadFailure.set(error) }
+                }
                 loadThread.start()
                 awaitCall(cli, "configs")
                 assertTrue(configured.loading)
@@ -295,7 +295,7 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                 awaitRefresh(panel)
                 loadThread.join(TimeUnit.SECONDS.toMillis(5))
                 assertFalse("Config preload scheduling should return", loadThread.isAlive)
-                loadFailure?.let { throw AssertionError("Could not start config preload", it) }
+                loadFailure.get()?.let { throw AssertionError("Could not start config preload", it) }
 
                 assertTrue(configured.loaded)
                 assertEquals("dev", ((configured.getChildAt(0) as EnvironmentNode).getChildAt(0) as ConfigNode).config.name)

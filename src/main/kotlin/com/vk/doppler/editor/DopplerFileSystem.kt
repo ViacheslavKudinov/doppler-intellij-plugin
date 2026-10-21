@@ -20,6 +20,15 @@ class DopplerFileSystem : DeprecatedVirtualFileSystem() {
 
     override fun findFileByPath(path: String): VirtualFile? = files[path]
 
+    /** Presents Doppler identities without exposing the internal auth-context path segment. */
+    override fun extractPresentableUrl(path: String): String {
+        files[path]?.let { return it.displayPath }
+        // Forgotten files still need safe presentation, but their environment metadata is no longer available.
+        val projectPath = path.substringBeforeLast('/').substringBeforeLast('/')
+        val configName = path.substringAfterLast('/').removeSuffix(".yaml")
+        return "$projectPath/$configName"
+    }
+
     override fun refresh(asynchronous: Boolean) = Unit
 
     override fun refreshAndFindFileByPath(path: String): VirtualFile? = findFileByPath(path)

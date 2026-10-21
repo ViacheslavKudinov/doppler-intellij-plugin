@@ -35,6 +35,51 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertNotNull(DopplerFileSystem.getInstance())
     }
 
+    fun `test presentable URLs hide auth context and follow environment metadata outside tabs`() {
+        val fs = DopplerFileSystem.getInstance()
+        val file = fs.obtain("presentable", "dev", "synthetic-auth-fingerprint")
+        try {
+            assertEquals("/presentable/dev", file.presentableUrl)
+            assertEquals(file.displayPath, fs.extractPresentableUrl(file.path))
+            file.environment = "development"
+            assertEquals("/presentable/development/dev", file.presentableUrl)
+            assertEquals(file.displayPath, fs.extractPresentableUrl(file.path))
+            assertFalse(file.toString().contains(file.authContextId))
+        } finally {
+            fs.forget(file)
+        }
+    }
+
+    fun `test forgotten file presentation does not expose auth context`() {
+        val fs = DopplerFileSystem.getInstance()
+        val file = fs.obtain("forgotten", "dev.yaml", "synthetic-auth-fingerprint").apply {
+            environment = "development"
+        }
+        fs.forget(file)
+
+        assertNull(fs.findFileByPath(file.path))
+        assertEquals("/forgotten/dev.yaml", fs.extractPresentableUrl(file.path))
+        assertEquals("/forgotten/dev.yaml", file.presentableUrl)
+        assertFalse(file.toString().contains(file.authContextId))
+    }
+
+    fun `test friendly URLs preserve auth scoped file identity`() {
+        val fs = DopplerFileSystem.getInstance()
+        val first = fs.obtain("account-presentation", "dev", "first-context")
+        val second = fs.obtain("account-presentation", "dev", "second-context")
+        try {
+            assertEquals("/account-presentation/dev", first.presentableUrl)
+            assertEquals(first.presentableUrl, second.presentableUrl)
+            assertFalse(first.path == second.path)
+            assertFalse(first.url == second.url)
+            assertSame(first, fs.findFileByPath(first.path))
+            assertSame(second, fs.findFileByPath(second.path))
+        } finally {
+            fs.forget(first)
+            fs.forget(second)
+        }
+    }
+
     fun `test auto refresh pauses for edits and resumes after undo despite unsaved flag`() {
         val snapshot = mapOf("A" to "old")
         val initialText = SecretsDocumentFormat.serialize(snapshot)

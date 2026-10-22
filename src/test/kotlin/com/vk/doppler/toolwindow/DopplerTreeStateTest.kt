@@ -2,6 +2,7 @@ package com.vk.doppler.toolwindow
 
 import com.vk.doppler.cli.DopplerConfig
 import com.vk.doppler.cli.DopplerProject
+import com.vk.doppler.DopplerIcons
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -20,6 +21,43 @@ import javax.swing.event.TreeModelEvent
 import javax.swing.event.TreeModelListener
 
 class DopplerTreeStateTest {
+    @Test
+    fun `project descriptions are escaped and preserve folder setup tooltips`() {
+        SwingUtilities.invokeAndWait {
+            val renderer = DopplerTreeCellRenderer { com.vk.doppler.cli.DopplerFolderSetup("backend", "dev") }
+            val tree = JTree()
+            val node = ProjectNode(DopplerProject("backend", "Backend", "A <service> & \"details\""))
+            renderer.getTreeCellRendererComponent(tree, node, false, false, true, 0, false)
+            assertTrue(renderer.getCharSequence(false).toString().contains("A <service>"))
+            assertTrue(renderer.toolTipText.contains("Configured for this project folder"))
+            assertTrue(renderer.toolTipText.contains("A &lt;service&gt; &amp; &quot;details&quot;"))
+            assertTrue(renderer.icon is com.intellij.ui.RowIcon)
+
+            renderer.getTreeCellRendererComponent(
+                tree, ProjectNode(DopplerProject("other", "Other", " ")), false, false, true, 0, false,
+            )
+            assertEquals(null, renderer.toolTipText)
+            assertSame(DopplerIcons.Project, renderer.icon)
+        }
+    }
+
+    @Test
+    fun `renderer handles environments selected configs and placeholders`() {
+        SwingUtilities.invokeAndWait {
+            val renderer = DopplerTreeCellRenderer()
+            val tree = JTree()
+            renderer.getTreeCellRendererComponent(tree, EnvironmentNode("production"), false, false, true, 0, false)
+            assertEquals("production", renderer.getCharSequence(false).toString())
+            assertSame(DopplerIcons.Environment, renderer.icon)
+            renderer.getTreeCellRendererComponent(tree, ConfigNode("backend", DopplerConfig("prod", "production")),
+                true, false, true, 0, false)
+            assertSame(DopplerIcons.ConfigSelected, renderer.icon)
+            renderer.getTreeCellRendererComponent(tree, LoadingNode(), false, false, true, 0, false)
+            assertEquals(LoadingNode().toString(), renderer.getCharSequence(false).toString())
+            assertEquals(null, renderer.toolTipText)
+        }
+    }
+
     @Test
     fun `folder bookmark follows setup and does not leak to other tree rows`() {
         SwingUtilities.invokeAndWait {

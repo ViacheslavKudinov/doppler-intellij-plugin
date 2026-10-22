@@ -8,6 +8,7 @@ import org.gradle.api.file.RegularFile
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 import org.jetbrains.intellij.platform.gradle.tasks.PublishPluginTask
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginSignatureTask
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 
 buildscript {
     repositories {
@@ -69,6 +70,7 @@ intellijPlatform {
     }
 
     pluginVerification {
+        failureLevel.add(VerifyPluginTask.FailureLevel.NON_EXTENDABLE_API_USAGES)
         ides {
             create(IntelliJPlatformType.IntellijIdea, "2025.3.6.1")
             create(IntelliJPlatformType.IntellijIdea, "2026.2.3")

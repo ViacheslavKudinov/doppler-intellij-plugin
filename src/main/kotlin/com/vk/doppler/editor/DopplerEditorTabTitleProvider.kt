@@ -17,7 +17,7 @@ class DopplerEditorTabTitleProvider : EditorTabTitleProvider {
             it is DopplerSecretsFile && it != config && it.configName == config.configName
         }
         val title = if (duplicate) {
-            "${config.configName} ${config.presentableUrl}"
+            "${config.configName} ${config.displayPath}"
         } else {
             config.configName
         }
@@ -27,4 +27,7 @@ class DopplerEditorTabTitleProvider : EditorTabTitleProvider {
             (document?.text?.let { it != serverText } ?: config.hasPendingSync)
         return if (editing) "$title *" else title
     }
+
+    override fun getEditorTabTooltipText(project: Project, virtualFile: VirtualFile): String? =
+        (virtualFile as? DopplerSecretsFile)?.displayPath
 }

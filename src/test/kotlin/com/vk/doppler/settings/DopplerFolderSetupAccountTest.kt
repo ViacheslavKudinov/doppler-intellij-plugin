@@ -7,6 +7,7 @@ import com.intellij.openapi.util.SystemInfo
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.util.ui.UIUtil
 import com.vk.doppler.cli.DopplerFolderSetup
+import com.vk.doppler.testutil.joinWithEventDispatch
 import org.junit.Assume.assumeFalse
 import java.nio.file.Files
 import java.nio.file.Path
@@ -193,12 +194,7 @@ class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
                 during()
             } finally {
                 Files.deleteIfExists(block)
-                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
-                while (thread.isAlive && System.nanoTime() < deadline) {
-                    UIUtil.dispatchAllInvocationEvents()
-                    thread.join(10)
-                }
-                assertFalse("Folder setup scheduling should return", thread.isAlive)
+                joinWithEventDispatch(thread, "Folder setup scheduling should return")
             }
             failure.get()?.let { throw AssertionError("Could not start folder setup loading", it) }
             awaitIdle()

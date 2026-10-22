@@ -2,6 +2,7 @@ package com.vk.doppler.settings
 
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.util.ui.UIUtil
@@ -10,9 +11,61 @@ import org.junit.Assume.assumeFalse
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JButton
 
 class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
+    fun `test folder setup loading shows a spinner while choices are disabled`() = withCli { fixture ->
+        assertFalse(fixture.setup.loadingIndicator.isVisible)
+        fixture.whileLoading("projects", fixture::startReload) {
+            assertTrue(fixture.setup.loadingIndicator.isVisible)
+            assertEquals("Loading Doppler folder setup…", fixture.setup.status.text)
+            assertFalse(fixture.setup.projectChoice.isEnabled)
+            assertFalse(fixture.setup.configChoice.isEnabled)
+        }
+        assertFalse(fixture.setup.loadingIndicator.isVisible)
+        assertFalse(fixture.setup.loadingIndicator.isRunning)
+        assertTrue(fixture.setup.projectChoice.isEnabled)
+        assertTrue(fixture.setup.configChoice.isEnabled)
+        assertEquals("dev", fixture.setup.configChoice.selectedItem)
+    }
+
+    fun `test config loading shows a spinner and clears it after success`() = withCli { fixture ->
+        fixture.reload()
+        fixture.whileLoading("configs", { fixture.setup.projectChoice.selectedItem = "parent" }) {
+            assertTrue(fixture.setup.loadingIndicator.isVisible)
+            assertEquals("Loading Doppler configs…", fixture.setup.status.text)
+            assertFalse(fixture.setup.projectChoice.isEnabled)
+            assertFalse(fixture.setup.configChoice.isEnabled)
+        }
+        assertFalse(fixture.setup.loadingIndicator.isVisible)
+        assertFalse(fixture.setup.loadingIndicator.isRunning)
+        assertTrue(fixture.setup.configChoice.isEnabled)
+        assertEquals(2, fixture.setup.configChoice.itemCount)
+        assertEquals("Choose a config, then apply settings.", fixture.setup.status.text)
+    }
+
+    fun `test loading failure hides the spinner and leaves an actionable error`() = withCli { fixture ->
+        fixture.reload()
+        Files.writeString(fixture.mode, "fail-configs")
+        fixture.whileLoading("configs", { fixture.setup.projectChoice.selectedItem = "parent" }) {
+            assertTrue(fixture.setup.loadingIndicator.isVisible)
+        }
+        assertFalse(fixture.setup.loadingIndicator.isVisible)
+        assertFalse(fixture.setup.loadingIndicator.isRunning)
+        assertTrue(fixture.setup.projectChoice.isEnabled)
+        assertTrue(fixture.setup.status.text.contains("Could not load Doppler setup"))
+        assertTrue(fixture.setup.status.text.contains("Reload"))
+    }
+
+    fun `test closing settings disposes a running spinner`() = withCli { fixture ->
+        fixture.setup.loadingIndicator.isVisible = true
+        fixture.setup.loadingIndicator.resume()
+        Disposer.dispose(fixture.setup)
+        assertFalse(fixture.setup.loadingIndicator.isVisible)
+        assertTrue(fixture.setup.loadingIndicator.isDisposed)
+    }
+
     fun `test set rejects switched account and requires explicit reload while preserving choices`() = withCli { fixture ->
         fixture.reload()
         fixture.setup.configChoice.selectedItem = "stg"
@@ -119,7 +172,37 @@ class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
         fun account(value: String) { Files.writeString(directory.resolve("account"), value) }
         fun calls(): List<String> = Files.readAllLines(directory.resolve("calls"))
         fun clearCalls() { Files.writeString(directory.resolve("calls"), "") }
+        fun startReload() { reloadButton.doClick() }
         fun reload() { reloadButton.doClick(); awaitIdle() }
+        fun whileLoading(command: String, begin: () -> Unit, during: () -> Unit) {
+            val block = directory.resolve("block-command")
+            Files.writeString(block, command)
+            clearCalls()
+            val failure = AtomicReference<Throwable>()
+            val thread = Thread({ begin() }, "Doppler folder setup loading test").apply {
+                uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> failure.set(error) }
+                start()
+            }
+            try {
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+                while (command !in calls() && System.nanoTime() < deadline) {
+                    UIUtil.dispatchAllInvocationEvents()
+                    Thread.sleep(10)
+                }
+                assertTrue("Expected CLI request for $command", command in calls())
+                during()
+            } finally {
+                Files.deleteIfExists(block)
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+                while (thread.isAlive && System.nanoTime() < deadline) {
+                    UIUtil.dispatchAllInvocationEvents()
+                    thread.join(10)
+                }
+                assertFalse("Folder setup scheduling should return", thread.isAlive)
+            }
+            failure.get()?.let { throw AssertionError("Could not start folder setup loading", it) }
+            awaitIdle()
+        }
         fun awaitIdle() {
             val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
             while (!reloadButton.isEnabled && System.nanoTime() < deadline) {
@@ -147,6 +230,7 @@ class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
         val calls = directory.resolve("calls")
         val mode = directory.resolve("mode")
         val state = directory.resolve("state")
+        val block = directory.resolve("block-command")
         Files.writeString(account, "alpha")
         Files.writeString(calls, "")
         Files.writeString(mode, "stable")
@@ -157,6 +241,17 @@ class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
               printf '%s %s\n' "${'$'}1" "${'$'}2" >> '$calls'
             else
               printf '%s\n' "${'$'}1" >> '$calls'
+            fi
+            if [ -f '$block' ] && [ "${'$'}(cat '$block')" = "${'$'}1" ]; then
+              attempts=0
+              while [ -f '$block' ] && [ "${'$'}attempts" -lt 1500 ]; do
+                attempts=${'$'}((attempts + 1))
+                sleep 0.01
+              done
+              if [ -f '$block' ]; then
+                printf '%s' '{"error":"Test request timed out"}'
+                exit 1
+              fi
             fi
             case "${'$'}1" in
               me)
@@ -172,6 +267,10 @@ class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
                 printf '%s' '[{"slug":"example"},{"slug":"parent"}]'
                 ;;
               configs)
+                if [ "${'$'}(cat '$mode')" = fail-configs ]; then
+                  printf '%s' '{"error":"Temporary config read failure"}'
+                  exit 1
+                fi
                 if [ "${'$'}(cat '$mode')" = switch-configs ]; then printf beta > '$account'; fi
                 printf '%s' '[{"name":"dev"},{"name":"stg"}]'
                 ;;

@@ -163,6 +163,8 @@ click **Reload** before applying folder setup changes. The plugin uses the Doppl
 so this setup also applies to CLI commands run from that folder. **Clear folder setup**
 removes this folder's override when applied; a parent folder's defaults may still apply.
 Use **Reload** to read changes made with `doppler setup` outside the IDE.
+While folder setup or config choices are loading, the fields are disabled and a spinner appears
+beside the loading message.
 The configured project and config are marked with a bookmark icon in the Doppler tree.
 Folder setup is checked in the background every 30 seconds so CLI changes update the bookmark
 and any unchanged Settings selections. Setup operations use the existing CLI call logging;

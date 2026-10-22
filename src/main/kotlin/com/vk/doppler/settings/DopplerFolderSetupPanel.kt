@@ -14,8 +14,10 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.util.ui.AsyncProcessIcon
 import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.cli.DopplerFolderSetup
 import com.vk.doppler.service.DopplerService
@@ -32,6 +34,10 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
     internal val projectChoice = ComboBox<String>()
     internal val configChoice = ComboBox<String>()
     internal val status = JLabel("Loading folder setup…")
+    internal val loadingIndicator = AsyncProcessIcon("Loading Doppler folder setup").apply {
+        suspend()
+        isVisible = false
+    }
     private val normalStatusForeground = status.foreground
     private var validationBalloon: Balloon? = null
     internal val validationMessageTimer = Timer(5_000) { clearValidationMessage() }.apply { isRepeats = false }
@@ -49,12 +55,13 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
     private var generation = 0
 
     init {
+        Disposer.register(this, loadingIndicator)
         add(panel {
             row("Folder:") { label(folder ?: "Open a project with a local folder to configure Doppler setup.") }
             row("Project:") { cell(projectChoice).align(AlignX.FILL) }
             row("Config:") { cell(configChoice).align(AlignX.FILL) }
             row { cell(reload); cell(clear) }
-            row { cell(status) }
+            row { cell(loadingIndicator); cell(status) }
             row {
                 comment("Choose the Doppler project and config for this folder, as with doppler setup. " +
                     "Changes are saved when you click Apply or OK. Clearing removes this folder's override; " +
@@ -107,6 +114,8 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
     override fun dispose() {
         disposed = true
         generation++
+        loadingIndicator.suspend()
+        loadingIndicator.isVisible = false
         clearValidationMessage()
     }
 
@@ -264,6 +273,8 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
         busy = true
         enableControls(false)
         status.text = title
+        loadingIndicator.isVisible = true
+        loadingIndicator.resume()
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, title, false) {
             private var result: T? = null
             override fun run(indicator: ProgressIndicator) { result = work() }
@@ -284,6 +295,8 @@ internal class DopplerFolderSetupPanel(private val project: Project) : JPanel(Bo
             override fun onFinished() {
                 if (!disposed && !project.isDisposed && request == generation) {
                     busy = false
+                    loadingIndicator.suspend()
+                    loadingIndicator.isVisible = false
                     enableControls(true)
                 }
             }

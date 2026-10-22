@@ -2,6 +2,13 @@
 
 # Doppler-plugin Changelog
 
+## [1.7.2](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.7.1...v1.7.2) (2026-10-22)
+
+
+### Maintenance
+
+* **deps:** update step-security/harden-runner action to v2.22.2 ([#80](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/80)) ([40974fe](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/40974fe06b66b8b3616d8b0b8c639f96ecfc4714))
+
 ## [1.7.1](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.7.0...v1.7.1) (2026-10-21)
 
 

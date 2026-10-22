@@ -22,6 +22,7 @@ import com.vk.doppler.service.DopplerStatusReport
 import com.vk.doppler.settings.DopplerFolderSetupListener
 import com.vk.doppler.settings.DopplerFolderSetupState
 import com.vk.doppler.settings.DopplerSettings
+import com.vk.doppler.testutil.joinWithEventDispatch
 import org.junit.Assume.assumeFalse
 import java.awt.event.MouseEvent
 import java.awt.image.BufferedImage
@@ -642,12 +643,7 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             test()
         } finally {
             cli.releaseConfigs()
-            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
-            while (thread.isAlive && System.nanoTime() < deadline) {
-                UIUtil.dispatchAllInvocationEvents()
-                thread.join(10)
-            }
-            assertFalse("Config task should finish", thread.isAlive)
+            joinWithEventDispatch(thread, "Config task should finish")
         }
         failure.get()?.let { throw AssertionError("Could not load configs", it) }
     }

@@ -516,10 +516,18 @@ maintainer may consider applying as a patch. See [CONTRIBUTING.md](CONTRIBUTING.
 
 ```
 src/main/kotlin/com/vk/doppler/
-├── cli/            Doppler CLI process execution, JSON parsing, binary discovery
-├── editor/         In-memory virtual file system, document format, two-way sync
+├── cli/            Doppler CLI process execution, JSON parsing, binary discovery, name transformation
+├── completion/     Secret reference completion, name index and loading
+├── editor/         Virtual file system, document format, two-way sync, editor tab presentation
+├── injection/      Run configuration secret injection (Java, Gradle, Node.js, Python, Docker)
 ├── notifications/  Balloon notifications
 ├── service/        Application-level facade and the secret diffing logic
-├── settings/       Persisted settings and the settings UI
-└── toolwindow/     Projects / environments / configs tree
+├── settings/       Persisted settings, folder setup, injection consent, and the settings UI
+└── toolwindow/     Projects / environments / configs tree and CLI installer options
+
+src/main/resources/
+├── icons/          Tool window, editor tab, and tree icons
+└── META-INF/       plugin.xml and optional-dependency configs (doppler-java/gradle/node/python/docker.xml)
+
+src/test/kotlin/    Unit tests mirroring the main package layout, plus testutil/
 ```

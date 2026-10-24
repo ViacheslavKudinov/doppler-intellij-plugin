@@ -3,6 +3,7 @@ package com.vk.doppler.examples;
 import java.util.Map;
 
 public final class InjectionExample {
+    @SuppressWarnings("java:S106")
     public static void main(String[] arguments) {
         String mode = arguments.length == 0 ? "plain" : arguments[0];
         if (arguments.length > 1 || !(mode.equals("plain") || mode.equals("custom"))) {

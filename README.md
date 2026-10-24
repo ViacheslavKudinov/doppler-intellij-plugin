@@ -319,6 +319,10 @@ disable the interval in **Settings | Tools | Doppler**.
 
 On save the plugin computes a **minimal diff** against the last known server state and issues only the
 required writes — changed and added keys via `doppler secrets set`, removed keys via `doppler secrets delete`.
+All replacement writes must succeed before any old names are deleted. A rename at a secret limit
+therefore requires temporary headroom: increase the limit or free unused capacity in Doppler, then
+retry. A rejected replacement leaves the original names intact and your edits available; the plugin
+never retries by deleting originals first. Earlier successful writes may already have been applied.
 If the document is not valid YAML the save is rejected and nothing is sent, so a malformed buffer can never
 wipe a config. To discard local edits, click the config in the tree again to re-fetch it.
 Malformed CLI snapshots are rejected instead of being treated as empty configs.

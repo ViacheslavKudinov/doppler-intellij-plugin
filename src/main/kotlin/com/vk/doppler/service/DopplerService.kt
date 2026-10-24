@@ -285,7 +285,18 @@ internal fun applyChangesWithOptimisticLock(
     }
     var committedSnapshot = expectedSnapshot
     for ((name, value) in changes.upserted) {
-        setSecret(name, value)
+        try {
+            setSecret(name, value)
+        } catch (error: DopplerCliException) {
+            if (error.kind != DopplerCliException.Kind.GENERIC || name in expectedSnapshot || changes.removed.isEmpty()) {
+                throw error
+            }
+            throw DopplerCliException(
+                "Could not create a replacement secret. No secrets were deleted; earlier writes may have succeeded. " +
+                    "Your edits were kept. Check the secret name, permissions, and available capacity in Doppler before retrying. " +
+                    "Renaming at a secret limit requires temporary headroom; increase the limit or free unused capacity in Doppler.",
+            )
+        }
         committedSnapshot = SecretChanges(mapOf(name to value), emptySet()).applyTo(committedSnapshot)
         onSnapshotAdvanced(committedSnapshot)
     }

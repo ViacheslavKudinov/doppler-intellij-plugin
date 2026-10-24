@@ -2,6 +2,10 @@ package com.vk.doppler.service
 
 import com.vk.doppler.cli.DopplerCliException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
@@ -219,6 +223,75 @@ class DopplerOptimisticLockTest {
         }
         assertEquals(mapOf("FIRST" to "synthetic-first", "SECOND" to "synthetic-second", "NEW_FIRST" to "synthetic-first"), remote)
         assertEquals(remote, baseline)
+    }
+
+    @Test
+    fun `secret limit rejection preserves original and retry succeeds with headroom`() {
+        val remote = linkedMapOf<String, String?>("OLD_NAME" to "synthetic-value")
+        var baseline: Map<String, String?> = remote.toMap()
+        var secretLimit = 1
+        var deletionCalls = 0
+        var snapshotAdvances = 0
+
+        fun save() {
+            applyChangesWithOptimisticLock(
+                expectedSnapshot = baseline,
+                changes = SecretChanges(mapOf("NEW_NAME" to "synthetic-value"), setOf("OLD_NAME")),
+                checkAuthContext = {},
+                loadSnapshot = { remote.toMap() },
+                deleteSecrets = { names ->
+                    deletionCalls++
+                    names.forEach(remote::remove)
+                },
+                setSecret = { name, value ->
+                    if (name !in remote && remote.size >= secretLimit) {
+                        throw DopplerCliException("Synthetic secret limit rejection: $value")
+                    }
+                    remote[name] = value
+                },
+                onSnapshotAdvanced = {
+                    snapshotAdvances++
+                    baseline = it
+                },
+            )
+        }
+
+        val error = expectConflict { save() }
+        assertEquals(DopplerCliException.Kind.GENERIC, error.kind)
+        assertTrue(error.message.orEmpty().contains("No secrets were deleted"))
+        assertTrue(error.message.orEmpty().contains("temporary headroom"))
+        assertFalse(error.message.orEmpty().contains("synthetic-value"))
+        assertNull(error.cause)
+        assertEquals(mapOf("OLD_NAME" to "synthetic-value"), remote)
+        assertEquals(remote, baseline)
+        assertEquals(0, deletionCalls)
+        assertEquals(0, snapshotAdvances)
+
+        secretLimit = 2
+        save()
+        assertEquals(mapOf("NEW_NAME" to "synthetic-value"), remote)
+        assertEquals(remote, baseline)
+        assertEquals(1, deletionCalls)
+        assertEquals(2, snapshotAdvances)
+    }
+
+    @Test
+    fun `replacement authentication failures retain their original kind`() {
+        for (kind in listOf(DopplerCliException.Kind.NOT_AUTHENTICATED, DopplerCliException.Kind.AUTH_CONTEXT_CHANGED)) {
+            val original = DopplerCliException("Synthetic authentication failure", kind)
+            val error = expectConflict {
+                applyChangesWithOptimisticLock(
+                    expectedSnapshot = mapOf("OLD_NAME" to "synthetic-value"),
+                    changes = SecretChanges(mapOf("NEW_NAME" to "synthetic-value"), setOf("OLD_NAME")),
+                    checkAuthContext = {},
+                    loadSnapshot = { mapOf("OLD_NAME" to "synthetic-value") },
+                    deleteSecrets = { fail("Must not delete after authentication failure") },
+                    setSecret = { _, _ -> throw original },
+                    onSnapshotAdvanced = { fail("A rejected write must not advance the baseline") },
+                )
+            }
+            assertSame(original, error)
+        }
     }
 
     @Test

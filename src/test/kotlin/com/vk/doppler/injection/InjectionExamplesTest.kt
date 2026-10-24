@@ -23,7 +23,7 @@ class InjectionExamplesTest : TestCase() {
         val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
         val source = Path.of("examples", "java-maven", "src", "main", "java", "com", "vk", "doppler", "examples", "InjectionExample.java")
             .toAbsolutePath().toString()
-        val builder = ProcessBuilder(listOf(java, source) + arguments).redirectErrorStream(true)
+        val builder = ProcessBuilder(listOf(java, source) + arguments)
         builder.environment().apply {
             listOf("EXAMPLE_MESSAGE", "EXAMPLE_NUMBER", "APP_MESSAGE", "APP_NUMBER").forEach { remove(it) }
             putAll(variables)
@@ -32,9 +32,19 @@ class InjectionExamplesTest : TestCase() {
         try {
             assertTrue("Example timed out", process.waitFor(30, TimeUnit.SECONDS))
             val output = process.inputStream.bufferedReader().use { it.readText() }
+            val error = process.errorStream.bufferedReader().use { it.readText() }
             assertEquals(expectedExit, process.exitValue())
-            assertTrue(output.trim().startsWith(if (expectedExit == 0) "PASS:" else "FAIL:"))
-            assertFalse(output.contains("unexpected-test-marker"))
+            if (expectedExit == 0) {
+                assertTrue(output.trim().startsWith("PASS:"))
+                assertEquals("", error)
+            } else {
+                assertEquals("", output)
+                assertTrue(error.trim().startsWith("FAIL:"))
+            }
+            variables.values.filter { it.isNotEmpty() }.forEach { value ->
+                assertFalse(output.contains(value))
+                assertFalse(error.contains(value))
+            }
         } finally {
             process.destroyForcibly()
         }

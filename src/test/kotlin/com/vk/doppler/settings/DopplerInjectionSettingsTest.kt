@@ -183,9 +183,10 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
             }
             val scrollPane = javax.swing.SwingUtilities.getAncestorOfClass(javax.swing.JScrollPane::class.java, table) as javax.swing.JScrollPane
             val decorated = scrollPane.parent
+            assertEquals("The mapping area should show more rows by default", 320, decorated.preferredSize.height)
             val layout = decorated.layout as java.awt.BorderLayout
-            assertNotNull("The add/remove toolbar belongs below the table header and rows", layout.getLayoutComponent(java.awt.BorderLayout.SOUTH))
-            assertNull(layout.getLayoutComponent(java.awt.BorderLayout.NORTH))
+            assertNotNull("The add/remove toolbar belongs above the table header and rows", layout.getLayoutComponent(java.awt.BorderLayout.NORTH))
+            assertNull(layout.getLayoutComponent(java.awt.BorderLayout.SOUTH))
             assertFalse(isShown(table, panel))
 
             transformation.selectedItem = DopplerNameTransformer.CUSTOM

@@ -164,7 +164,7 @@ class DopplerInjectionConfigurable(private val project: Project) : BoundConfigur
             override fun editingCanceled(event: ChangeEvent) = refreshPendingNames()
         })
         val decorated = ToolbarDecorator.createDecorator(table)
-            .setToolbarPosition(ActionToolbarPosition.BOTTOM)
+            .setToolbarPosition(ActionToolbarPosition.TOP)
             .disableUpDownActions()
             .setAddActionUpdater { canAddMapping() }
             .setAddAction {
@@ -179,7 +179,7 @@ class DopplerInjectionConfigurable(private val project: Project) : BoundConfigur
                 table.selectedRows.sortedDescending().forEach(model::removeRow)
             }
             .createPanel()
-            .apply { preferredSize = Dimension(420, 160) }
+            .apply { preferredSize = Dimension(420, 320) }
 
         lateinit var mappingRow: Row
         val dialog = panel {

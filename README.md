@@ -109,9 +109,10 @@ both `com.intellij.modules.platform` and the **Terminal plugin** (`org.jetbrains
 which must be installed and enabled. Other JetBrains IDEs must satisfy both dependencies and the
 minimum platform build requirement; compatibility is not guaranteed solely by using the IntelliJ Platform.
 
-This is achieved by compiling against the *oldest* supported release and leaving `untilBuild` unset —
-plugin binaries are forward-compatible, not backward-compatible, so the lowest target gives the widest
-range and new IDE releases do not require a re-publish.
+The plugin is compiled against the *oldest* supported release and leaves `untilBuild` unset so newer
+IDE builds can load it. This does not guarantee compatibility with every future IDE release:
+platform API changes may require a plugin update. Compatibility must still be verified against
+the supported IDE versions.
 
 Compatibility is checked with the JetBrains Plugin Verifier:
 
@@ -261,8 +262,10 @@ The guide covers IDE setup, synthetic test values, and cleanup without printing 
   the editor and excluded from writes.
 - YAML syntax errors report only a location, never document excerpts that could expose secret values
   in notifications or IDE diagnostic logs.
-- Secret names are validated (letters, digits, underscores; not starting with a digit) before they
-  reach the CLI, so a key can never be interpreted as a CLI flag or `KEY=value` argument.
+- The plugin accepts secret names containing ASCII letters, digits, `_`, `/`, `:`, `.`, and `-`,
+  including leading digits. Doppler's workplace naming rules still apply. Names are passed after
+  the CLI's `--` separator so they cannot be interpreted as flags; `=` is rejected to prevent
+  a name from becoming a `KEY=value` argument.
 - Notification text is HTML-escaped, so project, config and CLI-provided text cannot inject markup.
 - When the last editor tab for a config closes, its secrets are dropped from memory.
 
@@ -342,7 +345,7 @@ The project uses the [IntelliJ Platform Gradle Plugin](https://plugins.jetbrains
 
 ```bash
 ./gradlew test         # run the test suite
-./gradlew buildPlugin  # produce build/distributions/doppler-plugin-1.7.0.zip
+./gradlew buildPlugin  # produce build/distributions/doppler-plugin-<version>.zip
 ./gradlew cyclonedxBom # produce a full Gradle dependency SBOM in build/distributions
 ./gradlew verifyPlugin # JetBrains Plugin Verifier across the supported IDE range
 ./gradlew runIde       # launch a sandbox IDE with the plugin installed

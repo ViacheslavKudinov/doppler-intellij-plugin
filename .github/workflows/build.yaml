@@ -136,3 +136,12 @@ jobs:
       # Run Verify Plugin task and IntelliJ Plugin Verifier tool
       - name: Run Plugin Verification tasks
         run: ./gradlew verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+
+      - name: Upload verification problems report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plugin-verification-problems
+          path: build/reports/problems/problems-report.html
+          retention-days: 1
+          if-no-files-found: warn

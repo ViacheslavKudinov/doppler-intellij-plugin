@@ -27,7 +27,4 @@ class DopplerEditorTabTitleProvider : EditorTabTitleProvider {
             (document?.text?.let { it != serverText } ?: config.hasPendingSync)
         return if (editing) "$title *" else title
     }
-
-    override fun getEditorTabTooltipText(project: Project, virtualFile: VirtualFile): String? =
-        (virtualFile as? DopplerSecretsFile)?.displayPath
 }

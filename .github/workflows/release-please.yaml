@@ -111,12 +111,14 @@ jobs:
     outputs:
       zip: ${{ steps.assets.outputs.zip }}
       sbom: ${{ steps.assets.outputs.sbom }}
+      grype_report: ${{ steps.grype-report-upload.outputs.artifact-id }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: block
           allowed-endpoints: >
+            api.github.com:443
             api.jetbrains.ai:443
             artifacts-caching-proxy.aws.intellij.net:443
             cache-redirector.jetbrains.com:443
@@ -130,6 +132,7 @@ jobs:
             downloads.gradle.org:443
             downloads.marketplace.jetbrains.com:443
             github.com:443
+            grype.anchore.io:443
             jb.gg:443
             plugins-artifacts.gradle.org:443
             plugins.gradle.org:443
@@ -160,6 +163,40 @@ jobs:
 
       - name: Build and verify plugin and SBOM
         run: ./gradlew buildPlugin cyclonedxBom check verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+
+      - name: Locate generated SBOM
+        id: sbom
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          sboms=(build/distributions/*.cdx.json)
+          if [[ ${#sboms[@]} -ne 1 ]]; then
+            echo "::error::Expected exactly one CycloneDX SBOM, found ${#sboms[@]}"
+            exit 1
+          fi
+          echo "path=${sboms[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Scan generated SBOM with Grype
+        continue-on-error: true
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          sbom: ${{ steps.sbom.outputs.path }}
+          fail-build: false
+          severity-cutoff: high
+          output-format: sarif
+          output-file: ${{ runner.temp }}/grype-results.sarif
+
+      - name: Upload Grype scan report
+        id: grype-report-upload
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: grype-sbom-scan
+          path: ${{ runner.temp }}/grype-results.sarif
+          retention-days: 1
+          if-no-files-found: warn
 
       - name: Sign plugin and export public certificate
         env:
@@ -219,6 +256,37 @@ jobs:
           path: release-assets
           if-no-files-found: error
           retention-days: 1
+
+  upload-grype-sarif:
+    name: Upload Grype SARIF
+    needs: [ release-please, build-assets ]
+    if: ${{ !cancelled() && needs.build-assets.outputs.grype_report != '' }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - name: Download Grype SARIF
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: grype-sbom-scan
+          path: ${{ runner.temp }}/grype-sarif
+
+      - name: Upload Grype SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: ${{ runner.temp }}/grype-sarif/grype-results.sarif
+          checkout_path: ${{ github.workspace }}
+          category: grype-sbom
+          ref: refs/heads/main
+          sha: ${{ needs.release-please.outputs.sha }}
 
   publish-release:
     name: Attest assets and publish release

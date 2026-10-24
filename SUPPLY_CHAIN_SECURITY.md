@@ -57,6 +57,15 @@ The SBOM is generated from dependency information. It is not a guarantee of a co
 of your IDE, operating system, Doppler CLI, containers, or other software you run. Generating it
 also does not itself establish that its components are free of vulnerabilities.
 
+The release workflow scans the generated SBOM with the pinned `anchore/scan-action`
+before signing the plugin. The scan is informational: vulnerability findings and
+scanner errors do not block signing or publishing. Other release checks remain
+blocking. The SARIF scan report is uploaded to GitHub code scanning by a separate,
+non-blocking job and retained as the `grype-sbom-scan` workflow artifact for one
+day, including when the scan reports vulnerabilities. The build job remains
+read-only; only the report-upload job receives `security-events: write`.
+If scanning fails before producing a report, there is no report to upload.
+
 ### Scan a published SBOM for vulnerabilities with Grype
 
 [Grype](https://github.com/anchore/grype) scans an existing SBOM for known vulnerabilities.

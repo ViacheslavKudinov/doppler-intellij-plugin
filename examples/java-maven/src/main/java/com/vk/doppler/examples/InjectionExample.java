@@ -1,3 +1,5 @@
+package com.vk.doppler.examples;
+
 import java.util.Map;
 
 public final class InjectionExample {

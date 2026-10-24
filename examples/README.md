@@ -38,10 +38,11 @@ explicit entries take precedence over Doppler injection.
 ## Java And Maven
 
 Open `java-maven/pom.xml` as a Maven project and select JDK 17 or newer.
-Both launch paths use the same [main class](java-maven/src/main/java/InjectionExample.java).
+Both launch paths use the same [main class](java-maven/src/main/java/com/vk/doppler/examples/InjectionExample.java).
 
 - **Java Application:** Run or Debug `InjectionExample.main` using the editor gutter, or create
-  an **Application** configuration with main class `InjectionExample` and the example module's classpath.
+  an **Application** configuration with main class `com.vk.doppler.examples.InjectionExample`
+  and the example module's classpath.
 - **Maven:** create a **Maven** Run/Debug configuration with working directory `java-maven`
   and command line `compile exec:java`. Injection reaches Maven's JVM, which runs the verifier.
 

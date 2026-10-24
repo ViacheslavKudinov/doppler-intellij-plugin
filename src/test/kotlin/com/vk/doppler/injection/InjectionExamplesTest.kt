@@ -21,7 +21,7 @@ class InjectionExamplesTest : TestCase() {
 
     private fun assertExample(arguments: List<String>, variables: Map<String, String>, expectedExit: Int) {
         val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
-        val source = Path.of("examples", "java-maven", "src", "main", "java", "InjectionExample.java")
+        val source = Path.of("examples", "java-maven", "src", "main", "java", "com", "vk", "doppler", "examples", "InjectionExample.java")
             .toAbsolutePath().toString()
         val builder = ProcessBuilder(listOf(java, source) + arguments).redirectErrorStream(true)
         builder.environment().apply {

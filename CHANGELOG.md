@@ -2,6 +2,23 @@
 
 # Doppler-plugin Changelog
 
+## [1.9.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.8.0...v1.9.0) (2026-10-24)
+
+
+### Features
+
+* enhance release workflow with SBOM scanning and Grype report upload ([#92](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/92)) ([0f1971e](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/0f1971ef426b942a33908562227446a59d30fde7))
+
+
+### Bug Fixes
+
+* reposition toolbar above table and increase mapping area height in settings panel ([#91](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/91)) ([12d4d0b](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/12d4d0bd0a020bb8c642c00f14daa4208360304f))
+
+
+### Maintenance
+
+* **workflows:** update CodeQL permissions to include security-events read access ([#89](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/89)) ([355ef9c](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/355ef9c084c47277538225a062c2ff1acef17445))
+
 ## [1.8.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.7.1...v1.8.0) (2026-10-24)
 
 

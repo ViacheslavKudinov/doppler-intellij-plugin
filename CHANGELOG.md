@@ -2,6 +2,25 @@
 
 # Doppler-plugin Changelog
 
+## [1.8.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.7.1...v1.8.0) (2026-10-24)
+
+
+### Features
+
+* Add injection examples for various integrations and enhance secret name mapping functionality ([#87](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/87)) ([4e149e2](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/4e149e20cd309c8f10382e0c02016411e00c5ba7))
+
+
+### Documentation
+
+* update README.md to enhance directory structure descriptions and add new sections ([#86](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/86)) ([59b0166](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/59b0166200ab80c9a6751558bedd74c7845f3619))
+
+
+### Maintenance
+
+* **deps:** update github/codeql-action action to v4.39.1 ([#84](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/84)) ([1807bd3](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/1807bd3dc4114755c1fda6d0e4ac67348f772676))
+* **deps:** update step-security/harden-runner action to v2.22.2 ([#80](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/80)) ([40974fe](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/40974fe06b66b8b3616d8b0b8c639f96ecfc4714))
+* **deps:** update zizmorcore/zizmor-action action to v0.8.0 ([#85](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/85)) ([9924f66](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/9924f6699fdf54ee31713b3e5a7d5063c4508e6c))
+
 ## [1.7.1](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.7.0...v1.7.1) (2026-10-21)
 
 

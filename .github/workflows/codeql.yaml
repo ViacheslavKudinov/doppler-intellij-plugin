@@ -28,6 +28,7 @@ jobs:
       # PR-controlled Gradle code runs here; this job must have no repository write permissions.
       contents: read
       actions: read
+      security-events: read
 
     strategy:
       fail-fast: false

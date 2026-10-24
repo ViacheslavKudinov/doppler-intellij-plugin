@@ -362,8 +362,8 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
         assertEquals("dev /tab-backend/development/dev", provider.getEditorTabTitle(project, first))
         assertEquals("dev /tab-frontend/dev/dev", provider.getEditorTabTitle(project, second))
-        assertEquals("/tab-backend/development/dev", provider.getEditorTabTooltipText(project, first))
-        assertEquals("/tab-frontend/dev/dev", provider.getEditorTabTooltipText(project, second))
+        assertEquals("/tab-backend/development/dev", first.presentableUrl)
+        assertEquals("/tab-frontend/dev/dev", second.presentableUrl)
 
         manager.closeFile(second)
         assertEquals("dev", provider.getEditorTabTitle(project, first))
@@ -381,8 +381,8 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         val provider = DopplerEditorTabTitleProvider()
         val title = provider.getEditorTabTitle(project, first)
         assertEquals("stg /tab-known/stg", title)
-        assertEquals("/tab-known/stg", provider.getEditorTabTooltipText(project, first))
-        assertNull(provider.getEditorTabTooltipText(project, LightVirtualFile("ordinary.yaml")))
+        assertEquals("/tab-known/stg", first.presentableUrl)
+        assertNull(provider.getEditorTabTitle(project, LightVirtualFile("ordinary.yaml")))
         manager.closeFile(second)
         manager.closeFile(first)
     }

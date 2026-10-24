@@ -80,6 +80,92 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         assertTrue(projectNodes(panel).single().loaded)
     }
 
+    fun `test retry status link reloads projects after a failed startup`() = withPanel("project-failure") { panel, cli ->
+        assertTrue(statusText(panel).contains("Temporary project read failure"))
+        val status = field("statusPanel").get(panel) as com.intellij.ui.components.JBPanelWithEmptyText
+        cli.setMode("ready")
+        cli.clearCalls()
+
+        clickStatusLink(panel, "Retry")
+        awaitRefresh(panel)
+        awaitConfigLoads(panel)
+
+        assertEquals(listOf("example"), projectSlugs(panel))
+        assertTrue(projectNodes(panel).single().loaded)
+        assertEquals(DopplerFolderSetup("example", "dev"), folderSetupState().current)
+        assertEquals(1, cli.callCount("me"))
+        assertEquals(1, cli.callCount("projects"))
+        assertFalse(status.isVisible)
+    }
+
+    fun `test authentication loss invalidates cached files and recovery reloads the tree`() = withPanel { panel, cli ->
+        val context = requireNotNull(field("authContextId").get(panel) as? String)
+        val fileSystem = DopplerFileSystem.getInstance()
+        val cached = fileSystem.obtain("cached", "dev", context)
+        cli.setMode("not-authenticated")
+        cli.clearCalls()
+
+        panel.refresh(CliOperation.TREE_WINDOW_FOCUS)
+        awaitRefresh(panel)
+
+        assertNull(field("authContextId").get(panel))
+        assertNull(fileSystem.findFileByPath(cached.path))
+        assertEquals(DopplerFolderSetup(), folderSetupState().current)
+        assertTrue(statusText(panel).contains("Not logged in to Doppler."))
+        assertEquals(listOf("me"), cli.calls())
+
+        cli.setMode("ready")
+        cli.clearCalls()
+        panel.refresh(CliOperation.TREE_WINDOW_FOCUS)
+        awaitRefresh(panel)
+        awaitConfigLoads(panel)
+
+        assertEquals(context, field("authContextId").get(panel))
+        assertEquals(1, cli.callCount("projects"))
+        assertEquals(1, cli.callCount("configure"))
+        assertEquals(1, cli.callCount("configs"))
+        assertEquals(DopplerFolderSetup("example", "dev"), folderSetupState().current)
+    }
+
+    fun `test project read failure keeps tree nodes but forces a full reload on focus`() = withPanel { panel, cli ->
+        val node = projectNodes(panel).single()
+        cli.setMode("project-failure")
+        panel.refresh()
+        awaitRefresh(panel)
+
+        assertSame(node, projectNodes(panel).single())
+        assertNull(field("authContextId").get(panel))
+        assertTrue(statusText(panel).contains("Temporary project read failure"))
+        assertFalse(node.loading)
+
+        cli.setMode("ready")
+        cli.clearCalls()
+        panel.refresh(CliOperation.TREE_PANEL_FOCUS)
+        awaitRefresh(panel)
+        awaitConfigLoads(panel)
+
+        assertSame(node, projectNodes(panel).single())
+        assertTrue(node.loaded)
+        assertEquals(1, cli.callCount("projects"))
+        assertEquals(1, cli.callCount("configs"))
+    }
+
+    fun `test disposal removes both focus listeners and invalidates pending generations`() = withPanel { panel, _ ->
+        val manager = field("focusManager").get(panel) as java.awt.KeyboardFocusManager
+        val listener = field("focusListener").get(panel) as java.beans.PropertyChangeListener
+        val refreshGeneration = field("refreshGeneration").getInt(panel)
+        val configGeneration = field("configGeneration").getInt(panel)
+        assertTrue(manager.getPropertyChangeListeners("focusOwner").contains(listener))
+        assertTrue(manager.getPropertyChangeListeners("focusedWindow").contains(listener))
+
+        Disposer.dispose(panel)
+
+        assertFalse(manager.getPropertyChangeListeners("focusOwner").contains(listener))
+        assertFalse(manager.getPropertyChangeListeners("focusedWindow").contains(listener))
+        assertEquals(refreshGeneration + 1, field("refreshGeneration").getInt(panel))
+        assertEquals(configGeneration + 1, field("configGeneration").getInt(panel))
+    }
+
     fun `test refresh ignores duplicate requests and requests after disposal`() = withPanel { panel, cli ->
         cli.clearCalls()
         val generation = field("refreshGeneration").getInt(panel)
@@ -669,9 +755,12 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         val index = rows.indexOfFirst { it.getCharSequence(false).toString() == label }
         assertTrue("Expected status link: $label", index >= 0)
         val point = text.pointBelow
+        val gap = if (rows.size > 1) {
+            (text.preferredSize.height - rows.sumOf { it.preferredSize.height }) / (rows.size - 1)
+        } else 0
         val y = point.y - text.preferredSize.height +
-            rows.take(index).sumOf { it.preferredSize.height } + rows[index].preferredSize.height / 2
-        val x = point.x + rows[index].preferredSize.width / 2
+            rows.take(index).sumOf { it.preferredSize.height } + index * gap + rows[index].preferredSize.height / 2
+        val x = point.x + if (text.isCenterAlignText) text.preferredSize.width / 2 else rows[index].preferredSize.width / 2
         val pressed = MouseEvent(status, MouseEvent.MOUSE_PRESSED, 1, 0, x, y, 1, false, MouseEvent.BUTTON1)
         val released = MouseEvent(status, MouseEvent.MOUSE_RELEASED, 2, 0, x, y, 1, false, MouseEvent.BUTTON1)
         status.mouseListeners.forEach { it.mousePressed(pressed) }

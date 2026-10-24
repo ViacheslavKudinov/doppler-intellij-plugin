@@ -1,0 +1,9 @@
+{
+  "name": "doppler-injection-example",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "verify": "node verify.cjs",
+    "verify:custom": "node verify.cjs custom"
+  }
+}

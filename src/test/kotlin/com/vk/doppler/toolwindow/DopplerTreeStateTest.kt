@@ -132,11 +132,62 @@ class DopplerTreeStateTest {
             clickLabel(tree, listener, configPath, 1)
             clickLabel(tree, listener, configPath, 2)
             assertEquals(1, opens)
+            val configBounds = requireNotNull(tree.getPathBounds(configPath))
+            listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
+                configBounds.x - 1, configBounds.y + configBounds.height / 2, 1, false, MouseEvent.BUTTON1))
+            assertEquals("Indentation clicks must not open a config", 1, opens)
             val projectPath = TreePath(project.path)
             val bounds = requireNotNull(tree.getPathBounds(projectPath))
             listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
-                bounds.x - 1, bounds.y + bounds.height / 2, 1, false, MouseEvent.BUTTON1))
+                bounds.x + bounds.width + 1, bounds.y + bounds.height / 2, 1, false, MouseEvent.BUTTON1))
             assertTrue(tree.isExpanded(projectPath))
+        }
+    }
+
+    @Test
+    fun `clicks in the gap before branch icons toggle expansion`() {
+        SwingUtilities.invokeAndWait {
+            val root = DefaultMutableTreeNode()
+            val project = projectNode()
+            root.add(project)
+            val tree = JTree(root).apply {
+                isRootVisible = false
+                showsRootHandles = true
+                setUI(javax.swing.plaf.basic.BasicTreeUI())
+                (ui as javax.swing.plaf.basic.BasicTreeUI).apply {
+                    leftChildIndent = 12
+                    rightChildIndent = 18
+                    expandedIcon = javax.swing.ImageIcon(java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_ARGB))
+                    collapsedIcon = expandedIcon
+                }
+                setSize(400, 300)
+            }
+            val listener = DopplerTreeClickListener(tree) { error("Branch clicks must not open configs") }
+            val projectPath = TreePath(project.path)
+            tree.expandPath(projectPath)
+            val environmentPath = TreePath((project.getChildAt(0) as EnvironmentNode).path)
+            for (path in listOf(environmentPath, projectPath)) {
+                tree.expandPath(path)
+                val control = requireNotNull(com.intellij.util.ui.tree.TreeUtil.getExpandControlRange(tree, path))
+                val initialBounds = requireNotNull(tree.getPathBounds(path))
+                listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
+                    (control.from + control.to) / 2, initialBounds.y + initialBounds.height / 2, 1, false, MouseEvent.BUTTON1))
+                assertTrue("The platform handles arrow clicks; the listener must not toggle again", tree.isExpanded(path))
+                val gap = (control.to + 1) until initialBounds.x
+                assertFalse("The regression must exercise the arrow-to-icon gap", gap.isEmpty())
+                for (horizontal in gap) {
+                    listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
+                        horizontal, initialBounds.y + initialBounds.height / 2, 1, false, MouseEvent.BUTTON3))
+                    assertTrue("Right clicks must not toggle branches", tree.isExpanded(path))
+                    repeat(2) { index ->
+                        val bounds = requireNotNull(tree.getPathBounds(path))
+                        listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
+                            horizontal, bounds.y + bounds.height / 2, 1, false, MouseEvent.BUTTON1))
+                        assertEquals(index == 1, tree.isExpanded(path))
+                        assertEquals(path, tree.selectionPath)
+                    }
+                }
+            }
         }
     }
 

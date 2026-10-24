@@ -6,3 +6,4 @@ build
 /bin/
 .vscode/
 .DS_Store
+/examples/java-maven/target/

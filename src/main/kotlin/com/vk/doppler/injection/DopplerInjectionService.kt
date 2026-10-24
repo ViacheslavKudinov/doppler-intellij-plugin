@@ -9,6 +9,7 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.DopplerCliException
+import com.vk.doppler.cli.DopplerNameTransformer
 import com.vk.doppler.service.DopplerService
 import com.vk.doppler.settings.DopplerInjectionSettings
 
@@ -65,11 +66,30 @@ class DopplerInjectionService(private val project: Project) {
             if (project.isDisposed || !settings.enabled || !TrustedProjects.isProjectTrusted(project)) {
                 return existing
             }
-            return mergeInjectionEnvironment(existing, secrets)
+            val named = applyConfiguredNameMapping(secrets, settings)
+            return mergeInjectionEnvironment(existing, named)
         } catch (_: DopplerCliException) {
             // CLI output and arbitrary causes can contain secrets; do not attach them to an IDE exception.
             throw ExecutionException("Could not load the Doppler environment. Check CLI login and Settings | Tools | Doppler | Folder Setup.")
         }
+    }
+
+    private fun applyConfiguredNameMapping(
+        secrets: Map<String, String>,
+        settings: DopplerInjectionSettings,
+    ): Map<String, String> {
+        if (settings.nameTransformer != DopplerNameTransformer.CUSTOM) {
+            return secrets
+        }
+        val mappings = settings.customMappings
+        if (validateSecretNameMappings(mappings) != null) {
+            throw ExecutionException("Custom Doppler name mappings are invalid. Check Settings | Tools | Doppler | Run and Debug.")
+        }
+        val named = applySecretNameMapping(secrets, mappings)
+        if (named.size != secrets.size) {
+            throw ExecutionException("Custom Doppler name mappings conflict with existing secret names. Choose unique new names in Settings | Tools | Doppler | Run and Debug.")
+        }
+        return named
     }
 
     companion object {

@@ -217,8 +217,7 @@ class DopplerService {
     }
 
     /**
-     * Applies a diff to a config. Deletions run first so that a rename (delete + add)
-     * cannot transiently exceed any per-config limits.
+    * Applies a diff to a config. Replacements must succeed before old names are deleted.
      */
     fun applyChanges(
         authContextId: String,
@@ -227,6 +226,7 @@ class DopplerService {
         expectedSnapshot: Map<String, String?>,
         changes: SecretChanges,
         environment: String? = null,
+        onSnapshotAdvanced: (Map<String, String?>) -> Unit = {},
     ) {
         val cli = cli(CliOperation.SAVE, CliLogContext(projectSlug, configName, environment))
         applyChangesWithOptimisticLock(
@@ -242,6 +242,7 @@ class DopplerService {
             setSecret = { name, value ->
                 cli.setSecret(projectSlug, configName, name, value)
             },
+            onSnapshotAdvanced = onSnapshotAdvanced,
         )
     }
 
@@ -273,6 +274,7 @@ internal fun applyChangesWithOptimisticLock(
     loadSnapshot: () -> Map<String, String?>,
     deleteSecrets: (Set<String>) -> Unit,
     setSecret: (String, String) -> Unit,
+    onSnapshotAdvanced: (Map<String, String?>) -> Unit = {},
 ) {
     checkAuthContext()
     if (loadSnapshot() != expectedSnapshot) {
@@ -281,9 +283,27 @@ internal fun applyChangesWithOptimisticLock(
             DopplerCliException.Kind.REMOTE_CHANGED,
         )
     }
-    if (changes.removed.isNotEmpty()) deleteSecrets(changes.removed)
+    var committedSnapshot = expectedSnapshot
     for ((name, value) in changes.upserted) {
-        setSecret(name, value)
+        try {
+            setSecret(name, value)
+        } catch (error: DopplerCliException) {
+            if (error.kind != DopplerCliException.Kind.GENERIC || name in expectedSnapshot || changes.removed.isEmpty()) {
+                throw error
+            }
+            throw DopplerCliException(
+                "Could not create a replacement secret. No secrets were deleted; earlier writes may have succeeded. " +
+                    "Your edits were kept. Check the secret name, permissions, and available capacity in Doppler before retrying. " +
+                    "Renaming at a secret limit requires temporary headroom; increase the limit or free unused capacity in Doppler.",
+            )
+        }
+        committedSnapshot = SecretChanges(mapOf(name to value), emptySet()).applyTo(committedSnapshot)
+        onSnapshotAdvanced(committedSnapshot)
+    }
+    if (changes.removed.isNotEmpty()) {
+        deleteSecrets(changes.removed)
+        committedSnapshot = committedSnapshot - changes.removed
+        onSnapshotAdvanced(committedSnapshot)
     }
 }
 

@@ -2,6 +2,7 @@ package com.vk.doppler.toolwindow
 
 import com.vk.doppler.cli.DopplerConfig
 import com.vk.doppler.cli.DopplerProject
+import com.intellij.util.ui.tree.TreeUtil
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.JTree
@@ -40,9 +41,17 @@ internal class DopplerTreeClickListener(
 
     override fun mouseClicked(event: MouseEvent) {
         if (!SwingUtilities.isLeftMouseButton(event)) return
-        val path = tree.getPathForLocation(event.x, event.y) ?: return
-        if (tree.getPathBounds(path)?.contains(event.point) != true) return
-        when (val node = path.lastPathComponent) {
+        val path = TreeUtil.getPathForLocation(tree, event.x, event.y) ?: return
+        val bounds = tree.getPathBounds(path) ?: return
+        val node = path.lastPathComponent
+        if (!bounds.contains(event.point)) {
+            if (node !is ProjectNode && node !is EnvironmentNode) return
+            val control = TreeUtil.getExpandControlRange(tree, path) ?: return
+            if (event.x <= control.to || event.x >= bounds.x) return
+            if (TreeUtil.isLocationInExpandControl(tree, path, event.x, event.y)) return
+            tree.selectionPath = path
+        }
+        when (node) {
             is ProjectNode, is EnvironmentNode -> {
                 if (tree.isExpanded(path)) tree.collapsePath(path) else tree.expandPath(path)
             }

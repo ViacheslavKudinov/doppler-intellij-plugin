@@ -16,6 +16,8 @@
             <li><b>Browse secrets</b> &mdash; explore projects, environments, and configs in the Doppler tool window.</li>
             <li><b>Edit as YAML</b> &mdash; open a config in an editor tab, including multiline values and restricted-secret placeholders.</li>
             <li><b>Save to synchronize</b> &mdash; saving pushes a minimal set of changes to Doppler.
+                Saves check for conflicting remote edits and apply replacements before deletions;
+                rejected writes leave your editor changes available for correction.
                 Reload or use automatic refresh to retrieve remote changes.</li>
             <li><b>Secret-reference completion</b> &mdash; get completion suggestions for Doppler secret references while editing.</li>
             <li><b>Folder Setup</b> &mdash; choose the default Doppler project and config for your IDE project,
@@ -26,9 +28,18 @@
                 Node.js and npm, Maven, Gradle, and Docker launch environments, including Docker images,
                 Dockerfiles, and Compose. Each launch fetches fresh secrets; explicit run configuration
                 variables take precedence.</li>
-            <li><b>Optional name transformation</b> &mdash; keep original secret names with <b>None</b> (the default),
-                or use Doppler's <code>camel</code>, <code>upper-camel</code>, <code>lower-snake</code>,
-                <code>tf-var</code>, <code>dotnet-env</code>, or <code>lower-kebab</code> transformer.</li>
+            <li><b>Secret name transformers and custom mappings</b> &mdash; control injected names from the
+                default Doppler project/config selected in Folder Setup. Keep original names with
+                <code>none</code> (the default), or use Doppler's <code>camel</code>, <code>upper-camel</code>,
+                <code>lower-snake</code>, <code>tf-var</code>, <code>dotnet-env</code>, or <code>lower-kebab</code>
+                transformer. Choose <code>custom</code> to rename selected secrets, for example
+                <code>API_KEY</code> to <code>APP_API_KEY</code>, while leaving unmapped names unchanged.
+                Settings are per IDE project and affect only Run and Debug injection, never names or values
+                stored in Doppler. Invalid mappings or renames that overwrite another injected secret stop the launch.</li>
+            <li><b>Runnable injection examples</b> &mdash; try Java, Maven, Python, Node.js/npm, Gradle,
+                Docker image/Dockerfile, and Docker Compose checks with synthetic values and custom mappings.
+                The <a href="https://github.com/ViacheslavKudinov/doppler-intellij-plugin/blob/main/examples/README.md">examples guide</a>
+                covers setup and cleanup without printing environment values.</li>
             <li><b>CLI diagnostics</b> &mdash; optionally log sanitized command metadata, durations, and exit status,
                 without secret values or CLI output.</li>
         </ul>
@@ -38,6 +49,8 @@
         then enable injection on the <b>Run and Debug</b> page. Injection starts disabled and requires
         approval for each project in this IDE; workspace files alone cannot enable it.</p>
         <p>For Docker Compose, reference the injected variables in your Compose file to pass them to services.
+        Custom mappings do not rewrite Compose keys or references; declare the mapped names explicitly
+        and recreate containers after changing their environment.
         Running applications and containers keep their inherited environment for their lifetime;
         secret changes apply to the next launch.</p>
 

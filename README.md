@@ -84,13 +84,23 @@ and does not inherit its signature or attestation. For published downloads, foll
 
 ## ✨ Features
 
-- **Projects tree** — a `Doppler` tool window listing your projects, grouped into environments and configs.
-- **Edit secrets** — single-click a config to open its secrets in an editor tab.
-- **Two-way sync** — saving the tab (`⌘S` / `Ctrl+S`) pushes your changes to Doppler; click the config
-  again to pull the latest values.
-- **Setup guidance** — the tool window detects a missing CLI or missing login and links to the fix.
-- **Run and Debug** — automatically inject the default config's secrets into Java, Python, Node.js,
-  Maven, Gradle, and Docker launches, fetching fresh secrets for every launch.
+- **Projects tree:** a `Doppler` tool window listing your projects, grouped into environments and configs.
+- **Edit secrets:** single-click a config to open its secrets in an editor tab.
+- **Two-way sync:** saving the tab (`⌘S` / `Ctrl+S`) pushes your changes to Doppler; click the config
+  again to pull the latest values. Saves check for conflicting remote edits and apply replacements
+  before deletions, keeping editor changes available for correction if a write is rejected.
+- **Setup guidance:** the tool window detects a missing CLI or missing login and links to the fix.
+- **Run and Debug:** opt in per IDE project to inject fresh secrets into Java, Maven, Python,
+  Node.js/npm, Gradle, Docker image/Dockerfile, and Docker Compose launches without saving injected
+  values in run configurations. Explicit run configuration variables take precedence.
+- **Secret name mapping and transformers:** control the injected names of secrets from the default
+  Doppler project/config selected in **Folder Setup**. Keep original names with `none`, apply a
+  built-in transformer such as `camel` (`API_KEY` to `apiKey`) or `lower-kebab`, or choose `custom`
+  to rename selected secrets (for example, `API_KEY` to `APP_API_KEY`) while leaving unmapped names
+  unchanged. These settings are per IDE project and apply to Run and Debug injection only;
+  names and values stored in Doppler are never changed.
+- **Runnable examples:** try every supported integration with synthetic values and custom mappings
+  using the [injection examples guide](examples/README.md), without printing environment values.
 
 ## 🧩 Compatibility
 
@@ -189,6 +199,14 @@ only the injected secret names; values and saved Doppler secrets are unchanged. 
 when their names match the transformed names. If Doppler reports conflicting transformed names,
 the launch fails rather than injecting a partial environment.
 
+**Custom** renames only the secrets you list. Add pairs of current and new secret names; matching
+secrets are injected under the new name, and all other secrets keep their names. The current-name
+cell is a dropdown of secrets in the default config; names cannot be typed. Saved names missing
+from the config are shown in red but kept until a replacement is selected or the pair is removed.
+Pairs are stored per project and kept while another transformation is selected, but used only while
+**Custom** is selected.
+Invalid mappings or mappings that would overwrite another Doppler secret stop the launch instead
+of silently keeping an old name or dropping a variable.
 **Every Run or Debug launch fetches fresh secrets**, so changes saved in the plugin, CLI, or
 Doppler dashboard apply to the next launch. The injection service does not cache secret values.
 Launched processes keep their inherited environment for their lifetime; changes apply on the
@@ -218,20 +236,19 @@ Supported launch paths (with the corresponding IDE plugins enabled):
 | Docker image / Dockerfile | An execution-only copy of the container deployment settings |
 | Docker Compose | The Compose process environment, for substitution into the Compose file |
 
-For Compose, declare the names each service needs; secret values remain outside the YAML file:
-
-```yaml
-services:
-  api:
-    image: my-api
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-```
+See the [Compose injection guide](examples/README.md#docker-compose) for variable forwarding
+and custom name mapping details.
 
 The plugin never saves injected values in run configurations and does not change the IDE's own
 process environment. An application or container already running keeps its inherited environment;
 the plugin cannot remove variables from that process.
 Docker's execution-only command preview is disabled to avoid showing injected values.
+
+### Try the injection examples
+
+See the [injection examples](examples/README.md) for runnable Java, Maven, Python, Node.js/npm,
+Gradle, Docker image/Dockerfile, and Docker Compose checks, including custom name mappings.
+The guide covers IDE setup, synthetic test values, and cleanup without printing environment values.
 
 ## 🔐 How secrets are handled
 
@@ -508,9 +525,7 @@ Generate a local dependency SBOM with `./gradlew cyclonedxBom`.
 
 ## 🤝 Contributing
 
-Pull requests are not accepted due to the licensing costs of several security tools used by this
-project. Contributions can be discussed in issues, including changes made in a fork that the
-maintainer may consider applying as a patch. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for bug reports, suggestions, and contribution guidelines.
 
 ## 🗂️ Project layout
 

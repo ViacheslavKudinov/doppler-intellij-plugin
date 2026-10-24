@@ -1,0 +1,18 @@
+services:
+  verify:
+    image: alpine:3.22
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./verify.sh:/examples/verify.sh:ro
+    entrypoint:
+      - /bin/sh
+      - /examples/verify.sh
+      - plain
+    environment:
+      EXAMPLE_MESSAGE: ${EXAMPLE_MESSAGE:?Enable Doppler injection and configure EXAMPLE_MESSAGE}
+      EXAMPLE_NUMBER: ${EXAMPLE_NUMBER:?Enable Doppler injection and configure EXAMPLE_NUMBER}

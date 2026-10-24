@@ -5,6 +5,15 @@ import org.junit.Test
 
 class CliCallLogTest {
     @Test
+    fun `transformer labels use lowercase names and short dash separators`() {
+        assertEquals("none", DopplerNameTransformer.NONE.toString())
+        assertEquals("custom - rename selected secrets", DopplerNameTransformer.CUSTOM.toString())
+        for (transformer in DopplerNameTransformer.entries.filter { it.cliName != null }) {
+            assertTrue(transformer.toString().startsWith("${transformer.cliName} - "))
+        }
+    }
+
+    @Test
     fun `injection logs supported name transformer choices and redacts unknown operands`() {
         for (transformer in DopplerNameTransformer.entries.filter { it.cliName != null }) {
             val logs = mutableListOf<String>()

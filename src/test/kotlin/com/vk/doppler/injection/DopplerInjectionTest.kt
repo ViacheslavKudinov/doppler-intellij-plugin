@@ -176,6 +176,65 @@ class DopplerInjectionTest : BasePlatformTestCase() {
         assertFalse(Files.readAllLines(directory.resolve("downloads")).last().contains("--name-transformer"))
     }
 
+    fun `test custom mapping renames matching secrets without a CLI transformer and keeps pairs for other options`() {
+        val settings = DopplerInjectionSettings.getInstance(project)
+        settings.customMappings = listOf(SecretNameMapping("DB_URL", "DATABASE_URL"), SecretNameMapping("MISSING", "UNUSED"))
+        Files.writeString(directory.resolve("remote"), """{"DB_URL":"synthetic-url","API_KEY":"synthetic-key"}""")
+
+        settings.nameTransformer = DopplerNameTransformer.CUSTOM
+        val merged = background { service.mergeEnvironment(mapOf("API_KEY" to "local")) }
+        assertEquals(mapOf("DATABASE_URL" to "synthetic-url", "API_KEY" to "local"), merged)
+        assertFalse(Files.readAllLines(directory.resolve("downloads")).last().contains("--name-transformer"))
+
+        settings.nameTransformer = DopplerNameTransformer.NONE
+        assertEquals(
+            mapOf("DB_URL" to "synthetic-url", "API_KEY" to "synthetic-key"),
+            background { service.mergeEnvironment(emptyMap()) },
+        )
+        assertEquals(2, settings.customMappings.size)
+    }
+
+    fun `test custom mapping rejects invalid names and collisions instead of silently losing secrets`() {
+        val settings = DopplerInjectionSettings.getInstance(project)
+        settings.nameTransformer = DopplerNameTransformer.CUSTOM
+        Files.writeString(directory.resolve("remote"), """{"SOURCE":"synthetic-source","TARGET":"synthetic-target","OTHER":"synthetic-other"}""")
+        for (mappings in listOf(
+            listOf(SecretNameMapping("SOURCE", " INVALID")),
+            listOf(SecretNameMapping("SOURCE", "TARGET")),
+            listOf(SecretNameMapping("SOURCE", "NEW"), SecretNameMapping("TARGET", "NEW")),
+        )) {
+            settings.customMappings = mappings
+            try {
+                background { service.mergeEnvironment(emptyMap()) }
+                fail("Invalid or conflicting mappings must not silently inject an incomplete environment")
+            } catch (error: ExecutionException) {
+                assertTrue(error.message.orEmpty().contains("Custom Doppler name mappings"))
+                assertFalse(error.message.orEmpty().contains("synthetic"))
+                assertNull(error.cause)
+            }
+        }
+
+        settings.customMappings = listOf(SecretNameMapping("SOURCE", "RENAMED"))
+        assertEquals(
+            mapOf("RENAMED" to "synthetic-source", "TARGET" to "synthetic-target", "OTHER" to "synthetic-other"),
+            background { service.mergeEnvironment(emptyMap()) },
+        )
+    }
+
+    fun `test custom mapping removes original Doppler names but preserves explicit run configuration variables`() {
+        val settings = DopplerInjectionSettings.getInstance(project)
+        settings.nameTransformer = DopplerNameTransformer.CUSTOM
+        settings.customMappings = listOf(SecretNameMapping("SOURCE", "RENAMED"))
+        Files.writeString(directory.resolve("remote"), """{"SOURCE":"synthetic-source","OTHER":"synthetic-other"}""")
+        val renamed = background { service.mergeEnvironment(emptyMap()) }
+        assertFalse(renamed.containsKey("SOURCE"))
+        assertEquals(mapOf("RENAMED" to "synthetic-source", "OTHER" to "synthetic-other"), renamed)
+
+        val explicit = mapOf("SOURCE" to "synthetic-local", "RENAMED" to "synthetic-override")
+        assertEquals(explicit + ("OTHER" to "synthetic-other"), background { service.mergeEnvironment(explicit) })
+        assertEquals(mapOf("SOURCE" to "synthetic-local", "RENAMED" to "synthetic-override"), explicit)
+    }
+
     fun `test transformer CLI failure aborts injection without exposing error output`() {
         DopplerInjectionSettings.getInstance(project).nameTransformer = DopplerNameTransformer.CAMEL
         Files.createFile(directory.resolve("fail"))
@@ -415,15 +474,24 @@ class DopplerInjectionTest : BasePlatformTestCase() {
                 isUpDetach = true
                 showCommandPreview = true
             }
-            for (executor in listOf(DefaultRunExecutor.getRunExecutorInstance(), DefaultDebugExecutor.getDebugExecutorInstance())) {
-                val launch = runThroughRunner(runner, profile, executor)
-                val copy = (launch.runProfile as DeployToServerRunConfiguration<*, *>).deploymentConfiguration as DockerDeploymentConfiguration
-                assertNotSame(configuration, copy)
-                assertEquals("dev", copy.envVars.first { it.name == "DOPPLER_CONFIG" }.value)
-                assertEquals("local", copy.envVars.first { it.name == "KEY" }.value)
-                assertFalse(copy.showCommandPreview)
-                assertEquals(configuration.services, copy.services)
-                assertTrue(copy.isUpDetach)
+            val settings = DopplerInjectionSettings.getInstance(project)
+            settings.customMappings = listOf(SecretNameMapping("KEY", "RENAMED_KEY"), SecretNameMapping("MULTILINE", "RENAMED_MULTILINE"))
+            for (transformer in listOf(DopplerNameTransformer.NONE, DopplerNameTransformer.CUSTOM)) {
+                settings.nameTransformer = transformer
+                val expected = if (transformer == DopplerNameTransformer.CUSTOM) {
+                    mapOf("KEY" to "local", "RENAMED_KEY" to "resolved-one-dev", "EMPTY" to "", "RENAMED_MULTILINE" to "one\ntwo", "DOPPLER_CONFIG" to "dev")
+                } else {
+                    mapOf("KEY" to "local", "EMPTY" to "", "MULTILINE" to "one\ntwo", "DOPPLER_CONFIG" to "dev")
+                }
+                for (executor in listOf(DefaultRunExecutor.getRunExecutorInstance(), DefaultDebugExecutor.getDebugExecutorInstance())) {
+                    val launch = runThroughRunner(runner, profile, executor)
+                    val copy = (launch.runProfile as DeployToServerRunConfiguration<*, *>).deploymentConfiguration as DockerDeploymentConfiguration
+                    assertNotSame(configuration, copy)
+                    assertEquals("Every variable must reach the Docker launch copy", expected, copy.envVars.associate { it.name to it.value })
+                    assertFalse(copy.showCommandPreview)
+                    assertEquals(configuration.services, copy.services)
+                    assertTrue(copy.isUpDetach)
+                }
             }
             assertEquals(1, configuration.envVars.size)
             assertTrue(configuration.showCommandPreview)

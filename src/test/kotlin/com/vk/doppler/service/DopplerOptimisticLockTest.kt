@@ -113,4 +113,146 @@ class DopplerOptimisticLockTest {
     } catch (error: DopplerCliException) {
         error
     }
+
+    @Test
+    fun `corrected save can retry after confirmed writes precede a rejected edit`() {
+        val remote = linkedMapOf<String, String?>("OLD_NAME" to "synthetic", "KEEP" to "original")
+        var baseline: Map<String, String?> = remote.toMap()
+        try {
+            applyChangesWithOptimisticLock(
+                expectedSnapshot = baseline,
+                changes = SecretChanges(linkedMapOf("KEEP" to "updated", "NEW_NAME" to "rejected"), setOf("OLD_NAME")),
+                checkAuthContext = {},
+                loadSnapshot = { remote.toMap() },
+                deleteSecrets = { names -> names.forEach(remote::remove) },
+                setSecret = { name, value ->
+                    if (name == "NEW_NAME") throw DopplerCliException("Synthetic rejection")
+                    remote[name] = value
+                },
+                onSnapshotAdvanced = { baseline = it },
+            )
+            fail("Expected rejected write")
+        } catch (_: DopplerCliException) {
+            assertEquals(mapOf("OLD_NAME" to "synthetic", "KEEP" to "updated"), baseline)
+            assertEquals(baseline, remote)
+        }
+
+        applyChangesWithOptimisticLock(
+            expectedSnapshot = baseline,
+            changes = SecretChanges(mapOf("NEW_NAME" to "corrected"), setOf("OLD_NAME")),
+            checkAuthContext = {},
+            loadSnapshot = { remote.toMap() },
+            deleteSecrets = { names ->
+                assertEquals("corrected", remote["NEW_NAME"])
+                names.forEach(remote::remove)
+            },
+            setSecret = { name, value -> remote[name] = value },
+            onSnapshotAdvanced = { baseline = it },
+        )
+        assertEquals(mapOf("KEEP" to "updated", "NEW_NAME" to "corrected"), remote)
+        assertEquals(remote, baseline)
+    }
+
+    @Test
+    fun `TESTq rejection preserves TEST and corrected TESTQ rename succeeds`() {
+        val remote = linkedMapOf<String, String?>("TEST" to "synthetic")
+        var baseline: Map<String, String?> = remote.toMap()
+        expectConflict {
+            applyChangesWithOptimisticLock(
+                expectedSnapshot = baseline,
+                changes = SecretChanges.between(baseline, com.vk.doppler.editor.SecretsDocumentFormat.parse("TESTq: synthetic")),
+                checkAuthContext = {},
+                loadSnapshot = { remote.toMap() },
+                deleteSecrets = { fail("Must not delete before a replacement succeeds") },
+                setSecret = { name, _ ->
+                    assertEquals("TESTq", name)
+                    throw DopplerCliException("Synthetic Classic naming rejection")
+                },
+                onSnapshotAdvanced = { fail("A rejected write must not advance the baseline") },
+            )
+        }
+        assertEquals(mapOf("TEST" to "synthetic"), remote)
+        assertEquals(baseline, remote)
+
+        val writes = mutableListOf<String>()
+        applyChangesWithOptimisticLock(
+            expectedSnapshot = baseline,
+            changes = SecretChanges.between(baseline, com.vk.doppler.editor.SecretsDocumentFormat.parse("TESTQ: synthetic")),
+            checkAuthContext = {},
+            loadSnapshot = { remote.toMap() },
+            deleteSecrets = { names ->
+                assertEquals("synthetic", remote["TESTQ"])
+                writes += "delete"
+                names.forEach(remote::remove)
+            },
+            setSecret = { name, value ->
+                writes += "set"
+                remote[name] = value
+            },
+            onSnapshotAdvanced = { baseline = it },
+        )
+        assertEquals(listOf("set", "delete"), writes)
+        assertEquals(mapOf("TESTQ" to "synthetic"), remote)
+        assertEquals(remote, baseline)
+    }
+
+    @Test
+    fun `later rejected replacement preserves all originals despite earlier successful writes`() {
+        val remote = linkedMapOf<String, String?>("FIRST" to "synthetic-first", "SECOND" to "synthetic-second")
+        var baseline: Map<String, String?> = remote.toMap()
+        expectConflict {
+            applyChangesWithOptimisticLock(
+                expectedSnapshot = baseline,
+                changes = SecretChanges(
+                    linkedMapOf("NEW_FIRST" to "synthetic-first", "NEW_SECOND" to "synthetic-second"),
+                    setOf("FIRST", "SECOND"),
+                ),
+                checkAuthContext = {},
+                loadSnapshot = { remote.toMap() },
+                deleteSecrets = { fail("Must not delete unless all replacements succeed") },
+                setSecret = { name, value ->
+                    if (name == "NEW_SECOND") throw DopplerCliException("Synthetic rejection")
+                    remote[name] = value
+                },
+                onSnapshotAdvanced = { baseline = it },
+            )
+        }
+        assertEquals(mapOf("FIRST" to "synthetic-first", "SECOND" to "synthetic-second", "NEW_FIRST" to "synthetic-first"), remote)
+        assertEquals(remote, baseline)
+    }
+
+    @Test
+    fun `remote changes after partial success still block the retry`() {
+        val remote = linkedMapOf<String, String?>("A" to "old", "B" to "old-b")
+        var baseline: Map<String, String?> = remote.toMap()
+        expectConflict {
+            applyChangesWithOptimisticLock(
+                expectedSnapshot = baseline,
+                changes = SecretChanges(linkedMapOf("A" to "mine", "B" to "rejected"), emptySet()),
+                checkAuthContext = {},
+                loadSnapshot = { remote.toMap() },
+                deleteSecrets = { fail("No deletion expected") },
+                setSecret = { name, value ->
+                    if (name == "B") throw DopplerCliException("Synthetic rejection")
+                    remote[name] = value
+                },
+                onSnapshotAdvanced = { baseline = it },
+            )
+        }
+        assertEquals(mapOf("A" to "mine", "B" to "old-b"), baseline)
+        remote["TEAMMATE"] = "external"
+        val error = expectConflict {
+            applyChangesWithOptimisticLock(
+                expectedSnapshot = baseline,
+                changes = SecretChanges(mapOf("B" to "corrected"), emptySet()),
+                checkAuthContext = {},
+                loadSnapshot = { remote.toMap() },
+                deleteSecrets = { fail("Must not delete after conflict") },
+                setSecret = { _, _ -> fail("Must not write after conflict") },
+                onSnapshotAdvanced = { fail("Must not advance after conflict") },
+            )
+        }
+        assertEquals(DopplerCliException.Kind.REMOTE_CHANGED, error.kind)
+        assertEquals("external", remote["TEAMMATE"])
+    }
 }

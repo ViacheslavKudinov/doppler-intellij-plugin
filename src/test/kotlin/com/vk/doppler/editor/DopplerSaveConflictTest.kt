@@ -117,4 +117,58 @@ class DopplerSaveConflictTest : BasePlatformTestCase() {
         assertFalse(file.pushInProgress.get())
         assertNull(file.pendingPushText.get())
     }
+
+    fun `test corrected edit saves after a confirmed partial write without discarding local edits`() {
+        val baseline = mapOf("A" to "old", "B" to "old-b")
+        val edited = "A: mine\nB: rejected"
+        val file = DopplerFileSystem.getInstance().obtain("conflict", "confirmed-partial", "test-context")
+        file.setServerContent(edited, baseline)
+        myFixture.configureFromExistingVirtualFile(file)
+        val service = own(file)
+        file.hasPendingSync = true
+        file.pushInProgress.set(true)
+        val remote = baseline.toMutableMap()
+        val changes = SecretChanges.between(baseline, SecretsDocumentFormat.parse(edited))
+        val failedTask = service.createPushTask(file, edited, baseline, changes) {
+            applyChangesWithOptimisticLock(
+                baseline, changes, {}, { remote.toMap() }, {},
+                { name, value ->
+                    if (name == "B") throw DopplerCliException("Synthetic rejected edit")
+                    remote[name] = value
+                },
+                onSnapshotAdvanced = { file.remoteSnapshot = it },
+            )
+        }
+        try {
+            failedTask.run(EmptyProgressIndicator())
+            fail("Expected rejected edit")
+        } catch (error: DopplerCliException) {
+            failedTask.onThrowable(error)
+        }
+        failedTask.onFinished()
+        assertEquals(remote, file.remoteSnapshot)
+        assertEquals(edited, myFixture.editor.document.text)
+        assertTrue(file.hasPendingSync)
+
+        val corrected = "A: mine\nB: corrected"
+        com.intellij.openapi.application.WriteAction.run<RuntimeException> {
+            myFixture.editor.document.setText(corrected)
+        }
+        val expected = file.remoteSnapshot
+        val remaining = SecretChanges.between(expected, SecretsDocumentFormat.parse(corrected))
+        assertEquals(mapOf("B" to "corrected"), remaining.upserted)
+        file.pushInProgress.set(true)
+        val retry = service.createPushTask(file, corrected, expected, remaining) {
+            applyChangesWithOptimisticLock(
+                expected, remaining, {}, { remote.toMap() }, {},
+                { name, value -> remote[name] = value },
+                onSnapshotAdvanced = { file.remoteSnapshot = it },
+            )
+        }
+        retry.run(EmptyProgressIndicator())
+        retry.onSuccess()
+        retry.onFinished()
+        assertEquals(mapOf("A" to "mine", "B" to "corrected"), remote)
+        assertEquals(remote, file.remoteSnapshot)
+    }
 }

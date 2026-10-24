@@ -1,0 +1,18 @@
+services:
+  verify:
+    image: alpine:3.22
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./verify.sh:/examples/verify.sh:ro
+    entrypoint:
+      - /bin/sh
+      - /examples/verify.sh
+      - custom
+    environment:
+      APP_MESSAGE: ${APP_MESSAGE:?Configure the EXAMPLE_MESSAGE to APP_MESSAGE mapping}
+      APP_NUMBER: ${APP_NUMBER:?Configure the EXAMPLE_NUMBER to APP_NUMBER mapping}

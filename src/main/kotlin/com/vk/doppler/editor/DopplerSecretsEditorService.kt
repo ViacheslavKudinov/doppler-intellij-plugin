@@ -419,6 +419,7 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             DopplerService.getInstance().applyChanges(
                 file.authContextId, file.projectSlug, file.configName,
                 originalSnapshot, changes, environment = file.environment,
+                onSnapshotAdvanced = { file.remoteSnapshot = it },
             )
         },
     ): Task.Backgroundable {
@@ -457,8 +458,7 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
 
             override fun onThrowable(error: Throwable) {
                 closeAfterSync.remove(file)
-                // The document still represents the original baseline. Rebasing it
-                // silently could turn another user's additions into local deletions.
+                // Keep only confirmed local writes in the baseline; never rebase onto unverified remote changes.
                 file.hasPendingSync = true
                 if (error is DopplerCliException && error.kind in setOf(
                         DopplerCliException.Kind.NOT_AUTHENTICATED,

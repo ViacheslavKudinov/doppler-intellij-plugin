@@ -71,6 +71,8 @@ intellijPlatform {
 
     pluginVerification {
         failureLevel.add(VerifyPluginTask.FailureLevel.NON_EXTENDABLE_API_USAGES)
+        failureLevel.add(VerifyPluginTask.FailureLevel.DEPRECATED_API_USAGES)
+        failureLevel.add(VerifyPluginTask.FailureLevel.SCHEDULED_FOR_REMOVAL_API_USAGES)
         ides {
             create(IntelliJPlatformType.IntellijIdea, "2025.3.6.1")
             create(IntelliJPlatformType.IntellijIdea, "2026.2.3")

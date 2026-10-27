@@ -17,6 +17,11 @@ buildscript {
     dependencies {
         // Patch CycloneDX's transitive Jackson dependencies on the build classpath.
         classpath(platform("com.fasterxml.jackson:jackson-bom:${providers.gradleProperty("jacksonVersion").get()}"))
+        constraints {
+            classpath("com.google.guava:guava:33.7.2-jre") {
+                because("Fix GHSA-xxph-c9ww-hj94 in CycloneDX's transitive build dependency")
+            }
+        }
     }
 }
 

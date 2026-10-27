@@ -17,11 +17,6 @@ buildscript {
     dependencies {
         // Patch CycloneDX's transitive Jackson dependencies on the build classpath.
         classpath(platform("com.fasterxml.jackson:jackson-bom:${providers.gradleProperty("jacksonVersion").get()}"))
-        constraints {
-            classpath("com.google.guava:guava:33.7.2-jre") {
-                because("Fix GHSA-xxph-c9ww-hj94 in CycloneDX's transitive build dependency")
-            }
-        }
     }
 }
 
@@ -142,5 +137,13 @@ tasks.cyclonedxBom {
     projectType = Component.Type.APPLICATION
     jsonOutput = layout.buildDirectory.file("distributions/${project.name}-${project.version}.cdx.json")
     xmlOutput.convention(null as RegularFile?)
+}
+
+
+configurations.configureEach {
+    if (name == "compileClasspath" || name == "runtimeClasspath"
+            || name.endsWith("CompileClasspath") || name.endsWith("RuntimeClasspath")) {
+        resolutionStrategy.activateDependencyLocking()
+    }
 }
 

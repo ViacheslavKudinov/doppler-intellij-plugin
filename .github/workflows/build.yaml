@@ -63,6 +63,78 @@ jobs:
           fi
           ./gradlew buildPlugin "${args[@]}" --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
+  grype:
+    name: Grype
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Java
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: corretto
+          java-version: 21
+          cache: gradle
+          cache-jdk: true
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: Generate PR SBOM
+        run: ./gradlew cyclonedxBom -Psnapshot --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+
+      - name: Locate generated SBOM
+        id: sbom
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          sboms=(build/distributions/*.cdx.json)
+          if [[ ${#sboms[@]} -ne 1 ]]; then
+            echo "::error::Expected exactly one CycloneDX SBOM, found ${#sboms[@]}"
+            exit 1
+          fi
+          echo "path=${sboms[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Scan PR SBOM with Grype
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          sbom: ${{ steps.sbom.outputs.path }}
+          fail-build: true
+          severity-cutoff: high
+          output-format: table
+          output-file: ${{ runner.temp }}/grype-pr-report.txt
+
+      - name: Write Grype job summary
+        if: ${{ always() }}
+        shell: bash
+        env:
+          GRYPE_REPORT: ${{ runner.temp }}/grype-pr-report.txt
+        run: |
+          set -euo pipefail
+          {
+            printf '### Grype SBOM Scan\n\n'
+            if [[ -s "$GRYPE_REPORT" ]]; then
+              printf '<pre>\n'
+              sed -e 's/\&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' "$GRYPE_REPORT"
+              printf '\n</pre>\n'
+            else
+              printf 'No scan report was produced. Check the preceding steps for SBOM generation or scanner errors.\n'
+              exit 1
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # Run tests and upload test reports on failure
   test:
     name: Test

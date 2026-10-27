@@ -360,4 +360,4 @@ jobs:
       contents: read
       security-events: write
       id-token: write
-    uses: ./.github/workflows/scorecard.yaml
+    uses: $/.github/workflows/scorecard.yaml

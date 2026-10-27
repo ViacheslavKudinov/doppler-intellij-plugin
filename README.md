@@ -181,7 +181,7 @@ Folder setup is checked in the background every 30 seconds so CLI changes update
 and any unchanged Settings selections. Setup operations use the existing CLI call logging;
 background checks appear as `FOLDER_SETUP_POLL` when **Log CLI calls** is enabled.
 
-## Interface Reference
+## 📖 Interface Reference
 
 The plugin's user-facing interfaces are its IDE controls, YAML secret documents, and Run and
 Debug environment injection. The following sections describe their accepted inputs, outputs,

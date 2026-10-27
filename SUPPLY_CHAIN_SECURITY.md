@@ -158,7 +158,9 @@ claims in this project's release process:
 [GitHub artifact attestations](https://docs.github.com/en/actions/concepts/security/artifact-attestations)
 use Sigstore and GitHub Actions' authenticated workflow identity. Verification checks the signed
 statement and whether it applies to the file you have. The GitHub CLI retrieves the attestation
-records; they do not need to be separate assets beside the downloaded ZIP.
+records by default. Releases also attach the original Sigstore bundles as downloadable assets;
+`gh attestation verify --bundle <bundle-file>` can use a downloaded bundle instead of retrieving
+the attestation record. The same repository, workflow, and source-commit checks still apply.
 
 A valid signature alone is insufficient: the statement also needs to come from the repository
 and workflow you intended to trust. Anyone else's valid attestation is not evidence that a file
@@ -209,11 +211,19 @@ flowchart TD
 | `*.cdx.json` | The generated CycloneDX SBOM. |
 | `chain.crt` | The public plugin signing certificate. |
 | `SHA256SUMS` | SHA-256 checksums for the ZIP, SBOM, and certificate. |
+| `build-provenance.sigstore.json` | The signed provenance bundle for the four files above and the packaged JARs. |
+| `sbom.sigstore.json` | The signed SBOM attestation bundle for the plugin ZIP. |
 
-All four files have provenance attestations. Every JAR extracted from the signed ZIP, including
+The first four files have provenance attestations. Every JAR extracted from the signed ZIP, including
 bundled libraries, is also a provenance-attestation subject. Those extracted JARs are not
 published as separate release assets. The additional SBOM attestation uses the signed ZIP as
 its subject and the CycloneDX document as its predicate.
+
+The bundles are copied unchanged from the attestation actions and attached while the release is
+still a draft, before publication makes its assets immutable. The `.sigstore.json` suffix lets
+OpenSSF Scorecard recognize the release signatures. Scorecard samples up to five recent releases,
+so historical releases without recognized signature assets can keep the score below the signed
+release level. Previously published immutable releases are not modified.
 
 The [Publish workflow](.github/workflows/publish.yaml) verifies the ZIP and certificate's provenance
 against the expected release workflow and tag commit, then verifies the ZIP signature. It sends

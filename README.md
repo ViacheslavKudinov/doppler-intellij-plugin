@@ -190,9 +190,9 @@ and side effects without requiring readers to inspect the implementation.
 | Interface | Inputs | Outputs and effects | Reference |
 | --- | --- | --- | --- |
 | Doppler tool window and folder setup | Project/config selections, config clicks, and refresh actions | A projects/environments/configs tree and secret editor tabs; applying folder setup changes the CLI defaults for the IDE project folder | [Folder setup](#default-project-and-config) |
-| YAML secret editor | Secret-name/value mappings, restricted `null` values, empty strings, and removed or cleared keys | Saving creates, updates, or deletes Doppler secrets; invalid YAML is rejected before writes, and failed saves retain local edits | [Editing secrets](#-editing-secrets) |
-| Run and Debug injection | Project-local approval, folder defaults, name transformation or custom mappings, and explicit run configuration variables | Fresh secrets in the launched process environment; explicit run configuration variables take precedence, and injected values are not saved in run configurations | [Injection reference](#-run-and-debug-environment-injection) and [runnable examples](examples/README.md) |
-| Connection checks and optional CLI tracing | **Test Connection** and the **Log CLI calls** setting | Connection status and sanitized CLI trace entries, without secret values, tokens, or CLI output | [CLI setup](#doppler-cli) and [diagnostic logging](#-building) |
+| YAML secret editor | Secret-name/value mappings, restricted `null` values, empty strings, and removed or cleared keys | Saving creates, updates, or deletes Doppler secrets; invalid YAML is rejected before writes, and failed saves retain local edits | [Editing secrets](#editing-secrets) |
+| Run and Debug injection | Project-local approval, folder defaults, name transformation or custom mappings, and explicit run configuration variables | Fresh secrets in the launched process environment; explicit run configuration variables take precedence, and injected values are not saved in run configurations | [Injection reference](#run-and-debug-environment-injection) and [runnable examples](examples/README.md) |
+| Connection checks and optional CLI tracing | **Test Connection** and the **Log CLI calls** setting | Connection status and sanitized CLI trace entries, without secret values, tokens, or CLI output | [CLI setup](#doppler-cli) and [diagnostic logging](#diagnostic-logging) |
 
 ### Settings Reference
 
@@ -210,8 +210,10 @@ Open **Settings | Tools | Doppler** for IDE-wide settings, or its **Folder Setup
 | Custom name mappings | Current IDE project | No mappings | Pairs of existing and new secret names; used only with Custom, with unmapped names unchanged |
 
 Disabling secret-value refresh does not disable account-validation checks while secret configs
-are open. See [Editing secrets](#-editing-secrets) for refresh conditions, save semantics, and
-failure recovery, and [How secrets are handled](#-how-secrets-are-handled) for data-handling limits.
+are open. See [Editing secrets](#editing-secrets) for refresh conditions, save semantics, and
+failure recovery, and [How secrets are handled](#how-secrets-are-handled) for data-handling limits.
+
+<a id="run-and-debug-environment-injection"></a>
 
 ## ▶️ Run and Debug environment injection
 
@@ -282,6 +284,8 @@ See the [injection examples](examples/README.md) for runnable Java, Maven, Pytho
 Gradle, Docker image/Dockerfile, and Docker Compose checks, including custom name mappings.
 The guide covers IDE setup, synthetic test values, and cleanup without printing environment values.
 
+<a id="how-secrets-are-handled"></a>
+
 ## 🔐 How secrets are handled
 
 - Secrets live **in memory only**. The editor tab is backed by a custom in-memory virtual file system, so
@@ -299,6 +303,8 @@ The guide covers IDE setup, synthetic test values, and cleanup without printing 
   a name from becoming a `KEY=value` argument.
 - Notification text is HTML-escaped, so project, config and CLI-provided text cannot inject markup.
 - When the last editor tab for a config closes, its secrets are dropped from memory.
+
+<a id="editing-secrets"></a>
 
 ## ✏️ Editing secrets
 
@@ -359,6 +365,8 @@ wipe a config. To discard local edits, click the config in the tree again to re-
 Malformed CLI snapshots are rejected instead of being treated as empty configs.
 
 ## 🛠️ Building
+
+<a id="diagnostic-logging"></a>
 
 To inspect CLI activity, enable **Settings | Tools | Doppler | Log CLI calls** and apply.
 Open **Help | Show Log in Finder/Explorer** and search `idea.log` for `Doppler CLI`.

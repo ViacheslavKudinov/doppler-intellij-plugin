@@ -43,6 +43,10 @@ Examples:
 - `ci: increase Kotlin compiler heap for CodeQL`
 - `build(deps): upgrade Kotlin Gradle plugin`
 
+## Path References
+
+- Use `$/...` instead of `./...` for repository-relative path references.
+
 ## Code
 
 - Every new public function or class must have at least one unit test that exercises its main path and each documented edge case in src/test/kotlin. Do not add coverage tooling unless it is already configured in the project.

@@ -10,4 +10,7 @@ consider applying those changes as a patch; acceptance is not guaranteed.
 For security vulnerabilities, follow the [security policy](SECURITY.md).
 
 ## Tests
-Major new functionality must include tests in the automated test suite.
+
+Add or update automated tests under [src/test/kotlin](src/test/kotlin) for all new or changed
+behavior. Cover the main path and relevant edge cases, and follow the existing test conventions.
+Every bug fix must include a regression test.

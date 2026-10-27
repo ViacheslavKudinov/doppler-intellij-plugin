@@ -2,6 +2,15 @@
 
 # Doppler-plugin Changelog
 
+## [1.9.1](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.9.0...v1.9.1) (2026-10-27)
+
+
+### Maintenance
+
+* add attestation steps for build provenance and SBOM in release workflow ([#95](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/95)) ([9c999b0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/9c999b089a488cbf4668c6f16840db26362c5c05))
+* **build.gradle.kts:** add dependency constraint for Guava. Add Grype scan on PR ([#96](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/96)) ([2320a2d](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/2320a2d14aa79ae5f0f2931cc0f523a8add19700))
+* **workflows:** enhance Scorecard workflow with additional triggers and conditions ([#93](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/93)) ([34ae84d](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/34ae84da8027dd26a32e31b88b7a4bf003f7e845))
+
 ## [1.9.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.8.0...v1.9.0) (2026-10-24)
 
 

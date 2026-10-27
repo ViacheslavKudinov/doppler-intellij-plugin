@@ -326,6 +326,7 @@ jobs:
 
       # Attest release assets and all packaged JARs, including bundled dependencies.
       - name: Attest build provenance
+        id: provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
@@ -334,10 +335,23 @@ jobs:
 
       # Binds the CycloneDX SBOM to the plugin zip it describes.
       - name: Attest SBOM
+        id: sbom-attestation
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: release-assets/${{ needs.build-assets.outputs.zip }}
           sbom-path: release-assets/${{ needs.build-assets.outputs.sbom }}
+
+      - name: Collect attestation bundles
+        shell: bash
+        env:
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_BUNDLE: ${{ steps.sbom-attestation.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          test -s "$PROVENANCE_BUNDLE"
+          test -s "$SBOM_BUNDLE"
+          cp "$PROVENANCE_BUNDLE" release-assets/build-provenance.sigstore.json
+          cp "$SBOM_BUNDLE" release-assets/sbom.sigstore.json
 
       - name: Upload assets to the draft release
         shell: bash

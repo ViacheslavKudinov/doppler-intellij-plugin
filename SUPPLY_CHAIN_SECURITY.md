@@ -66,6 +66,14 @@ day, including when the scan reports vulnerabilities. The build job remains
 read-only; only the report-upload job receives `security-events: write`.
 If scanning fails before producing a report, there is no report to upload.
 
+Pull requests covered by the Build plugin workflow also run a separate `Grype` check against
+the generated SBOM, including build-environment dependencies. High and Critical findings fail
+the check, including findings without an available fix; scanner errors also fail it. The table
+report appears in the job logs and job summary, including when vulnerabilities cause the scan
+to fail. If no report is produced, the summary identifies that failure instead. Make `Grype` a
+required status check in branch protection or a ruleset to prevent merging a failing PR.
+The release scan remains informational.
+
 ### Scan a published SBOM for vulnerabilities with Grype
 
 [Grype](https://github.com/anchore/grype) scans an existing SBOM for known vulnerabilities.

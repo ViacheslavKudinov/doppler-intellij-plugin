@@ -9,6 +9,7 @@ import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessListener
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.util.text.VersionComparatorUtil
 import com.vk.doppler.settings.DopplerSettings
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -53,6 +54,29 @@ class DopplerCli(
     fun version(): String {
         val raw = runRaw(listOf("--version"), stdin = null, json = false)
         return raw.trim()
+    }
+
+    internal fun checkForUpdate(): DopplerCliUpdate {
+        val current = version()
+        val stableVersion = Regex("v?[0-9]+\\.[0-9]+\\.[0-9]+")
+        if (!stableVersion.matches(current)) {
+            throw DopplerCliException("The Doppler CLI returned an unsupported version.")
+        }
+        val changelog =
+            runJson(listOf("changelog")) as? JsonObject
+                ?: throw DopplerCliException("The Doppler CLI returned an invalid changelog.")
+        val latest =
+            changelog
+                .keySet()
+                .filter(stableVersion::matches)
+                .maxWithOrNull { left, right -> VersionComparatorUtil.compare(left.removePrefix("v"), right.removePrefix("v")) }
+                ?: throw DopplerCliException("The Doppler CLI changelog contains no stable releases.")
+        return DopplerCliUpdate(current, latest)
+    }
+
+    internal fun update(): String {
+        runRaw(listOf("update"), stdin = "", json = true, timeoutMs = 180_000)
+        return version()
     }
 
     /** Verifies that a usable token is configured. Throws [DopplerCliException] otherwise. */
@@ -272,6 +296,7 @@ class DopplerCli(
         args: List<String>,
         stdin: String?,
         json: Boolean,
+        timeoutMs: Int = DEFAULT_TIMEOUT_MS,
     ): String {
         val parameters = args.toMutableList()
         scope?.let { parameters.addAll(listOf(SCOPE_OPTION, it)) }
@@ -287,7 +312,7 @@ class DopplerCli(
         return traceCliCall(parameters, DopplerSettings.getInstance().logCliCalls, {
             thisLogger().info(it)
         }, operation, logContext, relatedConfigs) { reportExit ->
-            executeRaw(parameters, stdin, reportExit)
+            executeRaw(parameters, stdin, reportExit, timeoutMs)
         }
     }
 
@@ -295,6 +320,7 @@ class DopplerCli(
         parameters: List<String>,
         stdin: String?,
         reportExit: (Int, Boolean) -> Unit,
+        timeoutMs: Int,
     ): String {
         val commandLine =
             GeneralCommandLine(executablePath)
@@ -333,14 +359,14 @@ class DopplerCli(
             )
         }
 
-        val output = handler.runProcess(DEFAULT_TIMEOUT_MS, true)
+        val output = handler.runProcess(timeoutMs, true)
         reportExit(output.exitCode, output.isTimeout)
         stdinFailure.get()?.let { e ->
             thisLogger().warn("Failed to write the secret value to the Doppler CLI stdin", e)
             throw DopplerCliException("Could not pass the secret value to the Doppler CLI.", cause = e)
         }
         if (output.isTimeout) {
-            throw DopplerCliException("The Doppler CLI did not respond within ${DEFAULT_TIMEOUT_MS / 1000}s.")
+            throw DopplerCliException("The Doppler CLI did not respond within ${timeoutMs / 1000}s.")
         }
 
         val stdout = output.stdout
@@ -402,6 +428,14 @@ class DopplerCli(
         val value = get(key) ?: return null
         return if (value.isJsonPrimitive) value.asString else null
     }
+}
+
+internal data class DopplerCliUpdate(
+    val current: String,
+    val latest: String,
+) {
+    val available: Boolean
+        get() = VersionComparatorUtil.compare(current.removePrefix("v"), latest.removePrefix("v")) < 0
 }
 
 data class DopplerFolderSetup(

@@ -91,6 +91,13 @@ and does not inherit its signature or attestation. For published downloads, foll
   again to pull the latest values. Saves check for conflicting remote edits and apply replacements
   before deletions, keeping editor changes available for correction if a write is rejected.
 - **Setup guidance:** the tool window detects a missing CLI or missing login and links to the fix.
+- **CLI updates:** check the installed CLI against the latest stable release in **Settings | Tools | Doppler**.
+  **Automatically check for Doppler CLI updates** runs one check at IDE/plugin startup,
+  including when starting at the welcome screen. Changing the checkbox takes effect at the next startup.
+  Checks use `doppler --version`
+  and `doppler changelog --json`; updates require confirmation and run `doppler update` without elevation.
+  Automatic checks are enabled by default and can be disabled in settings. Package-manager installations may need updating through
+  their original package manager instead.
 - **Run and Debug:** opt in per IDE project to inject fresh secrets into Java, Maven, Python,
   Node.js/npm, Gradle, Docker image/Dockerfile, and Docker Compose launches without saving injected
   values in run configurations. Explicit run configuration variables take precedence.

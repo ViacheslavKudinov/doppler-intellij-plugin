@@ -13,6 +13,73 @@ import org.junit.Assume.assumeFalse
 import java.nio.file.Files
 
 class DopplerCliExecutionTest : BasePlatformTestCase() {
+    fun `test update check compares stable releases numerically without authentication`() {
+        assumeFalse(SystemInfo.isWindows)
+        val cli =
+            cli(
+                """
+                case "${'$'}*" in
+                  --version) printf 'v3.9.0\n' ;;
+                  'changelog --json --no-check-version') printf '%s' '{"v3.9.0":{},"v3.10.0":{},"v4.0.0-beta.1":{}}' ;;
+                  *) exit 1 ;;
+                esac
+                """.trimIndent(),
+            )
+        assertEquals(DopplerCliUpdate("v3.9.0", "v3.10.0"), cli.checkForUpdate())
+        assertTrue(cli.checkForUpdate().available)
+        assertFalse(DopplerCliUpdate("v3.10.0", "v3.10.0").available)
+        assertFalse(DopplerCliUpdate("v3.11.0", "v3.10.0").available)
+    }
+
+    fun `test update check rejects missing or malformed release metadata`() {
+        assumeFalse(SystemInfo.isWindows)
+        for (response in listOf("{}", "[]", "not-json", "{\"untrusted\":{}}")) {
+            val cli = cli("if [ \"${'$'}1\" = --version ]; then printf v3.9.0; else printf '%s' '$response'; fi")
+            try {
+                cli.checkForUpdate()
+                fail("Expected invalid changelog to be rejected")
+            } catch (error: DopplerCliException) {
+                assertEquals(DopplerCliException.Kind.GENERIC, error.kind)
+            }
+        }
+        try {
+            cli("printf development").checkForUpdate()
+            fail("Expected unsupported installed version to be rejected")
+        } catch (error: DopplerCliException) {
+            assertEquals(DopplerCliException.Kind.GENERIC, error.kind)
+        }
+    }
+
+    fun `test update invokes only the CLI updater and reads the resulting version`() {
+        assumeFalse(SystemInfo.isWindows)
+        val cli =
+            cli(
+                """
+                case "${'$'}*" in
+                  'update --json --no-check-version') printf '{}' ;;
+                  --version) printf v3.10.0 ;;
+                  *) exit 1 ;;
+                esac
+                """.trimIndent(),
+            )
+        assertEquals("v3.10.0", cli.update())
+        try {
+            cli("printf '%s' '{\"error\":\"Update denied\"}'; exit 1").update()
+            fail("Expected updater failure")
+        } catch (error: DopplerCliException) {
+            assertEquals("Update denied", error.message)
+        }
+    }
+
+    fun `test CLI update preference defaults on and preserves a saved opt out`() {
+        val settings = DopplerSettings()
+        assertTrue(settings.checkForCliUpdates)
+        settings.checkForCliUpdates = false
+        val restored = DopplerSettings()
+        restored.loadState(settings.state.copy())
+        assertFalse(restored.checkForCliUpdates)
+    }
+
     fun `test tree validated config open skips the redundant account preflight`() {
         checkTreeValidatedConfigOpen("stable", listOf("secrets", "me"), expectedAuthChange = false)
     }

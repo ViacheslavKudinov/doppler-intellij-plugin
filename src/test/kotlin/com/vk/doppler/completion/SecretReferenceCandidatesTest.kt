@@ -6,22 +6,28 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SecretReferenceCandidatesTest {
-
     private val current = SecretReferenceLocation("app", "api")
 
-    private val index: SecretNames = mapOf(
-        "app" to mapOf(
-            "api" to setOf("OLD_SERVER_COPY"),
-            "worker" to setOf("QUEUE", "REDIS"),
-        ),
-        "other" to mapOf("backend" to setOf("DATABASE_URL")),
-    )
+    private val index: SecretNames =
+        mapOf(
+            "app" to
+                mapOf(
+                    "api" to setOf("OLD_SERVER_COPY"),
+                    "worker" to setOf("QUEUE", "REDIS"),
+                ),
+            "other" to mapOf("backend" to setOf("DATABASE_URL")),
+        )
 
-    private fun find(prefix: String, live: Collection<String> = listOf("LOCAL"), names: SecretNames = index) =
-        SecretReferenceCandidates.find(current, live, names, prefix)
+    private fun find(
+        prefix: String,
+        live: Collection<String> = listOf("LOCAL"),
+        names: SecretNames = index,
+    ) = SecretReferenceCandidates.find(current, live, names, prefix)
 
-    private fun references(prefix: String, live: Collection<String> = listOf("LOCAL")) =
-        find(prefix, live).map { it.reference }.toSet()
+    private fun references(
+        prefix: String,
+        live: Collection<String> = listOf("LOCAL"),
+    ) = find(prefix, live).map { it.reference }.toSet()
 
     @Test
     fun `offers the three reference shapes without an environment`() {
@@ -117,7 +123,10 @@ class SecretReferenceCandidatesTest {
     fun `a config name shared with another project stays project qualified`() {
         val shared: SecretNames = mapOf("other" to mapOf("api" to setOf("TOKEN")))
 
-        assertEquals(setOf("other.api.TOKEN"), SecretReferenceCandidates.find(current, emptyList(), shared, "").map { it.reference }.toSet())
+        assertEquals(
+            setOf("other.api.TOKEN"),
+            SecretReferenceCandidates.find(current, emptyList(), shared, "").map { it.reference }.toSet(),
+        )
         assertEquals(emptyList<SecretReferenceCandidate>(), SecretReferenceCandidates.find(current, emptyList(), shared, "api."))
     }
 

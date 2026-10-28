@@ -1,16 +1,16 @@
 package com.vk.doppler.settings
 
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.xmlb.XmlSerializer
-import org.jdom.Element
-import com.intellij.openapi.progress.ProcessCanceledException
-import com.intellij.ui.components.JBTextField
 import com.vk.doppler.cli.DopplerNameTransformer
 import com.vk.doppler.injection.SecretNameMapping
+import org.jdom.Element
 import java.awt.Component
-import javax.swing.JCheckBox
 import javax.swing.DefaultComboBoxModel
+import javax.swing.JCheckBox
 import javax.swing.JComboBox
 import javax.swing.JTable
 import javax.swing.JTextField
@@ -28,10 +28,12 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
     override fun tearDown() {
         try {
             DopplerInjectionConsent.getInstance().loadState(savedConsent)
-        } finally { super.tearDown() }
+        } finally {
+            super.tearDown()
+        }
     }
 
-    fun `test defaults and persistence contain only injection preferences`() {
+    fun testDefaultsAndPersistenceContainOnlyInjectionPreferences() {
         val settings = DopplerInjectionSettings(project)
         assertFalse(settings.enabled)
         assertEquals(DopplerNameTransformer.NONE, settings.nameTransformer)
@@ -42,11 +44,16 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
             val restored = DopplerInjectionSettings(project)
             restored.loadState(XmlSerializer.deserialize(serialized, DopplerInjectionSettings.State::class.java))
             assertEquals(settings.state, restored.state)
-            assertTrue(serialized.getChildren("option").all { it.getAttributeValue("name") in setOf("enabled", "nameTransformer", "customMappings") })
+            assertTrue(
+                serialized.getChildren("option").all {
+                    it.getAttributeValue("name") in
+                        setOf("enabled", "nameTransformer", "customMappings")
+                },
+            )
         }
     }
 
-    fun `test custom mappings persist for every transformer and are copied not shared`() {
+    fun testCustomMappingsPersistForEveryTransformerAndAreCopiedNotShared() {
         val settings = DopplerInjectionSettings(project)
         assertEquals(emptyList<SecretNameMapping>(), settings.customMappings)
         val pairs = listOf(SecretNameMapping("DB_URL", "DATABASE_URL"), SecretNameMapping("MISSING", "OTHER"))
@@ -54,7 +61,9 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         for (transformer in DopplerNameTransformer.entries) {
             settings.nameTransformer = transformer
             val restored = DopplerInjectionSettings(project)
-            restored.loadState(XmlSerializer.deserialize(XmlSerializer.serialize(settings.state), DopplerInjectionSettings.State::class.java))
+            restored.loadState(
+                XmlSerializer.deserialize(XmlSerializer.serialize(settings.state), DopplerInjectionSettings.State::class.java),
+            )
             assertEquals(transformer, restored.nameTransformer)
             assertEquals(pairs, restored.customMappings)
         }
@@ -66,19 +75,27 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         assertEquals("DATABASE_URL", settings.customMappings[0].newName)
     }
 
-    fun `test legacy workspace opt in cannot enable injection without local approval`() {
-        val legacy = Element("state")
-            .addContent(Element("option").setAttribute("name", "enabled").setAttribute("value", "true"))
-            .addContent(Element("option").setAttribute("name", "durationMinutes").setAttribute("value", "12"))
+    fun testLegacyWorkspaceOptInCannotEnableInjectionWithoutLocalApproval() {
+        val legacy =
+            Element("state")
+                .addContent(Element("option").setAttribute("name", "enabled").setAttribute("value", "true"))
+                .addContent(Element("option").setAttribute("name", "durationMinutes").setAttribute("value", "12"))
         val settings = DopplerInjectionSettings(project)
         settings.loadState(XmlSerializer.deserialize(legacy, DopplerInjectionSettings.State::class.java))
         assertFalse(settings.enabled)
         assertEquals(DopplerNameTransformer.NONE, settings.nameTransformer)
         val serialized = XmlSerializer.serialize(settings.state)
-        assertEquals(setOf("enabled", "nameTransformer", "customMappings"), serialized.getChildren("option").map { it.getAttributeValue("name") }.toSet())
+        assertEquals(
+            setOf("enabled", "nameTransformer", "customMappings"),
+            serialized
+                .getChildren("option")
+                .map {
+                    it.getAttributeValue("name")
+                }.toSet(),
+        )
     }
 
-    fun `test workspace changes cannot grant or restore revoked approval`() {
+    fun testWorkspaceChangesCannotGrantOrRestoreRevokedApproval() {
         val settings = DopplerInjectionSettings(project)
         settings.loadState(DopplerInjectionSettings.State(true, DopplerNameTransformer.CAMEL))
         assertFalse(settings.enabled)
@@ -93,8 +110,12 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         assertFalse(reopened.enabled)
     }
 
-    fun `test consent is user local project scoped and persists without sharing mutable state`() {
-        val storage = DopplerInjectionConsent::class.java.getAnnotation(com.intellij.openapi.components.State::class.java).storages.single()
+    fun testConsentIsUserLocalProjectScopedAndPersistsWithoutSharingMutableState() {
+        val storage =
+            DopplerInjectionConsent::class.java
+                .getAnnotation(com.intellij.openapi.components.State::class.java)
+                .storages
+                .single()
         assertEquals("doppler-injection-consent.xml", storage.value)
         assertEquals(com.intellij.openapi.components.RoamingType.DISABLED, storage.roamingType)
         val consent = DopplerInjectionConsent()
@@ -116,7 +137,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         assertFalse(restored.isGranted("/synthetic/project-one"))
     }
 
-    fun `test settings page applies and resets opt in without an expiry field`() {
+    fun testSettingsPageAppliesAndResetsOptInWithoutAnExpiryField() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy()
         settings.enabled = false
@@ -148,7 +169,10 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    private fun isShown(component: Component, root: Component): Boolean {
+    private fun isShown(
+        component: Component,
+        root: Component,
+    ): Boolean {
         var current: Component? = component
         while (current != null && current !== root) {
             if (!current.isVisible) return false
@@ -157,7 +181,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         return true
     }
 
-    fun `test mapping table is shown only for custom and pairs are saved and kept when another option is chosen`() {
+    fun testMappingTableIsShownOnlyForCustomAndPairsAreSavedAndKeptWhenAnotherOptionIsChosen() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.NONE
@@ -171,9 +195,21 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
             val model = table.model as DefaultTableModel
             assertEquals(listOf("Current secret name", "New secret name"), (0 until 2).map { model.getColumnName(it) })
             assertSame(table.columnModel, table.tableHeader.columnModel)
-            val header = table.tableHeader.defaultRenderer.getTableCellRendererComponent(table, model.getColumnName(0), false, false, -1, 0) as javax.swing.JComponent
+            val header =
+                table.tableHeader.defaultRenderer.getTableCellRendererComponent(
+                    table,
+                    model.getColumnName(0),
+                    false,
+                    false,
+                    -1,
+                    0,
+                ) as javax.swing.JComponent
             assertTrue("Column headers must be visually distinct from mapping rows", header.font.isBold)
-            assertEquals(com.intellij.util.ui.UIUtil.getPanelBackground(), header.background)
+            assertEquals(
+                com.intellij.util.ui.UIUtil
+                    .getPanelBackground(),
+                header.background,
+            )
             val headerPadding = header.insets.left
             for (column in 0 until table.columnCount) {
                 val renderer = table.columnModel.getColumn(column).cellRenderer
@@ -181,11 +217,18 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
                 assertEquals("Headers and both mapping columns must share left padding", headerPadding, cell.insets.left)
                 assertNull("Destination names must not be marked as missing source secrets", cell.icon)
             }
-            val scrollPane = javax.swing.SwingUtilities.getAncestorOfClass(javax.swing.JScrollPane::class.java, table) as javax.swing.JScrollPane
+            val scrollPane =
+                javax.swing.SwingUtilities.getAncestorOfClass(
+                    javax.swing.JScrollPane::class.java,
+                    table,
+                ) as javax.swing.JScrollPane
             val decorated = scrollPane.parent
             assertEquals("The mapping area should show more rows by default", 320, decorated.preferredSize.height)
             val layout = decorated.layout as java.awt.BorderLayout
-            assertNotNull("The add/remove toolbar belongs above the table header and rows", layout.getLayoutComponent(java.awt.BorderLayout.NORTH))
+            assertNotNull(
+                "The add/remove toolbar belongs above the table header and rows",
+                layout.getLayoutComponent(java.awt.BorderLayout.NORTH),
+            )
             assertNull(layout.getLayoutComponent(java.awt.BorderLayout.SOUTH))
             assertFalse(isShown(table, panel))
 
@@ -223,7 +266,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test invalid pairs block apply only while custom is selected`() {
+    fun testInvalidPairsBlockApplyOnlyWhileCustomIsSelected() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.NONE
@@ -296,7 +339,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test current name only offers fetched secrets and preserves missing mappings`() {
+    fun testCurrentNameOnlyOffersFetchedSecretsAndPreservesMissingMappings() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
@@ -337,7 +380,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test checking modified state does not close the secret name editor`() {
+    fun testCheckingModifiedStateDoesNotCloseTheSecretNameEditor() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
@@ -361,7 +404,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test add action counts empty rows toward the fetched secret limit`() {
+    fun testAddActionCountsEmptyRowsTowardTheFetchedSecretLimit() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
@@ -375,7 +418,11 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
             val toolbar = UIUtil.findComponentOfType(panel, com.intellij.ui.CommonActionsPanel::class.java)!!
             val add = toolbar.getAnAction(com.intellij.ui.CommonActionsPanel.Buttons.ADD)!!
             val remove = toolbar.getAnAction(com.intellij.ui.CommonActionsPanel.Buttons.REMOVE)!!
-            val event = com.intellij.testFramework.TestActionEvent.createTestEvent(add, com.intellij.openapi.actionSystem.DataContext.EMPTY_CONTEXT)
+            val event =
+                com.intellij.testFramework.TestActionEvent.createTestEvent(
+                    add,
+                    com.intellij.openapi.actionSystem.DataContext.EMPTY_CONTEXT,
+                )
 
             repeat(5) { add.actionPerformed(event) }
             assertEquals("No rows can be added before the secret count is known", 0, model.rowCount)
@@ -386,7 +433,12 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
             assertTrue((0 until model.rowCount).all { model.getValueAt(it, 0) == "" })
 
             table.setRowSelectionInterval(0, 0)
-            remove.actionPerformed(com.intellij.testFramework.TestActionEvent.createTestEvent(remove, com.intellij.openapi.actionSystem.DataContext.EMPTY_CONTEXT))
+            remove.actionPerformed(
+                com.intellij.testFramework.TestActionEvent.createTestEvent(
+                    remove,
+                    com.intellij.openapi.actionSystem.DataContext.EMPTY_CONTEXT,
+                ),
+            )
             assertEquals(2, model.rowCount)
             repeat(5) { add.actionPerformed(event) }
             assertEquals("Removing a row allows only one replacement row", 3, model.rowCount)
@@ -406,7 +458,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test mapped secrets are excluded from other rows and restored after removal`() {
+    fun testMappedSecretsAreExcludedFromOtherRowsAndRestoredAfterRemoval() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
@@ -443,7 +495,10 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
                 assertTrue("Destination names remain editable", table.editCellAt(row, 1))
                 table.cellEditor.cancelCellEditing()
             }
-            assertEquals(listOf("USED_SECRET", "OTHER_SECRET", "AVAILABLE_SECRET"), (0 until model.rowCount).map { model.getValueAt(it, 0) })
+            assertEquals(
+                listOf("USED_SECRET", "OTHER_SECRET", "AVAILABLE_SECRET"),
+                (0 until model.rowCount).map { model.getValueAt(it, 0) },
+            )
 
             model.removeRow(0)
             assertTrue(table.editCellAt(0, 0))
@@ -465,7 +520,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test new secret name opens with one click and a visible caret`() {
+    fun testNewSecretNameOpensWithOneClickAndAVisibleCaret() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
@@ -475,9 +530,17 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
             val panel = page.createPanel()
             panel.reset()
             val table = UIUtil.findComponentOfType(panel, JTable::class.java)!!
-            val click = java.awt.event.MouseEvent(
-                table, java.awt.event.MouseEvent.MOUSE_PRESSED, 0, 0, 1, 1, 1, false,
-            )
+            val click =
+                java.awt.event.MouseEvent(
+                    table,
+                    java.awt.event.MouseEvent.MOUSE_PRESSED,
+                    0,
+                    0,
+                    1,
+                    1,
+                    1,
+                    false,
+                )
             assertTrue("A single click should start editing", table.editCellAt(0, 1, click))
             val input = table.editorComponent as? JBTextField
             assertNotNull("New secret name should open a text field", input)
@@ -496,7 +559,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test repeated dirty checks do not fire editor or table events`() {
+    fun testRepeatedDirtyChecksDoNotFireEditorOrTableEvents() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
@@ -531,7 +594,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test suggestion refresh is consumed before combo callbacks can requeue it`() {
+    fun testSuggestionRefreshIsConsumedBeforeComboCallbacksCanRequeueIt() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
@@ -550,8 +613,10 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
                 events++
                 if (pending.get(page) != null) refreshStillPending = true
             }
-            val refresh = DopplerInjectionConfigurable::class.java.getDeclaredMethod("refreshNameSuggestions", Set::class.java)
-                .apply { isAccessible = true }
+            val refresh =
+                DopplerInjectionConfigurable::class.java
+                    .getDeclaredMethod("refreshNameSuggestions", Set::class.java)
+                    .apply { isAccessible = true }
 
             refresh.invoke(page, setOf("CURRENT_SECRET"))
 
@@ -565,7 +630,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test remaining mapping keeps table colors after removing a row`() {
+    fun testRemainingMappingKeepsTableColorsAfterRemovingARow() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         val previousFocusBackground = javax.swing.UIManager.get("Table.focusCellBackground")
@@ -590,8 +655,11 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
             for (selected in listOf(false, true)) {
                 for (focused in listOf(false, true)) {
                     val cell = renderer.getTableCellRendererComponent(table, "SECOND", selected, focused, 0, 0)
-                    assertEquals("A remaining mapping must use table colors, not Swing's focus background",
-                        if (selected) table.selectionBackground else table.background, cell.background)
+                    assertEquals(
+                        "A remaining mapping must use table colors, not Swing's focus background",
+                        if (selected) table.selectionBackground else table.background,
+                        cell.background,
+                    )
                     assertEquals(if (selected) table.selectionForeground else table.foreground, cell.foreground)
                 }
             }
@@ -602,7 +670,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test reopening marks a renamed remote secret as a broken mapping`() {
+    fun testReopeningMarksARenamedRemoteSecretAsABrokenMapping() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
@@ -631,7 +699,11 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
                 val existing = renderer.getTableCellRendererComponent(table, "RENAMED_SECRET", selected, false, 0, 0) as javax.swing.JLabel
                 assertNull(existing.icon)
                 assertNull(existing.toolTipText)
-                assertEquals("Existing secrets must not inherit a previous row's error color", if (selected) table.selectionForeground else table.foreground, existing.foreground)
+                assertEquals(
+                    "Existing secrets must not inherit a previous row's error color",
+                    if (selected) table.selectionForeground else table.foreground,
+                    existing.foreground,
+                )
             }
             assertEquals("ORIGINAL_SECRET", table.model.getValueAt(0, 0))
             assertEquals("INJECTED_NAME", settings.customMappings.single().newName)

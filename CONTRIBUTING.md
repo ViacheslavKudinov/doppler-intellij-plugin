@@ -14,3 +14,16 @@ For security vulnerabilities, follow the [security policy](SECURITY.md).
 Add or update automated tests under [src/test/kotlin](src/test/kotlin) for all new or changed
 behavior. Cover the main path and relevant edge cases, and follow the existing test conventions.
 Every bug fix must include a regression test.
+
+## Kotlin Formatting
+
+Kotlin source files, tests, and Gradle Kotlin scripts must follow the project's shared
+ktlint configuration. Run the same check locally that CI uses:
+
+```bash
+./gradlew ktlintCheck
+```
+
+To apply automatic formatting, run `./gradlew ktlintFormat`, then run `./gradlew ktlintCheck`
+in a separate invocation. Fix any remaining violations manually. The Gradle `check` task also
+includes ktlint checks. CI fails on formatting violations and does not rewrite files.

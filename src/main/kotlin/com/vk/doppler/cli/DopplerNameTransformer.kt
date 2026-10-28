@@ -1,7 +1,10 @@
 package com.vk.doppler.cli
 
 /** Doppler's documented injection name transformers; null means no CLI transformation. */
-enum class DopplerNameTransformer(val cliName: String?, private val label: String) {
+enum class DopplerNameTransformer(
+    val cliName: String?,
+    private val label: String,
+) {
     NONE(null, "none"),
     CAMEL("camel", "camel - API_KEY → apiKey"),
     UPPER_CAMEL("upper-camel", "upper-camel - API_KEY → ApiKey"),
@@ -11,7 +14,8 @@ enum class DopplerNameTransformer(val cliName: String?, private val label: Strin
     LOWER_KEBAB("lower-kebab", "lower-kebab - API_KEY → api-key"),
 
     /** Not a CLI transformer: the plugin renames the chosen secrets after download. */
-    CUSTOM(null, "custom - rename selected secrets");
+    CUSTOM(null, "custom - rename selected secrets"),
+    ;
 
     override fun toString(): String = label
 }

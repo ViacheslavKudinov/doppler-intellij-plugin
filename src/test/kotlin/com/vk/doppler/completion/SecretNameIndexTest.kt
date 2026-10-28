@@ -71,8 +71,10 @@ class SecretNameIndexTest {
     private val first: SecretNames = mapOf("app" to mapOf("api" to setOf("A")))
     private val second: SecretNames = mapOf("app" to mapOf("api" to setOf("A", "B")))
 
-    private fun index(ttl: Long = 1_000L, retry: Long = 500L) =
-        SecretNameIndex(loader, executor, { now }, ttl, retry)
+    private fun index(
+        ttl: Long = 1_000L,
+        retry: Long = 500L,
+    ) = SecretNameIndex(loader, executor, { now }, ttl, retry)
 
     @Test
     fun `the first read returns nothing and loads in the background`() {
@@ -294,20 +296,21 @@ class SecretNameIndexTest {
     fun `invalidating an in-flight load starts a fresh generation and ignores the old result`() {
         val results = ArrayDeque(listOf(first, second))
         lateinit var index: SecretNameIndex
-        val queuedLoader = object : SecretNamesLoader {
-            private var calls = 0
+        val queuedLoader =
+            object : SecretNamesLoader {
+                private var calls = 0
 
-            override fun load(
-                authContextId: String,
-                checkCancelled: () -> Unit,
-                reportProgress: (String) -> Unit,
-                previousNames: SecretNames,
-            ): SecretNames {
-                calls++
-                if (calls == 1) index.invalidate()
-                return results.removeFirst()
+                override fun load(
+                    authContextId: String,
+                    checkCancelled: () -> Unit,
+                    reportProgress: (String) -> Unit,
+                    previousNames: SecretNames,
+                ): SecretNames {
+                    calls++
+                    if (calls == 1) index.invalidate()
+                    return results.removeFirst()
+                }
             }
-        }
         index = SecretNameIndex(queuedLoader, executor, { now }, 1_000L, 500L)
 
         index.namesFor("ctx") {}
@@ -444,10 +447,11 @@ class SecretNameIndexTest {
     @Test
     fun `a rejected executor does not break reads and is retried later`() {
         var attempts = 0
-        val rejecting = Executor {
-            attempts++
-            throw RejectedExecutionException("shutdown")
-        }
+        val rejecting =
+            Executor {
+                attempts++
+                throw RejectedExecutionException("shutdown")
+            }
         val index = SecretNameIndex(loader, rejecting, { now }, 1_000L, 500L)
 
         assertEquals(emptyMap<String, Map<String, Set<String>>>(), index.namesFor("ctx") {})

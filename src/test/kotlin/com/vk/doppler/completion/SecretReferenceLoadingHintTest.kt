@@ -1,12 +1,12 @@
 package com.vk.doppler.completion
 
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.codeInsight.lookup.LookupManager
 import com.intellij.codeInsight.lookup.impl.LookupImpl
+import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
 class SecretReferenceLoadingHintTest : BasePlatformTestCase() {
-    fun `test loading remains at caret with suggestions and popup dismissal`() {
+    fun testLoadingRemainsAtCaretWithSuggestionsAndPopupDismissal() {
         myFixture.configureByText("references.txt", "VALUE: \${<caret> remaining text")
         val editor = myFixture.editor
         val originalText = editor.document.text
@@ -15,6 +15,7 @@ class SecretReferenceLoadingHintTest : BasePlatformTestCase() {
         var loading = true
         var matches = true
         val hint = SecretReferenceLoadingHint.show(editor, { true }, { matches }) { loading }
+
         fun message(): String {
             val inlay = editor.inlayModel.getInlineElementsInRange(0, editor.document.textLength).single()
             assertEquals(offset, inlay.offset)
@@ -39,9 +40,13 @@ class SecretReferenceLoadingHintTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test matching local and cached suggestions select the more references message`() {
+    fun testMatchingLocalAndCachedSuggestionsSelectTheMoreReferencesMessage() {
         val location = SecretReferenceLocation("app", "dev")
-        fun needsHint(prefix: String, names: SecretNames = emptyMap()): Boolean {
+
+        fun needsHint(
+            prefix: String,
+            names: SecretNames = emptyMap(),
+        ): Boolean {
             val text = "LOCAL: example\nVALUE: \${$prefix"
             return SecretReferenceLoadingHint.needsLoadingHint(text, text.length, location, names)
         }
@@ -53,7 +58,7 @@ class SecretReferenceLoadingHintTest : BasePlatformTestCase() {
         assertFalse(needsHint("other.dev.K", names))
     }
 
-    fun `test repeated completion replaces stale hint predicate`() {
+    fun testRepeatedCompletionReplacesStaleHintPredicate() {
         myFixture.configureByText("references.txt", "VALUE: \${<caret>")
         val editor = myFixture.editor
         SecretReferenceLoadingHint.show(editor, { true }) { true }
@@ -67,7 +72,8 @@ class SecretReferenceLoadingHintTest : BasePlatformTestCase() {
             restarted.update()
         }
     }
-    fun `test focus loss removes loading hint and a late request cannot reopen it`() {
+
+    fun testFocusLossRemovesLoadingHintAndALateRequestCannotReopenIt() {
         myFixture.configureByText("references.txt", "VALUE: \${<caret>")
         val editor = myFixture.editor
         var focused = true
@@ -85,7 +91,7 @@ class SecretReferenceLoadingHintTest : BasePlatformTestCase() {
         hint.update()
     }
 
-    fun `test hint can appear again after leaving and reentering a reference`() {
+    fun testHintCanAppearAgainAfterLeavingAndReenteringAReference() {
         myFixture.configureByText("references.txt", "VALUE: \${<caret>")
         val editor = myFixture.editor
         val offset = editor.caretModel.offset
@@ -104,7 +110,7 @@ class SecretReferenceLoadingHintTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test loading hint is decoration and disappears when loading ends`() {
+    fun testLoadingHintIsDecorationAndDisappearsWhenLoadingEnds() {
         myFixture.configureByText("references.txt", "VALUE: \${<caret>")
         val editor = myFixture.editor
         val originalText = editor.document.text
@@ -125,7 +131,7 @@ class SecretReferenceLoadingHintTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test leaving reference clears hint even while loading continues`() {
+    fun testLeavingReferenceClearsHintEvenWhileLoadingContinues() {
         myFixture.configureByText("references.txt", "VALUE: \${<caret>")
         val editor = myFixture.editor
         val hint = SecretReferenceLoadingHint.show(editor, isEditorActive = { true }) { true }
@@ -134,7 +140,7 @@ class SecretReferenceLoadingHintTest : BasePlatformTestCase() {
         assertEmpty(editor.inlayModel.getInlineElementsInRange(0, editor.document.textLength))
     }
 
-    fun `test completed load never shows stale loading hint`() {
+    fun testCompletedLoadNeverShowsStaleLoadingHint() {
         myFixture.configureByText("references.txt", "VALUE: \${<caret>")
         val editor = myFixture.editor
         SecretReferenceLoadingHint.show(editor, isEditorActive = { true }) { false }

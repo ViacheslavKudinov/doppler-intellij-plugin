@@ -21,17 +21,17 @@ import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTabsManager
 import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.treeStructure.Tree
-import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTabsManager
 import com.vk.doppler.DopplerIcons
+import com.vk.doppler.cli.CliOperation
+import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.cli.DopplerConfig
 import com.vk.doppler.cli.DopplerFolderSetup
-import com.vk.doppler.cli.DopplerCliException
-import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.DopplerProject
 import com.vk.doppler.completion.SecretReferenceService
 import com.vk.doppler.editor.DopplerSecretsEditorService
@@ -39,8 +39,8 @@ import com.vk.doppler.service.DopplerService
 import com.vk.doppler.service.DopplerStatus
 import com.vk.doppler.service.DopplerStatusReport
 import com.vk.doppler.settings.DopplerConfigurable
-import com.vk.doppler.settings.DopplerFolderSetupState
 import com.vk.doppler.settings.DopplerFolderSetupListener
+import com.vk.doppler.settings.DopplerFolderSetupState
 import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.Component
@@ -72,8 +72,10 @@ private const val MAX_INSTALLER_BYTES = 2 * 1024 * 1024
 private const val MAX_INSTALLER_REDIRECTS = 5
 private val AUTOMATIC_REFRESH_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(30)
 
-class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPanel(true, true), Disposable {
-
+class DopplerToolWindowPanel(
+    private val project: Project,
+) : SimpleToolWindowPanel(true, true),
+    Disposable {
     private val rootNode = DefaultMutableTreeNode()
     private val treeModel = DefaultTreeModel(rootNode)
     private val treeUpdater = DopplerTreeUpdater(treeModel)
@@ -95,9 +97,12 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
     init {
         configureTree()
-        project.messageBus.connect(this).subscribe(DopplerFolderSetupState.TOPIC, DopplerFolderSetupListener {
-            tree.repaint()
-        })
+        project.messageBus.connect(this).subscribe(
+            DopplerFolderSetupState.TOPIC,
+            DopplerFolderSetupListener {
+                tree.repaint()
+            },
+        )
         cards.add(statusPanel, CARD_STATUS)
         cards.add(JBScrollPane(tree), CARD_TREE)
         setContent(cards)
@@ -116,15 +121,19 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
     }
 
     private fun buildToolbar(): JComponent {
-        val group = DefaultActionGroup().apply {
-            add(DopplerTreeRefreshAction(::refresh))
-            add(object : AnAction("Doppler Settings", "Open Doppler settings", AllIcons.General.Settings) {
-                override fun getActionUpdateThread() = ActionUpdateThread.EDT
-                override fun actionPerformed(e: AnActionEvent) {
-                    ShowSettingsUtil.getInstance().showSettingsDialog(project, DopplerConfigurable::class.java)
-                }
-            })
-        }
+        val group =
+            DefaultActionGroup().apply {
+                add(DopplerTreeRefreshAction(::refresh))
+                add(
+                    object : AnAction("Doppler Settings", "Open Doppler settings", AllIcons.General.Settings) {
+                        override fun getActionUpdateThread() = ActionUpdateThread.EDT
+
+                        override fun actionPerformed(e: AnActionEvent) {
+                            ShowSettingsUtil.getInstance().showSettingsDialog(project, DopplerConfigurable::class.java)
+                        }
+                    },
+                )
+            }
         val toolbar = ActionManager.getInstance().createActionToolbar(ActionPlaces.TOOLWINDOW_CONTENT, group, true)
         toolbar.targetComponent = this
         return toolbar.component
@@ -136,25 +145,30 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         tree.setExpandableItemsEnabled(false)
         tree.cellRenderer = DopplerTreeCellRenderer { DopplerFolderSetupState.getInstance(project).current }
 
-        tree.addTreeWillExpandListener(object : TreeWillExpandListener {
-            override fun treeWillExpand(event: TreeExpansionEvent) {
-                (event.path.lastPathComponent as? ProjectNode)?.let {
-                    loadConfigs(it, operation = if (refreshing) refreshOperation else CliOperation.TREE_EXPAND)
+        tree.addTreeWillExpandListener(
+            object : TreeWillExpandListener {
+                override fun treeWillExpand(event: TreeExpansionEvent) {
+                    (event.path.lastPathComponent as? ProjectNode)?.let {
+                        loadConfigs(it, operation = if (refreshing) refreshOperation else CliOperation.TREE_EXPAND)
+                    }
                 }
-            }
 
-            override fun treeWillCollapse(event: TreeExpansionEvent) = Unit
-        })
+                override fun treeWillCollapse(event: TreeExpansionEvent) = Unit
+            },
+        )
 
-        tree.addMouseListener(DopplerTreeClickListener(tree) { node ->
-            DopplerSecretsEditorService.getInstance(project)
-                .openConfig(
-                    node.projectSlug,
-                    node.config.name,
-                    node.config.environment,
-                    treeAuthContextId = authContextId,
-                )
-        })
+        tree.addMouseListener(
+            DopplerTreeClickListener(tree) { node ->
+                DopplerSecretsEditorService
+                    .getInstance(project)
+                    .openConfig(
+                        node.projectSlug,
+                        node.config.name,
+                        node.config.environment,
+                        treeAuthContextId = authContextId,
+                    )
+            },
+        )
     }
 
     /** Re-checks CLI availability and authentication, then reloads the project list. */
@@ -190,17 +204,22 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         }
 
         val projects = service.listTreeProjects(operation)
-        val folderSetup = project.basePath?.let { folder ->
-            try {
-                service.folderSetup(folder)
-            } catch (_: DopplerCliException) {
-                null
+        val folderSetup =
+            project.basePath?.let { folder ->
+                try {
+                    service.folderSetup(folder)
+                } catch (_: DopplerCliException) {
+                    null
+                }
             }
-        }
         return RefreshResult(report, projects, folderSetup)
     }
 
-    private fun applyRefreshResult(result: RefreshResult, operation: CliOperation, generation: Int) {
+    private fun applyRefreshResult(
+        result: RefreshResult,
+        operation: CliOperation,
+        generation: Int,
+    ) {
         if (project.isDisposed || generation != refreshGeneration) return
         val report = result.report
         DopplerSecretsEditorService.invalidateCachedFiles(
@@ -226,7 +245,10 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         }
     }
 
-    private fun handleRefreshFailure(error: Throwable, generation: Int) {
+    private fun handleRefreshFailure(
+        error: Throwable,
+        generation: Int,
+    ) {
         if (project.isDisposed || generation != refreshGeneration) return
         authContextId = null
         refreshGate.invalidate()
@@ -246,7 +268,10 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         val reuseExistingTree: Boolean = false,
     )
 
-    private fun populate(projects: List<DopplerProject>, operation: CliOperation) {
+    private fun populate(
+        projects: List<DopplerProject>,
+        operation: CliOperation,
+    ) {
         val state = DopplerTreeState(tree)
         val changed = treeUpdater.projects(projects)
         if (projects.isEmpty()) {
@@ -258,7 +283,8 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
         val folderSetup = DopplerFolderSetupState.getInstance(project).current
         rootNode.children().toList().filterIsInstance<ProjectNode>().forEach { node ->
             if (node.loaded || node.configLoadFailed || tree.isExpanded(javax.swing.tree.TreePath(node.path)) ||
-                folderSetup.matchesProject(node.dopplerProject.slug)) {
+                folderSetup.matchesProject(node.dopplerProject.slug)
+            ) {
                 loadConfigs(node, true, operation)
             }
         }
@@ -266,10 +292,18 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
     private fun invalidateConfigLoads() {
         configGeneration++
-        rootNode.children().toList().filterIsInstance<ProjectNode>().forEach { it.loading = false }
+        rootNode
+            .children()
+            .toList()
+            .filterIsInstance<ProjectNode>()
+            .forEach { it.loading = false }
     }
 
-    private fun loadConfigs(node: ProjectNode, force: Boolean = false, operation: CliOperation = CliOperation.TREE_EXPAND) {
+    private fun loadConfigs(
+        node: ProjectNode,
+        force: Boolean = false,
+        operation: CliOperation = CliOperation.TREE_EXPAND,
+    ) {
         if (node.loading || (node.loaded && !force)) return
         node.loading = true
         val slug = node.dopplerProject.slug
@@ -338,22 +372,34 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                 cardLayout.show(cards, CARD_STATUS)
             }
 
-            else -> showStatus(report.detail ?: "Could not reach Doppler.", "Retry")
+            else -> {
+                showStatus(report.detail ?: "Could not reach Doppler.", "Retry")
+            }
         }
     }
 
     private fun installCliInTerminal() {
         when {
-            SystemInfo.isMac -> sendInstallCommand("brew install gnupg && brew install dopplerhq/cli/doppler")
-            SystemInfo.isWindows -> sendInstallCommand("winget install doppler.doppler")
+            SystemInfo.isMac -> {
+                sendInstallCommand("brew install gnupg && brew install dopplerhq/cli/doppler")
+            }
+
+            SystemInfo.isWindows -> {
+                sendInstallCommand("winget install doppler.doppler")
+            }
+
             SystemInfo.isLinux -> {
                 val option = detectLinuxInstallerOption()
                 if (option == null) {
                     reviewLinuxInstaller()
-                } else sendInstallCommand(option.command)
+                } else {
+                    sendInstallCommand(option.command)
+                }
             }
 
-            else -> reviewLinuxInstaller()
+            else -> {
+                reviewLinuxInstaller()
+            }
         }
     }
 
@@ -406,8 +452,9 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
     private fun downloadInstaller(): ReviewedInstaller {
         var url = trustedInstallerUrl(URI(INSTALL_SCRIPT_URL))
         for (redirect in 0..MAX_INSTALLER_REDIRECTS) {
-            val connection = url.openConnection() as? HttpsURLConnection
-                ?: error("Installer URL must use HTTPS.")
+            val connection =
+                url.openConnection() as? HttpsURLConnection
+                    ?: error("Installer URL must use HTTPS.")
             connection.instanceFollowRedirects = false
             connection.connectTimeout = 15_000
             connection.readTimeout = 30_000
@@ -415,8 +462,9 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                 when (val response = connection.responseCode) {
                     in 300..399 -> {
                         require(redirect < MAX_INSTALLER_REDIRECTS) { "Too many installer redirects." }
-                        val location = connection.getHeaderField("Location")
-                            ?: error("Installer redirect did not include a location.")
+                        val location =
+                            connection.getHeaderField("Location")
+                                ?: error("Installer redirect did not include a location.")
                         url = trustedInstallerUrl(url.toURI().resolve(location))
                     }
 
@@ -436,7 +484,9 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
                         }
                     }
 
-                    else -> error("Installer download failed with HTTP status $response.")
+                    else -> {
+                        error("Installer download failed with HTTP status $response.")
+                    }
                 }
             } finally {
                 connection.disconnect()
@@ -463,15 +513,16 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
 
     private fun runReviewedInstaller(installer: ReviewedInstaller) {
         if (reviewedInstaller != installer || !Files.isRegularFile(installer.path, LinkOption.NOFOLLOW_LINKS)) return
-        val choice = Messages.showDialog(
-            project,
-            "This will run the downloaded file you reviewed (${installer.path.fileName}) with administrator privileges (sudo). " +
-                "Continue only if you trust its contents.",
-            "Run Reviewed Doppler Installer",
-            arrayOf("Open Terminal", "Cancel"),
-            1,
-            Messages.getWarningIcon(),
-        )
+        val choice =
+            Messages.showDialog(
+                project,
+                "This will run the downloaded file you reviewed (${installer.path.fileName}) with administrator privileges (sudo). " +
+                    "Continue only if you trust its contents.",
+                "Run Reviewed Doppler Installer",
+                arrayOf("Open Terminal", "Cancel"),
+                1,
+                Messages.getWarningIcon(),
+            )
         if (choice != 0) return
         if (!sendInstallCommand(reviewedInstallerCommand(installer))) {
             return
@@ -482,27 +533,36 @@ class DopplerToolWindowPanel(private val project: Project) : SimpleToolWindowPan
     private fun sendInstallCommand(command: String): Boolean =
         runCatching {
             val tabsManager = TerminalToolWindowTabsManager.getInstance(project)
-            val terminalTab = tabsManager.tabs.lastOrNull {
-                it.content.displayName == DOPPLER_TERMINAL_TAB_NAME || it.content.displayName == "Install Doppler CLI"
-            }
-                ?: tabsManager.createTabBuilder()
-                    .workingDirectory(project.basePath ?: System.getProperty("user.home"))
-                    .tabName(DOPPLER_TERMINAL_TAB_NAME)
-                    .requestFocus(true)
-                    .deferSessionStartUntilUiShown(true)
-                    .createTab()
+            val terminalTab =
+                tabsManager.tabs.lastOrNull {
+                    it.content.displayName == DOPPLER_TERMINAL_TAB_NAME || it.content.displayName == "Install Doppler CLI"
+                }
+                    ?: tabsManager
+                        .createTabBuilder()
+                        .workingDirectory(project.basePath ?: System.getProperty("user.home"))
+                        .tabName(DOPPLER_TERMINAL_TAB_NAME)
+                        .requestFocus(true)
+                        .deferSessionStartUntilUiShown(true)
+                        .createTab()
             terminalTab.content.displayName = DOPPLER_TERMINAL_TAB_NAME
             terminalTab.content.manager?.setSelectedContent(terminalTab.content)
-            ToolWindowManager.getInstance(project)
+            ToolWindowManager
+                .getInstance(project)
                 .getToolWindow("Terminal")
                 ?.activate(null, true)
-            terminalTab.view.createSendTextBuilder().shouldExecute().send(command)
+            terminalTab.view
+                .createSendTextBuilder()
+                .shouldExecute()
+                .send(command)
             true
         }.onFailure { error ->
             showStatus("Could not open terminal: ${error.message}", "Retry")
         }.getOrDefault(false)
 
-    private fun showStatus(message: String, actionLabel: String?) {
+    private fun showStatus(
+        message: String,
+        actionLabel: String?,
+    ) {
         statusPanel.emptyText.clear()
         statusPanel.emptyText.text = message
         if (actionLabel != null) {
@@ -520,7 +580,10 @@ internal class DopplerTreeRefreshGate(
     private var lastAuthContextId: String? = null
 
     @Synchronized
-    fun canReuseTree(operation: CliOperation, authContextId: String): Boolean {
+    fun canReuseTree(
+        operation: CliOperation,
+        authContextId: String,
+    ): Boolean {
         if (operation != CliOperation.TREE_PANEL_FOCUS && operation != CliOperation.TREE_WINDOW_FOCUS) return false
         val now = nanoTime()
         return lastAuthContextId == authContextId &&
@@ -543,10 +606,10 @@ internal class DopplerTreeRefreshGate(
 internal class DopplerTreeRefreshAction(
     private val refresh: (CliOperation) -> Unit,
 ) : AnAction(
-    "Refresh Doppler tree (does not reload open editors)",
-    "Reload Doppler projects, configs, and folder setup",
-    AllIcons.Actions.Refresh,
-) {
+        "Refresh Doppler tree (does not reload open editors)",
+        "Reload Doppler projects, configs, and folder setup",
+        AllIcons.Actions.Refresh,
+    ) {
     override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
     override fun actionPerformed(e: AnActionEvent) = refresh(CliOperation.TREE_REFRESH_BUTTON)
@@ -592,8 +655,9 @@ internal class DopplerTreeCellRenderer(
                 if (folderSetup().matchesProject(value.dopplerProject.slug)) markFolderSetup()
                 value.dopplerProject.description?.takeIf { it.isNotBlank() }?.let {
                     append("  $it", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-                    val details = listOfNotNull(toolTipText, it)
-                        .joinToString("<br><br>") { text -> StringUtil.escapeXmlEntities(text) }
+                    val details =
+                        listOfNotNull(toolTipText, it)
+                            .joinToString("<br><br>") { text -> StringUtil.escapeXmlEntities(text) }
                     toolTipText = "<html><div width='320'>$details</div></html>"
                 }
             }
@@ -609,7 +673,9 @@ internal class DopplerTreeCellRenderer(
                 if (folderSetup().matchesConfig(value.projectSlug, value.config.name)) markFolderSetup()
             }
 
-            else -> append(value?.toString().orEmpty(), SimpleTextAttributes.GRAYED_ATTRIBUTES)
+            else -> {
+                append(value?.toString().orEmpty(), SimpleTextAttributes.GRAYED_ATTRIBUTES)
+            }
         }
     }
 

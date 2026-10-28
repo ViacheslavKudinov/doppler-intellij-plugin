@@ -1,29 +1,32 @@
 package com.vk.doppler.settings
 
-import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.TestDialog
 import com.intellij.openapi.ui.TestDialogManager
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.ui.components.ActionLink
 import com.intellij.util.ui.UIUtil
-import javax.swing.JButton
-import javax.swing.JCheckBox
-import javax.swing.JTextField
 import org.junit.Assume.assumeFalse
 import java.nio.file.Files
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
+import javax.swing.JButton
+import javax.swing.JCheckBox
+import javax.swing.JTextField
 
 class DopplerConfigurableTest : BasePlatformTestCase() {
     fun `test global settings are discoverable without a project and folder setup requires a project`() {
         val globalId = DopplerConfigurable::class.java.name
         val folderId = DopplerFolderSetupConfigurable::class.java.name
         val injectionId = DopplerInjectionConfigurable::class.java.name
+
         fun ids(context: com.intellij.openapi.project.Project?) =
-            com.intellij.openapi.options.ex.ConfigurableExtensionPointUtil.getConfigurables(context, true)
-                .filterIsInstance<com.intellij.openapi.options.SearchableConfigurable>().map { it.id }
+            com.intellij.openapi.options.ex.ConfigurableExtensionPointUtil
+                .getConfigurables(context, true)
+                .filterIsInstance<com.intellij.openapi.options.SearchableConfigurable>()
+                .map { it.id }
 
         val withoutProject = ids(null)
         assertTrue(withoutProject.contains(globalId))
@@ -33,7 +36,12 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
         assertTrue(withProject.contains(globalId))
         assertTrue(withProject.contains(folderId))
         assertTrue(withProject.contains(injectionId))
-        val defaults = ids(com.intellij.openapi.project.ProjectManager.getInstance().defaultProject)
+        val defaults =
+            ids(
+                com.intellij.openapi.project.ProjectManager
+                    .getInstance()
+                    .defaultProject,
+            )
         assertTrue(defaults.contains(globalId))
         assertFalse(defaults.contains(folderId))
         assertFalse(defaults.contains(injectionId))
@@ -43,7 +51,12 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
             val panel = configurable.createPanel()
             assertNotNull(UIUtil.findComponentOfType(panel, TextFieldWithBrowseButton::class.java))
             assertNull(UIUtil.findComponentOfType(panel, DopplerFolderSetupPanel::class.java))
-            val links = UIUtil.uiTraverser(panel).filter(com.intellij.ui.components.ActionLink::class.java).map { it.text }.toList()
+            val links =
+                UIUtil
+                    .uiTraverser(panel)
+                    .filter(com.intellij.ui.components.ActionLink::class.java)
+                    .map { it.text }
+                    .toList()
             assertContainsElements(links, "Folder Setup…", "Run and Debug…")
         } finally {
             configurable.disposeUIResources()
@@ -52,10 +65,13 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
 
     fun `test project settings links explain that an IDE project is required outside a settings dialog`() {
         val messages = CopyOnWriteArrayList<String>()
-        TestDialogManager.setTestDialog(TestDialog { message ->
-            messages += message
-            Messages.OK
-        }, testRootDisposable)
+        TestDialogManager.setTestDialog(
+            TestDialog { message ->
+                messages += message
+                Messages.OK
+            },
+            testRootDisposable,
+        )
         val configurable = DopplerConfigurable()
         try {
             val panel = configurable.createPanel()
@@ -86,12 +102,16 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
             settings.logCliCalls = false
             val panel = configurable.createPanel()
             panel.reset()
-            val interval = UIUtil.uiTraverser(panel)
-                .filter(JTextField::class.java)
-                .single { it.text == "17" }
-            val logging = UIUtil.uiTraverser(panel)
-                .filter(JCheckBox::class.java)
-                .single { it.text == "Log CLI calls" }
+            val interval =
+                UIUtil
+                    .uiTraverser(panel)
+                    .filter(JTextField::class.java)
+                    .single { it.text == "17" }
+            val logging =
+                UIUtil
+                    .uiTraverser(panel)
+                    .filter(JCheckBox::class.java)
+                    .single { it.text == "Log CLI calls" }
 
             interval.text = "42"
             logging.isSelected = true
@@ -118,25 +138,33 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
         val settings = DopplerSettings.getInstance()
         val originalState = settings.state.copy()
         val messages = CopyOnWriteArrayList<String>()
-        TestDialogManager.setTestDialog(TestDialog { message ->
-            messages += message
-            Messages.OK
-        }, testRootDisposable)
+        TestDialogManager.setTestDialog(
+            TestDialog { message ->
+                messages += message
+                Messages.OK
+            },
+            testRootDisposable,
+        )
         val configurable = DopplerConfigurable()
         try {
-            writeExecutable(executable, """
+            writeExecutable(
+                executable,
+                """
                 case "${'$'}1" in
                   me) printf '%s' '{"slug":"identity","type":"personal","token_preview":"synthetic","name":"Local User","workplace":{"slug":"team","name":"Example Team"}}' ;;
                   --version) printf 'test-version' ;;
                   *) exit 1 ;;
                 esac
-            """)
+            """,
+            )
             val panel = configurable.createPanel()
             panel.reset()
             val cliPath = requireNotNull(UIUtil.findComponentOfType(panel, TextFieldWithBrowseButton::class.java))
-            val testConnection = UIUtil.uiTraverser(panel)
-                .filter(JButton::class.java)
-                .single { it.text == "Test Connection" }
+            val testConnection =
+                UIUtil
+                    .uiTraverser(panel)
+                    .filter(JButton::class.java)
+                    .single { it.text == "Test Connection" }
             cliPath.text = executable.toString()
 
             testConnection.doClick()
@@ -165,7 +193,9 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
         val calls = directory.resolve("calls")
         val failure = directory.resolve("fail")
         Files.writeString(state, """{"enclave.project":"example","enclave.config":"dev"}""")
-        Files.writeString(executable, """
+        Files.writeString(
+            executable,
+            """
             #!/bin/sh
             case "${'$'}1" in
               me) printf '%s' '{"slug":"test","type":"personal","token_preview":"synthetic","workplace":{"slug":"test"}}' ;;
@@ -186,7 +216,8 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
               configs) printf '%s' '[{"name":"dev"},{"name":"stg"},{"name":"prod"}]' ;;
               *) exit 1 ;;
             esac
-        """.trimIndent())
+            """.trimIndent(),
+        )
         assertTrue(executable.toFile().setExecutable(true))
         val settings = DopplerSettings.getInstance()
         val originalPath = settings.cliPath
@@ -199,7 +230,11 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
             val panel = folderConfigurable.createPanel()
             panel.reset()
             val setup = requireNotNull(UIUtil.findComponentOfType(panel, DopplerFolderSetupPanel::class.java))
-            UIUtil.uiTraverser(setup).filter(JButton::class.java).first { it.text == "Reload" }.doClick()
+            UIUtil
+                .uiTraverser(setup)
+                .filter(JButton::class.java)
+                .first { it.text == "Reload" }
+                .doClick()
             awaitEnabled(setup)
             assertEquals("example", setup.projectChoice.selectedItem)
             assertEquals("dev", setup.configChoice.selectedItem)
@@ -256,11 +291,14 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
             Files.delete(failure)
             val replacement = directory.resolve("replacement-doppler")
             val replacementCalls = directory.resolve("replacement-calls")
-            Files.writeString(replacement, """
+            Files.writeString(
+                replacement,
+                """
                 #!/bin/sh
                 printf '%s\n' "${'$'}@" >> '$replacementCalls'
                 exec '$executable' "${'$'}@"
-            """.trimIndent())
+                """.trimIndent(),
+            )
             assertTrue(replacement.toFile().setExecutable(true))
             val cliPath = requireNotNull(UIUtil.findComponentOfType(globalPanel, TextFieldWithBrowseButton::class.java))
             cliPath.text = replacement.toString()
@@ -273,11 +311,24 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
             assertEquals("stg", DopplerFolderSetupState.getInstance(project).current.configName)
             assertFalse(panel.isModified())
             assertEquals(replacement.toString(), settings.cliPath)
-            val setArguments = listOf("configure", "set", "--scope", requireNotNull(project.basePath),
-                "--silent", "--json", "--no-check-version", "--", "project=example", "config=stg")
+            val setArguments =
+                listOf(
+                    "configure",
+                    "set",
+                    "--scope",
+                    requireNotNull(project.basePath),
+                    "--silent",
+                    "--json",
+                    "--no-check-version",
+                    "--",
+                    "project=example",
+                    "config=stg",
+                )
             val preflightArguments = listOf("me", "--json", "--no-check-version")
-            assertEquals(preflightArguments + setArguments,
-                Files.readAllLines(replacementCalls).take(preflightArguments.size + setArguments.size))
+            assertEquals(
+                preflightArguments + setArguments,
+                Files.readAllLines(replacementCalls).take(preflightArguments.size + setArguments.size),
+            )
             val arguments = Files.readAllLines(calls)
             assertTrue(arguments.containsAll(listOf("set", "--scope", project.basePath, "--", "project=example", "config=stg")))
 
@@ -288,17 +339,31 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
             assertEquals("parent", setup.projectChoice.selectedItem)
             assertEquals("prod", setup.configChoice.selectedItem)
             assertEquals("prod", DopplerFolderSetupState.getInstance(project).current.configName)
-            assertEquals(listOf("configure", "unset", "--scope", requireNotNull(project.basePath),
-                "--silent", "--json", "--no-check-version", "--", "project", "config"),
-                Files.readAllLines(calls).drop(arguments.size))
+            assertEquals(
+                listOf(
+                    "configure",
+                    "unset",
+                    "--scope",
+                    requireNotNull(project.basePath),
+                    "--silent",
+                    "--json",
+                    "--no-check-version",
+                    "--",
+                    "project",
+                    "config",
+                ),
+                Files.readAllLines(calls).drop(arguments.size),
+            )
             assertFalse(panel.isModified())
 
             // Simulate the same background read used by the 30-second timer.
             Files.writeString(state, """{"enclave.project":"example","enclave.config":"dev"}""")
             val cache = DopplerFolderSetupState.getInstance(project)
-            com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
-                cache.refreshFromCli()
-            }.get()
+            com.intellij.openapi.application.ApplicationManager
+                .getApplication()
+                .executeOnPooledThread {
+                    cache.refreshFromCli()
+                }.get()
             UIUtil.dispatchAllInvocationEvents()
             awaitEnabled(setup)
             assertEquals("example", cache.current.projectSlug)
@@ -306,16 +371,22 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
 
             setup.configChoice.selectedItem = "stg"
             Files.writeString(state, """{"enclave.project":"parent","enclave.config":"prod"}""")
-            com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
-                cache.refreshFromCli()
-            }.get()
+            com.intellij.openapi.application.ApplicationManager
+                .getApplication()
+                .executeOnPooledThread {
+                    cache.refreshFromCli()
+                }.get()
             UIUtil.dispatchAllInvocationEvents()
             assertEquals("parent", cache.current.projectSlug)
             assertEquals("stg", setup.configChoice.selectedItem)
             assertTrue(panel.isModified())
 
             Files.writeString(state, "{}")
-            UIUtil.uiTraverser(setup).filter(JButton::class.java).first { it.text == "Reload" }.doClick()
+            UIUtil
+                .uiTraverser(setup)
+                .filter(JButton::class.java)
+                .first { it.text == "Reload" }
+                .doClick()
             awaitEnabled(setup)
             assertNull(setup.projectChoice.selectedItem)
             assertNull(setup.configChoice.selectedItem)
@@ -343,7 +414,10 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
     }
 
     private fun awaitEnabled(setup: DopplerFolderSetupPanel) {
-        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15)
+        val deadline =
+            System.nanoTime() +
+                java.util.concurrent.TimeUnit.SECONDS
+                    .toNanos(15)
         while (!setup.projectChoice.isEnabled && System.nanoTime() < deadline) {
             UIUtil.dispatchAllInvocationEvents()
             Thread.sleep(10)
@@ -351,7 +425,10 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
         assertTrue("Folder setup should finish loading", setup.projectChoice.isEnabled)
     }
 
-    private fun awaitMessage(messages: List<String>, count: Int): String {
+    private fun awaitMessage(
+        messages: List<String>,
+        count: Int,
+    ): String {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
         while (messages.size < count && System.nanoTime() < deadline) {
             UIUtil.dispatchAllInvocationEvents()
@@ -361,7 +438,10 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
         return messages[count - 1]
     }
 
-    private fun writeExecutable(path: java.nio.file.Path, body: String) {
+    private fun writeExecutable(
+        path: java.nio.file.Path,
+        body: String,
+    ) {
         Files.writeString(path, "#!/bin/sh\n${body.trimIndent()}\n")
         assertTrue(path.toFile().setExecutable(true))
     }

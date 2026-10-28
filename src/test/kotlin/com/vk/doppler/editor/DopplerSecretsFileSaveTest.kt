@@ -8,15 +8,15 @@ import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.VirtualFilePreCloseCheck
+import com.intellij.testFramework.LightVirtualFile
+import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.tabs.TabInfo
-import javax.swing.JPanel
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
-import com.intellij.testFramework.LightVirtualFile
 import com.vk.doppler.DopplerIcons
 import com.vk.doppler.cli.DopplerFolderSetup
 import com.vk.doppler.settings.DopplerFolderSetupState
 import java.nio.charset.StandardCharsets
+import javax.swing.JPanel
 
 /**
  * Guards the core assumption behind the two-way sync: an ordinary editor save must reach
@@ -26,17 +26,20 @@ import java.nio.charset.StandardCharsets
  * non-physical file system as unsaved.
  */
 class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
-
-    private fun newFile(configName: String, text: String, snapshot: Map<String, String?>): DopplerSecretsFile =
+    private fun newFile(
+        configName: String,
+        text: String,
+        snapshot: Map<String, String?>,
+    ): DopplerSecretsFile =
         DopplerFileSystem.getInstance().obtain("backend", configName, "test-context").also {
             it.setServerContent(text, snapshot)
         }
 
-    fun `test the file system is registered under the doppler protocol`() {
+    fun testTheFileSystemIsRegisteredUnderTheDopplerProtocol() {
         assertNotNull(DopplerFileSystem.getInstance())
     }
 
-    fun `test presentable URLs hide auth context and follow environment metadata outside tabs`() {
+    fun testPresentableUrlsHideAuthContextAndFollowEnvironmentMetadataOutsideTabs() {
         val fs = DopplerFileSystem.getInstance()
         val file = fs.obtain("presentable", "dev", "synthetic-auth-fingerprint")
         try {
@@ -51,19 +54,32 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test forgotten file presentation does not expose auth context`() {
+    fun testForgottenFilePresentationDoesNotExposeAuthContext() {
         val fs = DopplerFileSystem.getInstance()
-        val projectSlugs = listOf(
-            "forgotten", "team/backend", "team/nested/backend", "team%2Fbackend", "team +%?#", "\u9879\u76ee/\u540e\u7aef",
-        )
-        val configNames = listOf(
-            "dev", "dev.yaml", "team/dev", "team/nested/dev.yaml", "team%2Fdev +%?#", "\u5f00\u53d1/dev",
-        )
+        val projectSlugs =
+            listOf(
+                "forgotten",
+                "team/backend",
+                "team/nested/backend",
+                "team%2Fbackend",
+                "team +%?#",
+                "\u9879\u76ee/\u540e\u7aef",
+            )
+        val configNames =
+            listOf(
+                "dev",
+                "dev.yaml",
+                "team/dev",
+                "team/nested/dev.yaml",
+                "team%2Fdev +%?#",
+                "\u5f00\u53d1/dev",
+            )
         for (projectSlug in projectSlugs) {
             for (configName in configNames) {
-                val file = fs.obtain(projectSlug, configName, "synthetic-auth-fingerprint").apply {
-                    environment = "development"
-                }
+                val file =
+                    fs.obtain(projectSlug, configName, "synthetic-auth-fingerprint").apply {
+                        environment = "development"
+                    }
                 fs.forget(file)
 
                 assertNull(fs.findFileByPath(file.path))
@@ -74,7 +90,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test internal file paths encode each identity component without changing YAML names`() {
+    fun testInternalFilePathsEncodeEachIdentityComponentWithoutChangingYamlNames() {
         val fs = DopplerFileSystem.getInstance()
         val file = fs.obtain("team/sub% +", "nested/dev% +.yaml", "ctx/one% +")
         try {
@@ -88,17 +104,19 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test slash containing identity components cannot collide in the file cache`() {
+    fun testSlashContainingIdentityComponentsCannotCollideInTheFileCache() {
         val fs = DopplerFileSystem.getInstance()
-        val identities = listOf(
-            Triple("team/project", "dev", "ctx"),
-            Triple("team", "dev", "project/ctx"),
-            Triple("team", "ctx/dev", "project"),
-            Triple("team%2Fproject", "dev", "ctx"),
-        )
-        val files = identities.map { (projectSlug, configName, authContextId) ->
-            fs.obtain(projectSlug, configName, authContextId)
-        }
+        val identities =
+            listOf(
+                Triple("team/project", "dev", "ctx"),
+                Triple("team", "dev", "project/ctx"),
+                Triple("team", "ctx/dev", "project"),
+                Triple("team%2Fproject", "dev", "ctx"),
+            )
+        val files =
+            identities.map { (projectSlug, configName, authContextId) ->
+                fs.obtain(projectSlug, configName, authContextId)
+            }
         try {
             assertEquals(identities.size, files.map { it.path }.distinct().size)
             assertEquals(identities.size, files.map { it.url }.distinct().size)
@@ -115,14 +133,15 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test malformed presentation paths fail without exposing their contents`() {
+    fun testMalformedPresentationPathsFailWithoutExposingTheirContents() {
         val fs = DopplerFileSystem.getInstance()
-        val paths = listOf(
-            "/team/backend/synthetic-auth-fingerprint/dev.yaml",
-            "/team/synthetic-auth-fingerprint/dev",
-            "team/synthetic-auth-fingerprint/dev.yaml",
-            "/",
-        )
+        val paths =
+            listOf(
+                "/team/backend/synthetic-auth-fingerprint/dev.yaml",
+                "/team/synthetic-auth-fingerprint/dev",
+                "team/synthetic-auth-fingerprint/dev.yaml",
+                "/",
+            )
         for (path in paths) {
             try {
                 fs.extractPresentableUrl(path)
@@ -133,7 +152,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test friendly URLs preserve auth scoped file identity`() {
+    fun testFriendlyUrlsPreserveAuthScopedFileIdentity() {
         val fs = DopplerFileSystem.getInstance()
         val first = fs.obtain("account-presentation", "dev", "first-context")
         val second = fs.obtain("account-presentation", "dev", "second-context")
@@ -150,7 +169,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test auto refresh pauses for edits and resumes after undo despite unsaved flag`() {
+    fun testAutoRefreshPausesForEditsAndResumesAfterUndoDespiteUnsavedFlag() {
         val snapshot = mapOf("A" to "old")
         val initialText = SecretsDocumentFormat.serialize(snapshot)
         val file = newFile("refresh-undo", initialText, snapshot)
@@ -169,7 +188,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertFalse(service.canAutoRefresh(file))
     }
 
-    fun `test auto refresh requires active window and selected clean config`() {
+    fun testAutoRefreshRequiresActiveWindowAndSelectedCleanConfig() {
         val text = SecretsDocumentFormat.serialize(emptyMap())
         val selected = newFile("refresh-selected", text, emptyMap())
         val background = newFile("refresh-background", text, emptyMap())
@@ -184,14 +203,17 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertEquals(listOf(background), service.autoRefreshFiles(true, arrayOf(selected, background)))
     }
 
-    fun `test auto refresh resumes after successful sync but not local save`() {
+    fun testAutoRefreshResumesAfterSuccessfulSyncButNotLocalSave() {
         val file = newFile("refresh-save", SecretsDocumentFormat.serialize(mapOf("A" to "old")), mapOf("A" to "old"))
         val documents = FileDocumentManager.getInstance()
         val document = requireNotNull(documents.getDocument(file))
         val service = DopplerSecretsEditorService.getInstance(project)
         val savedSnapshot = mapOf("A" to "new")
         val savedText = SecretsDocumentFormat.serialize(savedSnapshot)
-        WriteAction.run<RuntimeException> { document.setText(savedText); documents.saveDocument(document) }
+        WriteAction.run<RuntimeException> {
+            document.setText(savedText)
+            documents.saveDocument(document)
+        }
         assertFalse(service.canAutoRefresh(file))
         file.pushInProgress.set(true)
         file.setServerContent(savedText, savedSnapshot)
@@ -203,7 +225,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertFalse(service.canAutoRefresh(file))
     }
 
-    fun `test auto refresh skips pending failed queued and invalidated configs`() {
+    fun testAutoRefreshSkipsPendingFailedQueuedAndInvalidatedConfigs() {
         val file = newFile("refresh-pending", SecretsDocumentFormat.serialize(emptyMap()), emptyMap())
         val other = newFile("refresh-other", SecretsDocumentFormat.serialize(emptyMap()), emptyMap())
         val service = DopplerSecretsEditorService.getInstance(project)
@@ -221,13 +243,16 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertFalse(service.canAutoRefresh(file))
     }
 
-    fun `test close check is registered and leaves ordinary files unaffected`() {
-        val check = VirtualFilePreCloseCheck.EP_NAME.extensionList.filterIsInstance<DopplerFileCloseCheck>().single()
+    fun testCloseCheckIsRegisteredAndLeavesOrdinaryFilesUnaffected() {
+        val check =
+            VirtualFilePreCloseCheck.EP_NAME.extensionList
+                .filterIsInstance<DopplerFileCloseCheck>()
+                .single()
         assertTrue(check.canCloseFile(LightVirtualFile("ordinary.yaml")))
         assertTrue(check.canCloseFile(newFile("close-clean", "A: old", mapOf("A" to "old"))))
     }
 
-    fun `test cancel close preserves unsaved document and pending sync`() {
+    fun testCancelClosePreservesUnsavedDocumentAndPendingSync() {
         val file = newFile("close-cancel", "A: old", mapOf("A" to "old"))
         val documents = FileDocumentManager.getInstance()
         val document = requireNotNull(documents.getDocument(file))
@@ -240,7 +265,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertTrue(file.hasPendingSync)
     }
 
-    fun `test dont save discards edits without pushing to Doppler`() {
+    fun testDontSaveDiscardsEditsWithoutPushingToDoppler() {
         val file = newFile("close-discard", "A: old", mapOf("A" to "old"))
         val documents = FileDocumentManager.getInstance()
         val document = requireNotNull(documents.getDocument(file))
@@ -254,7 +279,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertEquals(SecretsDocumentFormat.serialize(mapOf("A" to "old")), document.text)
     }
 
-    fun `test save permits closing when document already matches Doppler`() {
+    fun testSavePermitsClosingWhenDocumentAlreadyMatchesDoppler() {
         val text = SecretsDocumentFormat.serialize(mapOf("A" to "old"))
         val file = newFile("close-save", text, mapOf("A" to "old"))
         FileDocumentManager.getInstance().getDocument(file)
@@ -263,7 +288,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertFalse(file.hasPendingSync)
     }
 
-    fun `test invalid save keeps the tab open and retains local edits`() {
+    fun testInvalidSaveKeepsTheTabOpenAndRetainsLocalEdits() {
         val file = newFile("close-invalid", "A: old", mapOf("A" to "old"))
         val document = requireNotNull(FileDocumentManager.getInstance().getDocument(file))
         WriteAction.run<RuntimeException> { document.setText("A: [unclosed") }
@@ -273,7 +298,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertFalse(file.pushInProgress.get())
     }
 
-    fun `test save defers closing until sync completes without pending edits`() {
+    fun testSaveDefersClosingUntilSyncCompletesWithoutPendingEdits() {
         val file = newFile("close-deferred", "A: old", mapOf("A" to "old"))
         FileDocumentManager.getInstance().getDocument(file)
         val service = DopplerSecretsEditorService.getInstance(project)
@@ -290,7 +315,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertEquals(1, closes)
     }
 
-    fun `test cancelling a pending close request prevents delayed closure`() {
+    fun testCancellingAPendingCloseRequestPreventsDelayedClosure() {
         val file = newFile("close-cancel-deferred", "A: old", mapOf("A" to "old"))
         FileDocumentManager.getInstance().getDocument(file)
         val service = DopplerSecretsEditorService.getInstance(project)
@@ -305,8 +330,11 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertEquals(0, closes)
     }
 
-    fun `test registered file icon provider only overrides Doppler files`() {
-        val provider = FileIconProvider.EP_NAME.extensionList.filterIsInstance<DopplerFileIconProvider>().single()
+    fun testRegisteredFileIconProviderOnlyOverridesDopplerFiles() {
+        val provider =
+            FileIconProvider.EP_NAME.extensionList
+                .filterIsInstance<DopplerFileIconProvider>()
+                .single()
         val file = DopplerFileSystem.getInstance().obtain("icons", "dev", "test-context")
         val setupState = DopplerFolderSetupState.getInstance(project)
         val originalSetup = setupState.current
@@ -337,7 +365,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test folder setup changes refresh open Doppler tab icons`() {
+    fun testFolderSetupChangesRefreshOpenDopplerTabIcons() {
         val dopplerFile = DopplerFileSystem.getInstance().obtain("icons", "dev", "test-context")
         val ordinaryFile = LightVirtualFile("ordinary.yaml")
         val refreshed = mutableListOf<VirtualFile>()
@@ -350,7 +378,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertEquals(listOf(dopplerFile), refreshed)
     }
 
-    fun `test duplicate config tabs include project and environment`() {
+    fun testDuplicateConfigTabsIncludeProjectAndEnvironment() {
         val fs = DopplerFileSystem.getInstance()
         val first = fs.obtain("tab-backend", "dev", "test-context").apply { environment = "development" }
         val second = fs.obtain("tab-frontend", "dev", "test-context").apply { environment = "dev" }
@@ -370,7 +398,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         manager.closeFile(first)
     }
 
-    fun `test duplicate config title handles missing environment metadata`() {
+    fun testDuplicateConfigTitleHandlesMissingEnvironmentMetadata() {
         val fs = DopplerFileSystem.getInstance()
         val first = fs.obtain("tab-known", "stg", "test-context")
         val second = fs.obtain("tab-other", "stg", "test-context")
@@ -387,7 +415,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         manager.closeFile(first)
     }
 
-    fun `test tab presentation uses bold config and regular path and survives title resets`() {
+    fun testTabPresentationUsesBoldConfigAndRegularPathAndSurvivesTitleResets() {
         val fs = DopplerFileSystem.getInstance()
         val first = fs.obtain("bold-backend", "dev", "test-context").apply { environment = "dev" }
         val second = fs.obtain("bold-frontend", "dev", "test-context").apply { environment = "dev" }
@@ -415,7 +443,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test tab presentation marks unsaved edits while typing`() {
+    fun testTabPresentationMarksUnsavedEditsWhileTyping() {
         val initialText = SecretsDocumentFormat.serialize(mapOf("A" to "old"))
         val editedText = SecretsDocumentFormat.serialize(mapOf("A" to "changed"))
         val file = newFile("editing", initialText, mapOf("A" to "old"))
@@ -433,7 +461,10 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
 
             WriteAction.run<RuntimeException> { document.setText(initialText) }
 
-            assertTrue("the IDE still considers the reverted document unsaved", FileDocumentManager.getInstance().isDocumentUnsaved(document))
+            assertTrue(
+                "the IDE still considers the reverted document unsaved",
+                FileDocumentManager.getInstance().isDocumentUnsaved(document),
+            )
             assertEquals("undoing back to the server content clears the edit marker", listOf("editing"), tab.coloredText.texts)
 
             WriteAction.run<RuntimeException> { document.setText(editedText) }
@@ -454,7 +485,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test real editor tab presentation tracks undo to server content`() {
+    fun testRealEditorTabPresentationTracksUndoToServerContent() {
         val initialText = SecretsDocumentFormat.serialize(mapOf("A" to "old"))
         val editedText = SecretsDocumentFormat.serialize(mapOf("A" to "changed"))
         val file = newFile("real-tab-editing", initialText, mapOf("A" to "old"))
@@ -477,7 +508,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test editing marks the document unsaved and saving writes through to the file`() {
+    fun testEditingMarksTheDocumentUnsavedAndSavingWritesThroughToTheFile() {
         val file = newFile("dev", "API_KEY: old", mapOf("API_KEY" to "old"))
         val manager = FileDocumentManager.getInstance()
         val document = requireNotNull(manager.getDocument(file))
@@ -498,14 +529,14 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         )
     }
 
-    fun `test the file system returns the same instance for a config`() {
+    fun testTheFileSystemReturnsTheSameInstanceForAConfig() {
         val fs = DopplerFileSystem.getInstance()
         assertSame(fs.obtain("backend", "stg", "test-context"), fs.obtain("backend", "stg", "test-context"))
         assertNotSame(fs.obtain("backend", "stg", "test-context"), fs.obtain("backend", "prd", "test-context"))
         assertNotSame(fs.obtain("backend", "stg", "test-context"), fs.obtain("backend", "stg", "other-context"))
     }
 
-    fun `test invalidating another auth context closes and scrubs the cached editor`() {
+    fun testInvalidatingAnotherAuthContextClosesAndScrubsTheCachedEditor() {
         val fs = DopplerFileSystem.getInstance()
         val secretText = SecretsDocumentFormat.serialize(mapOf("API_TOKEN" to "secret-value"))
         val file = newFile("auth-scrub", secretText, mapOf("API_TOKEN" to "secret-value"))
@@ -525,7 +556,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertNull(fs.findFileByPath(file.path))
     }
 
-    fun `test the file is resolvable by path and is writable yaml`() {
+    fun testTheFileIsResolvableByPathAndIsWritableYaml() {
         val file = newFile("prd", DopplerSecretsFile.EMPTY_DOCUMENT, emptyMap())
 
         assertTrue(file.isWritable)
@@ -535,16 +566,21 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertSame(file, DopplerFileSystem.getInstance().findFileByPath(file.path))
     }
 
-    fun `test navigation label shows config name without synthetic yaml extension`() {
+    fun testNavigationLabelShowsConfigNameWithoutSyntheticYamlExtension() {
         val file = newFile("stg", DopplerSecretsFile.EMPTY_DOCUMENT, emptyMap())
         myFixture.configureFromExistingVirtualFile(file)
         val psiFile = myFixture.file
 
-        assertEquals("stg", com.intellij.ide.navigationToolbar.DefaultNavBarExtension().getPresentableText(psiFile))
+        assertEquals(
+            "stg",
+            com.intellij.ide.navigationToolbar
+                .DefaultNavBarExtension()
+                .getPresentableText(psiFile),
+        )
         assertEquals("YAML", psiFile.fileType.name)
     }
 
-    fun `test reloading server content does not push back`() {
+    fun testReloadingServerContentDoesNotPushBack() {
         val file = newFile("ci", "A: '1'", mapOf("A" to "1"))
         file.suppressPush = true
         file.setServerContent("A: '2'", mapOf("A" to "2"))
@@ -554,7 +590,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertEquals("A: '2'", String(file.contentsToByteArray(), StandardCharsets.UTF_8))
     }
 
-    fun `test a saved local edit remains pending until synchronized`() {
+    fun testASavedLocalEditRemainsPendingUntilSynchronized() {
         val file = newFile("pending", "A: old", mapOf("A" to "old"))
         assertFalse(file.hasPendingSync)
         file.getOutputStream(null, -1, -1).use { it.write("A: new".toByteArray(StandardCharsets.UTF_8)) }
@@ -564,7 +600,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertFalse(file.hasPendingSync)
     }
 
-    fun `test a rejected save remains protected from auto refresh`() {
+    fun testARejectedSaveRemainsProtectedFromAutoRefresh() {
         val file = newFile("invalid", "A: old", mapOf("A" to "old"))
         DopplerSecretsEditorService.getInstance(project).push(file, "A: [unclosed")
 
@@ -573,7 +609,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertEquals(mapOf("A" to "old"), file.remoteSnapshot)
     }
 
-    fun `test a save without remote changes clears the pending state`() {
+    fun testASaveWithoutRemoteChangesClearsThePendingState() {
         val file = newFile("unchanged", "A: old", mapOf("A" to "old"))
         file.hasPendingSync = true
         DopplerSecretsEditorService.getInstance(project).push(file, "A: old")
@@ -582,7 +618,7 @@ class DopplerSecretsFileSaveTest : BasePlatformTestCase() {
         assertFalse(file.pushInProgress.get())
     }
 
-    fun `test saves during a sync keep only the newest pending document`() {
+    fun testSavesDuringASyncKeepOnlyTheNewestPendingDocument() {
         val file = newFile("queued", "A: old", mapOf("A" to "old"))
         val service = DopplerSecretsEditorService.getInstance(project)
         file.pushInProgress.set(true)

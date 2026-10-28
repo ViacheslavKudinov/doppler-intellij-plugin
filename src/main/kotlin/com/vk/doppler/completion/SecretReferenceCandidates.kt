@@ -3,9 +3,14 @@ package com.vk.doppler.completion
 /** Secret names by project slug, then config name. */
 internal typealias SecretNames = Map<String, Map<String, Set<String>>>
 
-internal data class SecretReferenceLocation(val projectSlug: String, val configName: String)
+internal data class SecretReferenceLocation(
+    val projectSlug: String,
+    val configName: String,
+)
 
-internal enum class SecretReferenceScope(val priority: Double) {
+internal enum class SecretReferenceScope(
+    val priority: Double,
+) {
     CONFIG(3.0),
     PROJECT(2.0),
     ACCOUNT(1.0),
@@ -22,7 +27,6 @@ internal data class SecretReferenceCandidate(
  * `${secret}`, `${config.secret}` and `${project.config.secret}`.
  */
 internal object SecretReferenceCandidates {
-
     fun find(
         current: SecretReferenceLocation,
         currentNames: Collection<String>,
@@ -50,8 +54,12 @@ internal object SecretReferenceCandidates {
             val configs = projectConfigs + (current.configName to currentNames.toSet())
             for ((config, names) in configs) {
                 addQualified(
-                    "$projectLead$config.", names, SecretReferenceScope.PROJECT,
-                    origin(current.projectSlug, config), prefix, result,
+                    "$projectLead$config.",
+                    names,
+                    SecretReferenceScope.PROJECT,
+                    origin(current.projectSlug, config),
+                    prefix,
+                    result,
                 )
             }
         }
@@ -60,8 +68,12 @@ internal object SecretReferenceCandidates {
             if (project == current.projectSlug || !matchesLead("$project.", prefix)) continue
             for ((config, names) in configs) {
                 addQualified(
-                    "$project.$config.", names, SecretReferenceScope.ACCOUNT,
-                    origin(project, config), prefix, result,
+                    "$project.$config.",
+                    names,
+                    SecretReferenceScope.ACCOUNT,
+                    origin(project, config),
+                    prefix,
+                    result,
                 )
             }
         }
@@ -90,8 +102,13 @@ internal object SecretReferenceCandidates {
     }
 
     /** Whether references starting with [lead] can still match what has been typed. */
-    private fun matchesLead(lead: String, prefix: String): Boolean =
-        lead.startsWith(prefix, ignoreCase = true) || prefix.startsWith(lead, ignoreCase = true)
+    private fun matchesLead(
+        lead: String,
+        prefix: String,
+    ): Boolean = lead.startsWith(prefix, ignoreCase = true) || prefix.startsWith(lead, ignoreCase = true)
 
-    private fun origin(project: String, config: String) = "$project/$config"
+    private fun origin(
+        project: String,
+        config: String,
+    ) = "$project/$config"
 }

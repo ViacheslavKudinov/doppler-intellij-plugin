@@ -16,6 +16,13 @@ Secrets must never be persisted or leaked. Before suggesting any code, check tha
 
 If you can't be certain the answer is "no", don't generate the code. Say what the risk is.
 
+## Kotlin Formatting
+
+- All Kotlin source files, tests, and Gradle Kotlin scripts must follow the project's ktlint formatting rules and `$/.editorconfig` configuration.
+- After Kotlin or Gradle Kotlin script changes, run `./gradlew ktlintFormat --console=plain -x patchChangelog`, then run `./gradlew ktlintCheck --console=plain -x patchChangelog` in a separate invocation. Keep formatting changes within the task's scope unless a broader cleanup is authorized.
+- Fix formatting violations before reporting completion. Do not disable rules, add baselines, or ignore failures merely to make checks pass without explicit approval.
+- CI must check formatting and fail on violations, not automatically rewrite source files.
+
 ## Build and Unit Tests
 
 - Add or update unit tests for new code and changed behavior, including relevant edge cases. Include a regression test for bug fixes. Follow the existing test conventions under `src/test/kotlin`.

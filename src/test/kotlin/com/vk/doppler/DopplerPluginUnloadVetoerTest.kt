@@ -8,13 +8,17 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
 class DopplerPluginUnloadVetoerTest : BasePlatformTestCase() {
     private fun registeredVetoer(): DopplerPluginUnloadVetoer =
-        ExtensionPointName.create<DynamicPluginVetoer>("com.intellij.ide.dynamicPluginVetoer")
-            .extensionList.filterIsInstance<DopplerPluginUnloadVetoer>().single()
+        ExtensionPointName
+            .create<DynamicPluginVetoer>("com.intellij.ide.dynamicPluginVetoer")
+            .extensionList
+            .filterIsInstance<DopplerPluginUnloadVetoer>()
+            .single()
 
-    fun `test registered vetoer blocks unloading Doppler`() {
-        val descriptor = requireNotNull(
-            PluginManagerCore.getPlugin(PluginId.getId("com.viacheslavkudinov.doppler")),
-        )
+    fun testRegisteredVetoerBlocksUnloadingDoppler() {
+        val descriptor =
+            requireNotNull(
+                PluginManagerCore.getPlugin(PluginId.getId("com.viacheslavkudinov.doppler")),
+            )
 
         assertEquals(
             "Restart the IDE to disable, remove, or update Doppler Secrets Manager.",
@@ -22,7 +26,7 @@ class DopplerPluginUnloadVetoerTest : BasePlatformTestCase() {
         )
     }
 
-    fun `test registered vetoer leaves other plugins unaffected`() {
+    fun testRegisteredVetoerLeavesOtherPluginsUnaffected() {
         val descriptor = requireNotNull(PluginManagerCore.getPlugin(PluginId.getId("com.intellij")))
 
         assertNull(registeredVetoer().vetoPluginUnload(descriptor))

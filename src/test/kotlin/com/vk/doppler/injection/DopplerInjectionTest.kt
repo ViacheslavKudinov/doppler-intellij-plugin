@@ -12,9 +12,9 @@ import com.intellij.execution.application.ApplicationConfigurationType
 import com.intellij.execution.configurations.ConfigurationType
 import com.intellij.execution.configurations.JavaParameters
 import com.intellij.execution.configurations.RunConfiguration
+import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.execution.configurations.RunProfile
 import com.intellij.execution.configurations.RunnerSettings
-import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.execution.executors.DefaultDebugExecutor
 import com.intellij.execution.executors.DefaultRunExecutor
 import com.intellij.execution.runners.ExecutionEnvironment
@@ -27,19 +27,19 @@ import com.intellij.javascript.nodejs.interpreter.local.NodeJsLocalInterpreter
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskType
-import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.remoteServer.configuration.ServerConfiguration
 import com.intellij.remoteServer.impl.configuration.deployment.DeployToServerRunConfiguration
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.ExtensionTestUtil
+import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.jetbrains.nodejs.run.NodeJsRunConfigurationType
-import com.jetbrains.python.run.PythonConfigurationType
 import com.jetbrains.python.run.AbstractPythonRunConfiguration
+import com.jetbrains.python.run.PythonConfigurationType
+import com.vk.doppler.cli.DopplerNameTransformer
+import com.vk.doppler.settings.DopplerInjectionConsent
 import com.vk.doppler.settings.DopplerInjectionSettings
 import com.vk.doppler.settings.DopplerSettings
-import com.vk.doppler.settings.DopplerInjectionConsent
-import com.vk.doppler.cli.DopplerNameTransformer
 import org.gradle.tooling.LongRunningOperation
 import org.jetbrains.idea.maven.execution.MavenRunConfigurationType
 import org.jetbrains.plugins.gradle.service.execution.GradleExecutionContext
@@ -70,7 +70,9 @@ class DopplerInjectionTest : BasePlatformTestCase() {
         Files.writeString(directory.resolve("config"), "dev")
         Files.writeString(directory.resolve("project"), "example")
         val script = directory.resolve("doppler")
-        Files.writeString(script, """
+        Files.writeString(
+            script,
+            """
             #!/bin/sh
             case "${'$'}1" in
               configure)
@@ -103,7 +105,8 @@ class DopplerInjectionTest : BasePlatformTestCase() {
                 printf '{"KEY":"resolved-%s-%s","EMPTY":"","MULTILINE":"one\ntwo","DOPPLER_CONFIG":"%s"}' "${'$'}(cat '$directory/account')" "${'$'}(cat '$directory/config')" "${'$'}(cat '$directory/config')" ;;
               *) exit 1 ;;
             esac
-        """.trimIndent())
+            """.trimIndent(),
+        )
         assertTrue(script.toFile().setExecutable(true))
         DopplerSettings.getInstance().cliPath = script.toString()
         DopplerInjectionSettings.getInstance(project).enabled = true
@@ -117,7 +120,9 @@ class DopplerInjectionTest : BasePlatformTestCase() {
                 DopplerInjectionConsent.getInstance().loadState(previousConsent)
                 Files.walk(directory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
             }
-        } finally { super.tearDown() }
+        } finally {
+            super.tearDown()
+        }
     }
 
     fun `test every launch downloads default config resolved values and preserves local overrides`() {
@@ -129,7 +134,12 @@ class DopplerInjectionTest : BasePlatformTestCase() {
         assertEquals("resolved-one-dev", background { service.mergeEnvironment(emptyMap()) }["KEY"])
         val downloads = Files.readAllLines(directory.resolve("downloads"))
         assertEquals(2, downloads.size)
-        assertTrue(downloads.all { it == "secrets download --no-file --no-fallback --format json --project example --config dev --scope ${project.basePath} --json --no-check-version" })
+        assertTrue(
+            downloads.all {
+                it ==
+                    "secrets download --no-file --no-fallback --format json --project example --config dev --scope ${project.basePath} --json --no-check-version"
+            },
+        )
         assertTrue(downloads.none { it.contains("resolved") })
         assertTrue(Files.readAllLines(directory.resolve("accounts")).all { it.contains("--scope ${project.basePath}") })
     }
@@ -148,14 +158,15 @@ class DopplerInjectionTest : BasePlatformTestCase() {
 
     fun `test every name transformer is forwarded to CLI and transformed output preserves local overrides`() {
         val settings = DopplerInjectionSettings.getInstance(project)
-        val examples = mapOf(
-            DopplerNameTransformer.CAMEL to "apiKey",
-            DopplerNameTransformer.UPPER_CAMEL to "ApiKey",
-            DopplerNameTransformer.LOWER_SNAKE to "api_key",
-            DopplerNameTransformer.TF_VAR to "TF_VAR_api_key",
-            DopplerNameTransformer.DOTNET_ENV to "ApiKey",
-            DopplerNameTransformer.LOWER_KEBAB to "api-key",
-        )
+        val examples =
+            mapOf(
+                DopplerNameTransformer.CAMEL to "apiKey",
+                DopplerNameTransformer.UPPER_CAMEL to "ApiKey",
+                DopplerNameTransformer.LOWER_SNAKE to "api_key",
+                DopplerNameTransformer.TF_VAR to "TF_VAR_api_key",
+                DopplerNameTransformer.DOTNET_ENV to "ApiKey",
+                DopplerNameTransformer.LOWER_KEBAB to "api-key",
+            )
         for ((transformer, name) in examples) {
             settings.nameTransformer = transformer
             // The fake CLI returns transformed names; production delegates transformation to Doppler.
@@ -167,8 +178,12 @@ class DopplerInjectionTest : BasePlatformTestCase() {
             assertEquals("remote", merged["OTHER"])
             assertFalse(merged.containsKey("API_KEY"))
             assertEquals(mapOf(name to "local"), existing)
-            assertTrue(Files.readAllLines(directory.resolve("downloads")).last()
-                .contains("--name-transformer ${transformer.cliName} --scope"))
+            assertTrue(
+                Files
+                    .readAllLines(directory.resolve("downloads"))
+                    .last()
+                    .contains("--name-transformer ${transformer.cliName} --scope"),
+            )
         }
         settings.nameTransformer = DopplerNameTransformer.NONE
         Files.writeString(directory.resolve("remote"), """{"API_KEY":"unchanged"}""")
@@ -197,7 +212,10 @@ class DopplerInjectionTest : BasePlatformTestCase() {
     fun `test custom mapping rejects invalid names and collisions instead of silently losing secrets`() {
         val settings = DopplerInjectionSettings.getInstance(project)
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
-        Files.writeString(directory.resolve("remote"), """{"SOURCE":"synthetic-source","TARGET":"synthetic-target","OTHER":"synthetic-other"}""")
+        Files.writeString(
+            directory.resolve("remote"),
+            """{"SOURCE":"synthetic-source","TARGET":"synthetic-target","OTHER":"synthetic-other"}""",
+        )
         for (mappings in listOf(
             listOf(SecretNameMapping("SOURCE", " INVALID")),
             listOf(SecretNameMapping("SOURCE", "TARGET")),
@@ -354,8 +372,18 @@ class DopplerInjectionTest : BasePlatformTestCase() {
     }
 
     fun `test Java and Maven patch launch parameters without changing stored profiles`() {
-        val java = ApplicationConfigurationType.getInstance().configurationFactories.first().createTemplateConfiguration(project)
-        val maven = MavenRunConfigurationType.getInstance().configurationFactories.first().createTemplateConfiguration(project)
+        val java =
+            ApplicationConfigurationType
+                .getInstance()
+                .configurationFactories
+                .first()
+                .createTemplateConfiguration(project)
+        val maven =
+            MavenRunConfigurationType
+                .getInstance()
+                .configurationFactories
+                .first()
+                .createTemplateConfiguration(project)
         val extension = DopplerJavaEnvironmentExtension()
         for (profile in listOf(java, maven)) {
             val configuration = profile as RunConfigurationBase<*>
@@ -368,12 +396,20 @@ class DopplerInjectionTest : BasePlatformTestCase() {
             assertEquals("dev", parameters.env["DOPPLER_CONFIG"])
             val after = org.jdom.Element("configuration")
             configuration.writeExternal(after)
-            assertEquals(com.intellij.openapi.util.JDOMUtil.writeElement(before), com.intellij.openapi.util.JDOMUtil.writeElement(after))
+            assertEquals(
+                com.intellij.openapi.util.JDOMUtil
+                    .writeElement(before),
+                com.intellij.openapi.util.JDOMUtil
+                    .writeElement(after),
+            )
         }
     }
 
     fun `test Python delegates Run and Debug using an isolated profile with local overrides`() {
-        val configuration = PythonConfigurationType.getInstance().factory.createTemplateConfiguration(project) as AbstractPythonRunConfiguration<*>
+        val configuration =
+            PythonConfigurationType.getInstance().factory.createTemplateConfiguration(
+                project,
+            ) as AbstractPythonRunConfiguration<*>
         configuration.envs = mapOf("KEY" to "local")
         val originalEnvironment = configuration.envs.toMap()
         val runner = DopplerPythonEnvironmentRunner()
@@ -387,7 +423,12 @@ class DopplerInjectionTest : BasePlatformTestCase() {
         }
         assertEquals(originalEnvironment, configuration.envs)
         assertFalse(runner.canRun("Coverage", configuration))
-        val java = ApplicationConfigurationType.getInstance().configurationFactories.first().createTemplateConfiguration(project)
+        val java =
+            ApplicationConfigurationType
+                .getInstance()
+                .configurationFactories
+                .first()
+                .createTemplateConfiguration(project)
         assertFalse(runner.canRun(DefaultRunExecutor.EXECUTOR_ID, java))
         assertFalse(DopplerDockerEnvironmentRunner().canRun(DefaultRunExecutor.EXECUTOR_ID, java))
         DopplerInjectionSettings.getInstance(project).enabled = false
@@ -406,25 +447,35 @@ class DopplerInjectionTest : BasePlatformTestCase() {
         assertEquals("local", target.envData.envs["KEY"])
         assertEquals("dev", target.envData.envs["DOPPLER_CONFIG"])
         val after = org.jdom.Element("configuration").also(configuration::writeExternal)
-        assertEquals(com.intellij.openapi.util.JDOMUtil.writeElement(saved), com.intellij.openapi.util.JDOMUtil.writeElement(after))
+        assertEquals(
+            com.intellij.openapi.util.JDOMUtil
+                .writeElement(saved),
+            com.intellij.openapi.util.JDOMUtil
+                .writeElement(after),
+        )
     }
 
     fun `test Gradle Tooling API patches execution operation and skips project sync`() {
         val settings = GradleExecutionSettings().apply { withEnvironmentVariables(mapOf("KEY" to "local")) }
         var injected: Map<String, String>? = null
-        val operation = proxy<LongRunningOperation> { method, args ->
-            if (method == "setEnvironmentVariables") {
-                @Suppress("UNCHECKED_CAST")
-                injected = args!![0] as Map<String, String>
+        val operation =
+            proxy<LongRunningOperation> { method, args ->
+                if (method == "setEnvironmentVariables") {
+                    @Suppress("UNCHECKED_CAST")
+                    injected = args!![0] as Map<String, String>
+                }
+                null
             }
-            null
-        }
-        fun context(type: ExternalSystemTaskType) = proxy<GradleExecutionContext> { method, _ -> when (method) {
-            "getTaskId" -> ExternalSystemTaskId.create(GradleConstants.SYSTEM_ID, type, project)
-            "getSettings" -> settings
-            "getProject" -> project
-            else -> null
-        } }
+
+        fun context(type: ExternalSystemTaskType) =
+            proxy<GradleExecutionContext> { method, _ ->
+                when (method) {
+                    "getTaskId" -> ExternalSystemTaskId.create(GradleConstants.SYSTEM_ID, type, project)
+                    "getSettings" -> settings
+                    "getProject" -> project
+                    else -> null
+                }
+            }
         val extension = DopplerGradleEnvironmentExtension()
         background { extension.configureOperation(operation, context(ExternalSystemTaskType.RESOLVE_PROJECT)) }
         assertNull(injected)
@@ -436,16 +487,24 @@ class DopplerInjectionTest : BasePlatformTestCase() {
 
     fun `test Gradle cancels operation on injection failure even if host swallows extension errors`() {
         var cancelled = false
-        val operation = proxy<LongRunningOperation> { method, args ->
-            if (method == "withCancellationToken") cancelled = (args!![0] as org.gradle.tooling.CancellationToken).isCancellationRequested
-            null
-        }
-        val context = proxy<GradleExecutionContext> { method, _ -> when (method) {
-            "getTaskId" -> ExternalSystemTaskId.create(GradleConstants.SYSTEM_ID, ExternalSystemTaskType.EXECUTE_TASK, project)
-            "getSettings" -> GradleExecutionSettings()
-            "getProject" -> project
-            else -> null
-        } }
+        val operation =
+            proxy<LongRunningOperation> { method, args ->
+                if (method ==
+                    "withCancellationToken"
+                ) {
+                    cancelled = (args!![0] as org.gradle.tooling.CancellationToken).isCancellationRequested
+                }
+                null
+            }
+        val context =
+            proxy<GradleExecutionContext> { method, _ ->
+                when (method) {
+                    "getTaskId" -> ExternalSystemTaskId.create(GradleConstants.SYSTEM_ID, ExternalSystemTaskType.EXECUTE_TASK, project)
+                    "getSettings" -> GradleExecutionSettings()
+                    "getProject" -> project
+                    else -> null
+                }
+            }
         Files.createFile(directory.resolve("fail"))
         try {
             background { DopplerGradleEnvironmentExtension().configureOperation(operation, context) }
@@ -459,13 +518,20 @@ class DopplerInjectionTest : BasePlatformTestCase() {
         val type = ConfigurationType.CONFIGURATION_TYPE_EP.extensionList.first { it.id == "docker-deploy" }
         val runner = DopplerDockerEnvironmentRunner()
         assertEquals("DopplerDockerEnvironment", runner.runnerId)
-        val sources = listOf(DockerImageDeploymentSourceType.getInstance(), DockerFileDeploymentSourceType.getInstance(), DockerComposeDeploymentSourceType.getInstance())
+        val sources =
+            listOf(
+                DockerImageDeploymentSourceType.getInstance(),
+                DockerFileDeploymentSourceType.getInstance(),
+                DockerComposeDeploymentSourceType.getInstance(),
+            )
         for (source in sources) {
             @Suppress("UNCHECKED_CAST")
-            val profile = type.configurationFactories.map { it.createTemplateConfiguration(project) }
-                .filterIsInstance<DeployToServerRunConfiguration<*, *>>()
-                .first { it.deploymentSource?.type == source } as
-                DeployToServerRunConfiguration<ServerConfiguration, DockerDeploymentConfiguration>
+            val profile =
+                type.configurationFactories
+                    .map { it.createTemplateConfiguration(project) }
+                    .filterIsInstance<DeployToServerRunConfiguration<*, *>>()
+                    .first { it.deploymentSource?.type == source } as
+                    DeployToServerRunConfiguration<ServerConfiguration, DockerDeploymentConfiguration>
             val configuration = DockerDeploymentConfiguration()
             profile.deploymentConfiguration = configuration
             configuration.apply {
@@ -478,16 +544,28 @@ class DopplerInjectionTest : BasePlatformTestCase() {
             settings.customMappings = listOf(SecretNameMapping("KEY", "RENAMED_KEY"), SecretNameMapping("MULTILINE", "RENAMED_MULTILINE"))
             for (transformer in listOf(DopplerNameTransformer.NONE, DopplerNameTransformer.CUSTOM)) {
                 settings.nameTransformer = transformer
-                val expected = if (transformer == DopplerNameTransformer.CUSTOM) {
-                    mapOf("KEY" to "local", "RENAMED_KEY" to "resolved-one-dev", "EMPTY" to "", "RENAMED_MULTILINE" to "one\ntwo", "DOPPLER_CONFIG" to "dev")
-                } else {
-                    mapOf("KEY" to "local", "EMPTY" to "", "MULTILINE" to "one\ntwo", "DOPPLER_CONFIG" to "dev")
-                }
+                val expected =
+                    if (transformer == DopplerNameTransformer.CUSTOM) {
+                        mapOf(
+                            "KEY" to "local",
+                            "RENAMED_KEY" to "resolved-one-dev",
+                            "EMPTY" to "",
+                            "RENAMED_MULTILINE" to "one\ntwo",
+                            "DOPPLER_CONFIG" to "dev",
+                        )
+                    } else {
+                        mapOf("KEY" to "local", "EMPTY" to "", "MULTILINE" to "one\ntwo", "DOPPLER_CONFIG" to "dev")
+                    }
                 for (executor in listOf(DefaultRunExecutor.getRunExecutorInstance(), DefaultDebugExecutor.getDebugExecutorInstance())) {
                     val launch = runThroughRunner(runner, profile, executor)
-                    val copy = (launch.runProfile as DeployToServerRunConfiguration<*, *>).deploymentConfiguration as DockerDeploymentConfiguration
+                    val copy =
+                        (launch.runProfile as DeployToServerRunConfiguration<*, *>).deploymentConfiguration as DockerDeploymentConfiguration
                     assertNotSame(configuration, copy)
-                    assertEquals("Every variable must reach the Docker launch copy", expected, copy.envVars.associate { it.name to it.value })
+                    assertEquals(
+                        "Every variable must reach the Docker launch copy",
+                        expected,
+                        copy.envVars.associate { it.name to it.value },
+                    )
                     assertFalse(copy.showCommandPreview)
                     assertEquals(configuration.services, copy.services)
                     assertTrue(copy.isUpDetach)
@@ -500,9 +578,11 @@ class DopplerInjectionTest : BasePlatformTestCase() {
 
     fun `test Docker XML validation failures cannot expose environment values`() {
         val type = ConfigurationType.CONFIGURATION_TYPE_EP.extensionList.first { it.id == "docker-deploy" }
+
         @Suppress("UNCHECKED_CAST")
-        val profile = type.configurationFactories.first().createTemplateConfiguration(project) as
-            DeployToServerRunConfiguration<ServerConfiguration, DockerDeploymentConfiguration>
+        val profile =
+            type.configurationFactories.first().createTemplateConfiguration(project) as
+                DeployToServerRunConfiguration<ServerConfiguration, DockerDeploymentConfiguration>
         profile.deploymentConfiguration = DockerDeploymentConfiguration()
         Files.createFile(directory.resolve("xml-control"))
         try {
@@ -515,13 +595,25 @@ class DopplerInjectionTest : BasePlatformTestCase() {
         }
     }
 
-    private fun runThroughRunner(runner: DopplerEnvironmentRunner, profile: RunConfiguration, executor: Executor): ExecutionEnvironment {
+    private fun runThroughRunner(
+        runner: DopplerEnvironmentRunner,
+        profile: RunConfiguration,
+        executor: Executor,
+    ): ExecutionEnvironment {
         var received: ExecutionEnvironment? = null
-        val delegate = object : ProgramRunner<RunnerSettings> {
-            override fun getRunnerId(): String = "SyntheticDelegate"
-            override fun canRun(executorId: String, profile: RunProfile): Boolean = true
-            override fun execute(environment: ExecutionEnvironment) { received = environment }
-        }
+        val delegate =
+            object : ProgramRunner<RunnerSettings> {
+                override fun getRunnerId(): String = "SyntheticDelegate"
+
+                override fun canRun(
+                    executorId: String,
+                    profile: RunProfile,
+                ): Boolean = true
+
+                override fun execute(environment: ExecutionEnvironment) {
+                    received = environment
+                }
+            }
         val disposable = Disposer.newDisposable()
         try {
             ExtensionTestUtil.maskExtensions(ProgramRunner.PROGRAM_RUNNER_EP, listOf(delegate), disposable)
@@ -535,7 +627,9 @@ class DopplerInjectionTest : BasePlatformTestCase() {
             assertSame(settings, launch.runnerAndConfigurationSettings)
             assertSame(profile, settings.configuration)
             return launch
-        } finally { Disposer.dispose(disposable) }
+        } finally {
+            Disposer.dispose(disposable)
+        }
     }
 
     private fun assertSafeFailure() {
@@ -549,7 +643,12 @@ class DopplerInjectionTest : BasePlatformTestCase() {
     }
 
     private fun environment(): ExecutionEnvironment {
-        val java = ApplicationConfigurationType.getInstance().configurationFactories.first().createTemplateConfiguration(project)
+        val java =
+            ApplicationConfigurationType
+                .getInstance()
+                .configurationFactories
+                .first()
+                .createTemplateConfiguration(project)
         return ExecutionEnvironmentBuilder.create(project, DefaultRunExecutor.getRunExecutorInstance(), java).build()
     }
 

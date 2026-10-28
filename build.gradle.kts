@@ -1,14 +1,14 @@
-import java.util.Base64
-import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
-import org.jetbrains.intellij.platform.gradle.TestFrameworkType
-import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.cyclonedx.gradle.CyclonedxDirectTask
 import org.cyclonedx.model.Component
 import org.gradle.api.file.RegularFile
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.tasks.PublishPluginTask
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginSignatureTask
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
+import java.util.Base64
 
 buildscript {
     repositories {
@@ -31,6 +31,13 @@ plugins {
     id("org.jetbrains.changelog")
     id("org.jetbrains.intellij.platform")
     alias(libs.plugins.cyclonedx)
+    alias(libs.plugins.ktlint)
+}
+
+ktlint {
+    version.set(libs.versions.ktlint.get())
+    outputToConsole.set(true)
+    ignoreFailures.set(false)
 }
 
 if (providers.gradleProperty("snapshot").isPresent) {
@@ -47,7 +54,10 @@ kotlin {
 dependencies {
     testImplementation(libs.junit)
     // Patch the IDE test framework without bundling Jackson in the plugin.
-    add("intellijPlatformTestDependencies", platform("com.fasterxml.jackson:jackson-bom:${providers.gradleProperty("jacksonVersion").get()}"))
+    add(
+        "intellijPlatformTestDependencies",
+        platform("com.fasterxml.jackson:jackson-bom:${providers.gradleProperty("jacksonVersion").get()}"),
+    )
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
@@ -86,28 +96,38 @@ intellijPlatform {
 
     signing {
         // Signing accepts base64, but signature verification expects a PEM certificate file.
-        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN").map { value ->
-            val certificate = value.trim()
-            if (certificate.contains("-----BEGIN CERTIFICATE-----")) certificate
-            else String(Base64.getDecoder().decode(certificate.filterNot(Char::isWhitespace)), Charsets.UTF_8)
-        }
+        certificateChain =
+            providers.environmentVariable("CERTIFICATE_CHAIN").map { value ->
+                val certificate = value.trim()
+                if (certificate.contains("-----BEGIN CERTIFICATE-----")) {
+                    certificate
+                } else {
+                    String(Base64.getDecoder().decode(certificate.filterNot(Char::isWhitespace)), Charsets.UTF_8)
+                }
+            }
         privateKey = providers.environmentVariable("PRIVATE_KEY")
         password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
     }
 
     publishing {
-      token = providers.environmentVariable("PUBLISH_TOKEN")
-  }
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+    }
 }
 
 // Verify and upload the signed release asset without rebuilding or signing again.
 val releaseArchive = providers.gradleProperty("releaseArchive").orNull
 if (releaseArchive != null) {
-    val verifyRelease = tasks.named<VerifyPluginSignatureTask>("verifyPluginSignature") {
-        setDependsOn(emptyList<Any>())
-        inputArchiveFile.set(layout.projectDirectory.file(releaseArchive))
-        certificateChainFile.set(layout.projectDirectory.file(releaseArchive).asFile.resolveSibling("chain.crt"))
-    }
+    val verifyRelease =
+        tasks.named<VerifyPluginSignatureTask>("verifyPluginSignature") {
+            setDependsOn(emptyList<Any>())
+            inputArchiveFile.set(layout.projectDirectory.file(releaseArchive))
+            certificateChainFile.set(
+                layout.projectDirectory
+                    .file(releaseArchive)
+                    .asFile
+                    .resolveSibling("chain.crt"),
+            )
+        }
     tasks.named<PublishPluginTask>("publishPlugin") {
         setDependsOn(listOf(verifyRelease))
         archiveFiles.setFrom(layout.projectDirectory.file(releaseArchive))
@@ -143,4 +163,3 @@ tasks.cyclonedxBom {
     jsonOutput = layout.buildDirectory.file("distributions/${project.name}-${project.version}.cdx.json")
     xmlOutput.convention(null as RegularFile?)
 }
-

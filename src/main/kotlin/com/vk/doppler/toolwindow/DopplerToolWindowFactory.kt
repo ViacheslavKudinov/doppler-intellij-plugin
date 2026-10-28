@@ -6,8 +6,10 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
 
 class DopplerToolWindowFactory : ToolWindowFactory {
-
-    override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
+    override fun createToolWindowContent(
+        project: Project,
+        toolWindow: ToolWindow,
+    ) {
         val panel = DopplerToolWindowPanel(project)
         val content = ContentFactory.getInstance().createContent(panel, null, false)
         content.setDisposer(panel)

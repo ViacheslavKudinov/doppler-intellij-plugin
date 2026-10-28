@@ -12,20 +12,36 @@ import java.util.concurrent.ExecutorService
 /** The slice of Doppler access needed to list secret names. */
 internal interface DopplerNamesApi {
     fun listProjects(authContextId: String): List<DopplerProject>
-    fun listConfigs(authContextId: String, projectSlug: String): List<DopplerConfig>
-    fun listSecretNames(authContextId: String, projectSlug: String, configName: String, environment: String): Set<String>
+
+    fun listConfigs(
+        authContextId: String,
+        projectSlug: String,
+    ): List<DopplerConfig>
+
+    fun listSecretNames(
+        authContextId: String,
+        projectSlug: String,
+        configName: String,
+        environment: String,
+    ): Set<String>
+
     fun currentAuthContextId(): String
 }
 
 internal object DopplerServiceNamesApi : DopplerNamesApi {
-    override fun listProjects(authContextId: String): List<DopplerProject> =
-        DopplerService.getInstance().listProjects(authContextId)
+    override fun listProjects(authContextId: String): List<DopplerProject> = DopplerService.getInstance().listProjects(authContextId)
 
-    override fun listConfigs(authContextId: String, projectSlug: String): List<DopplerConfig> =
-        DopplerService.getInstance().listConfigs(authContextId, projectSlug)
+    override fun listConfigs(
+        authContextId: String,
+        projectSlug: String,
+    ): List<DopplerConfig> = DopplerService.getInstance().listConfigs(authContextId, projectSlug)
 
-    override fun listSecretNames(authContextId: String, projectSlug: String, configName: String, environment: String): Set<String> =
-        DopplerService.getInstance().listSecretNames(authContextId, projectSlug, configName, environment)
+    override fun listSecretNames(
+        authContextId: String,
+        projectSlug: String,
+        configName: String,
+        environment: String,
+    ): Set<String> = DopplerService.getInstance().listSecretNames(authContextId, projectSlug, configName, environment)
 
     override fun currentAuthContextId(): String = DopplerService.getInstance().currentAuthContextId()
 }
@@ -41,7 +57,6 @@ internal class DopplerSecretNamesLoader(
     private val api: DopplerNamesApi,
     private val pool: ExecutorService,
 ) : SecretNamesLoader {
-
     override fun load(
         authContextId: String,
         checkCancelled: () -> Unit,
@@ -50,21 +65,24 @@ internal class DopplerSecretNamesLoader(
     ): SecretNames {
         reportProgress("Listing Doppler projects…")
         val projects = api.listProjects(authContextId)
-        val tasks = projects.map { project ->
-            project.slug to pool.submit(
-                Callable {
-                    loadProject(project.slug, authContextId, previousNames[project.slug].orEmpty(), checkCancelled, reportProgress)
-                },
-            )
-        }
+        val tasks =
+            projects.map { project ->
+                project.slug to
+                    pool.submit(
+                        Callable {
+                            loadProject(project.slug, authContextId, previousNames[project.slug].orEmpty(), checkCancelled, reportProgress)
+                        },
+                    )
+            }
         val result = LinkedHashMap<String, Map<String, Set<String>>>()
         try {
             for ((slug, task) in tasks) {
-                val configs = try {
-                    task.get()
-                } catch (e: ExecutionException) {
-                    throw e.cause ?: e
-                }
+                val configs =
+                    try {
+                        task.get()
+                    } catch (e: ExecutionException) {
+                        throw e.cause ?: e
+                    }
                 result[slug] = configs
             }
         } finally {
@@ -88,12 +106,13 @@ internal class DopplerSecretNamesLoader(
     ): Map<String, Set<String>> {
         reportProgress("Listing configs for $slug…")
         checkCancelled()
-        val configs = try {
-            api.listConfigs(authContextId, slug)
-        } catch (e: DopplerCliException) {
-            skipOrFail(e, "configs of $slug")
-            return previousNames
-        }
+        val configs =
+            try {
+                api.listConfigs(authContextId, slug)
+            } catch (e: DopplerCliException) {
+                skipOrFail(e, "configs of $slug")
+                return previousNames
+            }
         val names = LinkedHashMap<String, Set<String>>()
         for (config in configs) {
             checkCancelled()
@@ -108,7 +127,10 @@ internal class DopplerSecretNamesLoader(
         return names
     }
 
-    private fun skipOrFail(error: DopplerCliException, what: String) {
+    private fun skipOrFail(
+        error: DopplerCliException,
+        what: String,
+    ) {
         if (error.kind == DopplerCliException.Kind.CLI_NOT_FOUND ||
             error.kind == DopplerCliException.Kind.AUTH_CONTEXT_CHANGED
         ) {

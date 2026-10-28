@@ -20,16 +20,23 @@ class DopplerSecretReferenceTypedHandler internal constructor(
         file: PsiFile,
         fileType: FileType,
     ): Result {
-        val insideReference = charTyped.isWhitespace() &&
-            file.virtualFile is DopplerSecretsFile &&
-            SecretReferenceParser.contextAt(editor.document.charsSequence, editor.caretModel.offset) != null
+        val insideReference =
+            charTyped.isWhitespace() &&
+                file.virtualFile is DopplerSecretsFile &&
+                SecretReferenceParser.contextAt(editor.document.charsSequence, editor.caretModel.offset) != null
         return if (insideReference) Result.STOP else Result.CONTINUE
     }
 
-    override fun charTyped(charTyped: Char, project: Project, editor: Editor, file: PsiFile): Result {
+    override fun charTyped(
+        charTyped: Char,
+        project: Project,
+        editor: Editor,
+        file: PsiFile,
+    ): Result {
         // Inspect the document after insertion, including when an existing popup was dismissed.
         if (file.virtualFile is DopplerSecretsFile &&
-            SecretReferenceParser.contextAt(editor.document.charsSequence, editor.caretModel.offset) != null) {
+            SecretReferenceParser.contextAt(editor.document.charsSequence, editor.caretModel.offset) != null
+        ) {
             schedulePopup(project, editor)
         }
         return Result.CONTINUE

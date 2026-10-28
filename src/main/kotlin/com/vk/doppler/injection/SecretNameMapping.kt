@@ -4,10 +4,12 @@ import com.vk.doppler.cli.DopplerReservedSecrets
 import com.vk.doppler.cli.DopplerSecretNames
 
 /** One custom rename: the secret [name] in Doppler is injected as [newName]. */
-data class SecretNameMapping(var name: String = "", var newName: String = "")
+data class SecretNameMapping(
+    var name: String = "",
+    var newName: String = "",
+)
 
-private fun isValidEnvironmentName(name: String): Boolean =
-    DopplerSecretNames.isValid(name) && !DopplerReservedSecrets.isReserved(name)
+private fun isValidEnvironmentName(name: String): Boolean = DopplerSecretNames.isValid(name) && !DopplerReservedSecrets.isReserved(name)
 
 /** Returns a user-facing problem with [mappings], or null when they can be applied. Fully blank rows are ignored. */
 internal fun validateSecretNameMappings(mappings: List<SecretNameMapping>): String? {
@@ -20,9 +22,15 @@ internal fun validateSecretNameMappings(mappings: List<SecretNameMapping>): Stri
     if (used.any { DopplerReservedSecrets.isReserved(it.newName) }) {
         return "New secret names cannot use names managed by Doppler."
     }
-    used.groupBy { it.name }.entries.firstOrNull { it.value.size > 1 }
+    used
+        .groupBy { it.name }
+        .entries
+        .firstOrNull { it.value.size > 1 }
         ?.let { return "\"${it.key}\" is mapped more than once." }
-    used.groupBy { it.newName }.entries.firstOrNull { it.value.size > 1 }
+    used
+        .groupBy { it.newName }
+        .entries
+        .firstOrNull { it.value.size > 1 }
         ?.let { return "More than one secret is mapped to \"${it.key}\"." }
     return null
 }
@@ -31,7 +39,10 @@ internal fun validateSecretNameMappings(mappings: List<SecretNameMapping>): Stri
  * Renames secrets listed in [mappings]; all other secrets keep their names. Renames use the original
  * names, so A->B and B->C do not chain. A mapped value wins over an unmapped secret with the same new name.
  */
-internal fun applySecretNameMapping(secrets: Map<String, String>, mappings: List<SecretNameMapping>): Map<String, String> {
+internal fun applySecretNameMapping(
+    secrets: Map<String, String>,
+    mappings: List<SecretNameMapping>,
+): Map<String, String> {
     val renames = LinkedHashMap<String, String>()
     for (mapping in mappings) {
         if (mapping.name.isNotEmpty() && isValidEnvironmentName(mapping.newName) && mapping.name !in renames) {

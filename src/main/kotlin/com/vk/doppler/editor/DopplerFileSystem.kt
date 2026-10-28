@@ -15,7 +15,6 @@ import java.util.concurrent.ConcurrentHashMap
  * the push back to Doppler.
  */
 class DopplerFileSystem : DeprecatedVirtualFileSystem() {
-
     private val files = ConcurrentHashMap<String, DopplerSecretsFile>()
 
     override fun getProtocol(): String = PROTOCOL
@@ -40,7 +39,11 @@ class DopplerFileSystem : DeprecatedVirtualFileSystem() {
     override fun refreshAndFindFileByPath(path: String): VirtualFile? = findFileByPath(path)
 
     /** Returns the existing file for the config, creating it on first use. */
-    fun obtain(projectSlug: String, configName: String, authContextId: String): DopplerSecretsFile =
+    fun obtain(
+        projectSlug: String,
+        configName: String,
+        authContextId: String,
+    ): DopplerSecretsFile =
         files.computeIfAbsent(DopplerSecretsFile.pathFor(projectSlug, configName, authContextId)) {
             DopplerSecretsFile(this, projectSlug, configName, authContextId)
         }
@@ -54,7 +57,6 @@ class DopplerFileSystem : DeprecatedVirtualFileSystem() {
     companion object {
         const val PROTOCOL: String = "doppler"
 
-        fun getInstance(): DopplerFileSystem =
-            VirtualFileManager.getInstance().getFileSystem(PROTOCOL) as DopplerFileSystem
+        fun getInstance(): DopplerFileSystem = VirtualFileManager.getInstance().getFileSystem(PROTOCOL) as DopplerFileSystem
     }
 }

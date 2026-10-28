@@ -2,15 +2,15 @@ package com.vk.doppler.service
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
-import com.vk.doppler.cli.DopplerCli
-import com.vk.doppler.cli.DopplerNameTransformer
-import com.vk.doppler.cli.DopplerAccountInfo
-import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.CliLogContext
+import com.vk.doppler.cli.CliOperation
+import com.vk.doppler.cli.DopplerAccountInfo
+import com.vk.doppler.cli.DopplerCli
 import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.cli.DopplerConfig
-import com.vk.doppler.cli.DopplerFolderSetup
 import com.vk.doppler.cli.DopplerExecutableLocator
+import com.vk.doppler.cli.DopplerFolderSetup
+import com.vk.doppler.cli.DopplerNameTransformer
 import com.vk.doppler.cli.DopplerProject
 import com.vk.doppler.cli.DopplerSecret
 import com.vk.doppler.editor.ParsedSecrets
@@ -25,7 +25,10 @@ data class DopplerStatusReport(
     val account: DopplerAccountInfo? = null,
 )
 
-data class DopplerSecretsSnapshot(val authContextId: String, val secrets: List<DopplerSecret>)
+data class DopplerSecretsSnapshot(
+    val authContextId: String,
+    val secrets: List<DopplerSecret>,
+)
 
 data class DopplerFolderSetupSnapshot(
     val authContextId: String,
@@ -40,39 +43,41 @@ data class DopplerFolderSetupSnapshot(
  */
 @Service(Service.Level.APP)
 class DopplerService {
-
     private fun cli(
         operation: CliOperation = CliOperation.AUTOCOMPLETE,
         context: CliLogContext = CliLogContext(),
         relatedConfigs: List<CliLogContext> = emptyList(),
         scope: String? = null,
     ): DopplerCli {
-        val path = DopplerExecutableLocator.find(DopplerSettings.getInstance().cliPath)
-            ?: throw DopplerCliException(
-                "The Doppler CLI could not be found. Install it from https://docs.doppler.com/docs/install-cli " +
-                    "or set its path in Settings | Tools | Doppler.",
-                DopplerCliException.Kind.CLI_NOT_FOUND,
-            )
+        val path =
+            DopplerExecutableLocator.find(DopplerSettings.getInstance().cliPath)
+                ?: throw DopplerCliException(
+                    "The Doppler CLI could not be found. Install it from https://docs.doppler.com/docs/install-cli " +
+                        "or set its path in Settings | Tools | Doppler.",
+                    DopplerCliException.Kind.CLI_NOT_FOUND,
+                )
         return DopplerCli(path, operation, context, relatedConfigs, scope)
     }
 
     fun checkStatus(
         includeVersion: Boolean = true,
         operation: CliOperation = if (includeVersion) CliOperation.TEST_CONNECTION else CliOperation.TREE_RELOAD,
-    ): DopplerStatusReport = try {
-        val cli = cli(operation)
-        val account = cli.accountInfo()
-        DopplerStatusReport(DopplerStatus.READY, if (includeVersion) cli.version() else null, account.authContextId, account)
-    } catch (e: DopplerCliException) {
-        val status = when (e.kind) {
-            DopplerCliException.Kind.CLI_NOT_FOUND -> DopplerStatus.CLI_NOT_FOUND
-            DopplerCliException.Kind.NOT_AUTHENTICATED -> DopplerStatus.NOT_AUTHENTICATED
-            DopplerCliException.Kind.AUTH_CONTEXT_CHANGED -> DopplerStatus.ERROR
-            DopplerCliException.Kind.REMOTE_CHANGED -> DopplerStatus.ERROR
-            DopplerCliException.Kind.GENERIC -> DopplerStatus.ERROR
+    ): DopplerStatusReport =
+        try {
+            val cli = cli(operation)
+            val account = cli.accountInfo()
+            DopplerStatusReport(DopplerStatus.READY, if (includeVersion) cli.version() else null, account.authContextId, account)
+        } catch (e: DopplerCliException) {
+            val status =
+                when (e.kind) {
+                    DopplerCliException.Kind.CLI_NOT_FOUND -> DopplerStatus.CLI_NOT_FOUND
+                    DopplerCliException.Kind.NOT_AUTHENTICATED -> DopplerStatus.NOT_AUTHENTICATED
+                    DopplerCliException.Kind.AUTH_CONTEXT_CHANGED -> DopplerStatus.ERROR
+                    DopplerCliException.Kind.REMOTE_CHANGED -> DopplerStatus.ERROR
+                    DopplerCliException.Kind.GENERIC -> DopplerStatus.ERROR
+                }
+            DopplerStatusReport(status, e.message)
         }
-        DopplerStatusReport(status, e.message)
-    }
 
     fun currentAuthContextId(
         operation: CliOperation = CliOperation.AUTOCOMPLETE,
@@ -90,11 +95,15 @@ class DopplerService {
         return projects
     }
 
-    fun listConfigs(projectSlug: String, operation: CliOperation = CliOperation.TREE_CONFIGS): List<DopplerConfig> =
-        cli(operation, CliLogContext(project = projectSlug)).listConfigs(projectSlug)
+    fun listConfigs(
+        projectSlug: String,
+        operation: CliOperation = CliOperation.TREE_CONFIGS,
+    ): List<DopplerConfig> = cli(operation, CliLogContext(project = projectSlug)).listConfigs(projectSlug)
 
-    fun folderSetup(folder: String, operation: CliOperation = CliOperation.FOLDER_SETUP): DopplerFolderSetup =
-        cli(operation).folderSetup(folder)
+    fun folderSetup(
+        folder: String,
+        operation: CliOperation = CliOperation.FOLDER_SETUP,
+    ): DopplerFolderSetup = cli(operation).folderSetup(folder)
 
     /** Bind all initial choices to one account, checking once around the complete read batch. */
     fun loadFolderSetup(folder: String): DopplerFolderSetupSnapshot {
@@ -107,7 +116,10 @@ class DopplerService {
         return DopplerFolderSetupSnapshot(account, setup, projects, configs)
     }
 
-    fun folderSetupConfigs(expectedAuthContextId: String, projectSlug: String): List<DopplerConfig> {
+    fun folderSetupConfigs(
+        expectedAuthContextId: String,
+        projectSlug: String,
+    ): List<DopplerConfig> {
         val cli = cli(CliOperation.FOLDER_SETUP, CliLogContext(project = projectSlug))
         requireFolderSetupAccount(cli, expectedAuthContextId)
         val configs = cli.listConfigs(projectSlug)
@@ -115,19 +127,30 @@ class DopplerService {
         return configs
     }
 
-    fun setFolderSetup(folder: String, projectSlug: String, configName: String, expectedAuthContextId: String) {
+    fun setFolderSetup(
+        folder: String,
+        projectSlug: String,
+        configName: String,
+        expectedAuthContextId: String,
+    ) {
         val cli = cli(CliOperation.FOLDER_SETUP, CliLogContext(projectSlug, configName))
         requireFolderSetupAccount(cli, expectedAuthContextId)
         cli.setFolderSetup(folder, projectSlug, configName)
     }
 
-    fun clearFolderSetup(folder: String, expectedAuthContextId: String) {
+    fun clearFolderSetup(
+        folder: String,
+        expectedAuthContextId: String,
+    ) {
         val cli = cli(CliOperation.FOLDER_SETUP)
         requireFolderSetupAccount(cli, expectedAuthContextId)
         cli.clearFolderSetup(folder)
     }
 
-    private fun requireFolderSetupAccount(cli: DopplerCli, expected: String) {
+    private fun requireFolderSetupAccount(
+        cli: DopplerCli,
+        expected: String,
+    ) {
         if (cli.authContextId() != expected) {
             throw DopplerCliException(
                 "The Doppler account changed. Reload folder setup before applying changes.",
@@ -136,7 +159,10 @@ class DopplerService {
         }
     }
 
-    fun listConfigs(expectedAuthContextId: String, projectSlug: String): List<DopplerConfig> {
+    fun listConfigs(
+        expectedAuthContextId: String,
+        projectSlug: String,
+    ): List<DopplerConfig> {
         val cli = cli(context = CliLogContext(project = projectSlug))
         requireAuthContext(cli, expectedAuthContextId)
         val configs = cli.listConfigs(projectSlug)
@@ -144,10 +170,17 @@ class DopplerService {
         return configs
     }
 
-    fun listSecretNames(projectSlug: String, configName: String): Set<String> =
-        cli(context = CliLogContext(projectSlug, configName)).listSecretNames(projectSlug, configName)
+    fun listSecretNames(
+        projectSlug: String,
+        configName: String,
+    ): Set<String> = cli(context = CliLogContext(projectSlug, configName)).listSecretNames(projectSlug, configName)
 
-    fun listSecretNames(expectedAuthContextId: String, projectSlug: String, configName: String, environment: String? = null): Set<String> {
+    fun listSecretNames(
+        expectedAuthContextId: String,
+        projectSlug: String,
+        configName: String,
+        environment: String? = null,
+    ): Set<String> {
         val cli = cli(context = CliLogContext(projectSlug, configName, environment))
         requireAuthContext(cli, expectedAuthContextId)
         val names = cli.listSecretNames(projectSlug, configName)
@@ -204,20 +237,21 @@ class DopplerService {
         configName: String,
         expectedAuthContextId: String,
     ): DopplerSecretsSnapshot {
-        val secrets = try {
-            cli.listSecrets(projectSlug, configName)
-        } catch (error: DopplerCliException) {
-            // A failed value read can itself be caused by an account switch. Check before
-            // propagating it so callers scrub every cached config when authentication changed.
-            requireAuthContext(cli, expectedAuthContextId)
-            throw error
-        }
+        val secrets =
+            try {
+                cli.listSecrets(projectSlug, configName)
+            } catch (error: DopplerCliException) {
+                // A failed value read can itself be caused by an account switch. Check before
+                // propagating it so callers scrub every cached config when authentication changed.
+                requireAuthContext(cli, expectedAuthContextId)
+                throw error
+            }
         requireAuthContext(cli, expectedAuthContextId)
         return DopplerSecretsSnapshot(expectedAuthContextId, secrets)
     }
 
     /**
-    * Applies a diff to a config. Replacements must succeed before old names are deleted.
+     * Applies a diff to a config. Replacements must succeed before old names are deleted.
      */
     fun applyChanges(
         authContextId: String,
@@ -246,14 +280,18 @@ class DopplerService {
         )
     }
 
-    private fun requireAuthContext(cli: DopplerCli, expected: String) {
+    private fun requireAuthContext(
+        cli: DopplerCli,
+        expected: String,
+    ) {
         if (cli.authContextId() != expected) throw authContextChanged()
     }
 
-    private fun authContextChanged() = DopplerCliException(
-        "The Doppler account changed. Reopen this config under the current account.",
-        DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
-    )
+    private fun authContextChanged() =
+        DopplerCliException(
+            "The Doppler account changed. Reopen this config under the current account.",
+            DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
+        )
 
     companion object {
         fun getInstance(): DopplerService = service()
@@ -325,21 +363,29 @@ data class SecretChanges(
     }
 
     companion object {
-        fun unvaluedAdditions(original: Map<String, String?>, edited: ParsedSecrets): Set<String> =
+        fun unvaluedAdditions(
+            original: Map<String, String?>,
+            edited: ParsedSecrets,
+        ): Set<String> =
             edited.values
                 .filter { (name, value) -> name !in original && value == null }
                 .keys + edited.cleared.filterNot(original::containsKey)
 
-        fun between(original: Map<String, String?>, edited: ParsedSecrets): SecretChanges {
-            val upserted = edited.values
-                .mapNotNull { (name, value) -> value?.let { name to it } }
-                .filter { (name, value) -> original[name] != value }
-                .toMap()
+        fun between(
+            original: Map<String, String?>,
+            edited: ParsedSecrets,
+        ): SecretChanges {
+            val upserted =
+                edited.values
+                    .mapNotNull { (name, value) -> value?.let { name to it } }
+                    .filter { (name, value) -> original[name] != value }
+                    .toMap()
 
             // Emptying a value deletes the secret, including a restricted one. A value left as
             // the literal `null` is the unreadable placeholder and must stay a no-op.
-            val removed = (original.keys - edited.values.keys - edited.cleared) +
-                edited.cleared.filter { original.containsKey(it) }
+            val removed =
+                (original.keys - edited.values.keys - edited.cleared) +
+                    edited.cleared.filter { original.containsKey(it) }
 
             return SecretChanges(upserted, removed)
         }

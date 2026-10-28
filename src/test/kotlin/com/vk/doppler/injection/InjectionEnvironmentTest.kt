@@ -1,6 +1,7 @@
 package com.vk.doppler.injection
 
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class InjectionEnvironmentTest {

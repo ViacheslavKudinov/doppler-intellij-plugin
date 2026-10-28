@@ -2,8 +2,8 @@ package com.vk.doppler.completion
 
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorCustomElementRenderer
-import com.intellij.openapi.editor.colors.EditorFontType
 import com.intellij.openapi.editor.Inlay
+import com.intellij.openapi.editor.colors.EditorFontType
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.util.Key
 import com.intellij.ui.JBColor
@@ -24,7 +24,8 @@ internal class SecretReferenceLoadingHint private constructor(
 
     internal fun update() {
         if (editor.isDisposed || !isLoading() ||
-            SecretReferenceParser.contextAt(editor.document.charsSequence, editor.caretModel.offset) == null) {
+            SecretReferenceParser.contextAt(editor.document.charsSequence, editor.caretModel.offset) == null
+        ) {
             timer.stop()
             inlay?.dispose()
             inlay = null
@@ -49,7 +50,12 @@ internal class SecretReferenceLoadingHint private constructor(
         const val MESSAGE = "  Loading Doppler references… this may take a moment"
         internal const val MORE_MESSAGE = "  Loading more Doppler references…"
 
-        internal fun needsLoadingHint(text: CharSequence, offset: Int, location: SecretReferenceLocation, names: SecretNames): Boolean {
+        internal fun needsLoadingHint(
+            text: CharSequence,
+            offset: Int,
+            location: SecretReferenceLocation,
+            names: SecretNames,
+        ): Boolean {
             val reference = SecretReferenceParser.contextAt(text, offset) ?: return false
             return SecretReferenceCandidates.find(location, SecretReferenceParser.secretNames(text), names, reference.prefix).isEmpty()
         }
@@ -60,7 +66,12 @@ internal class SecretReferenceLoadingHint private constructor(
             hasSuggestions: () -> Boolean = { false },
             isLoading: () -> Boolean,
         ): SecretReferenceLoadingHint {
-            editor.getUserData(KEY)?.let { it.isLoading = isLoading; it.hasSuggestions = hasSuggestions; it.update(); return it }
+            editor.getUserData(KEY)?.let {
+                it.isLoading = isLoading
+                it.hasSuggestions = hasSuggestions
+                it.update()
+                return it
+            }
             val hint = SecretReferenceLoadingHint(editor, isEditorActive, hasSuggestions, isLoading)
             editor.putUserData(KEY, hint)
             hint.timer.start()
@@ -69,14 +80,23 @@ internal class SecretReferenceLoadingHint private constructor(
         }
     }
 
-    internal class Renderer(val message: String) : EditorCustomElementRenderer {
+    internal class Renderer(
+        val message: String,
+    ) : EditorCustomElementRenderer {
         override fun calcWidthInPixels(inlay: Inlay<*>): Int {
             val editor = inlay.editor
-            return editor.contentComponent.getFontMetrics(editor.colorsScheme.getFont(EditorFontType.PLAIN))
-                .stringWidth(message).coerceAtLeast(1)
+            return editor.contentComponent
+                .getFontMetrics(editor.colorsScheme.getFont(EditorFontType.PLAIN))
+                .stringWidth(message)
+                .coerceAtLeast(1)
         }
 
-        override fun paint(inlay: Inlay<*>, g: Graphics, targetRegion: Rectangle, textAttributes: TextAttributes) {
+        override fun paint(
+            inlay: Inlay<*>,
+            g: Graphics,
+            targetRegion: Rectangle,
+            textAttributes: TextAttributes,
+        ) {
             g.font = inlay.editor.colorsScheme.getFont(EditorFontType.PLAIN)
             g.color = JBColor.GRAY
             g.drawString(message, targetRegion.x, targetRegion.y + inlay.editor.ascent)

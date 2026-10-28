@@ -1,7 +1,7 @@
 package com.vk.doppler.toolwindow
 
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.ui.TestDialog
 import com.intellij.openapi.ui.TestDialogManager
 import com.intellij.openapi.util.Disposer
@@ -57,156 +57,164 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test status errors show detail and fallback without requesting projects`() = withPanel("status-error") { panel, cli ->
-        assertTrue(statusText(panel).contains("Account service unavailable"))
-        assertTrue(statusText(panel).contains("Retry"))
-        assertEquals(listOf("me"), cli.calls())
-        assertNull(field("authContextId").get(panel))
-        invokePanel(panel, "showStatusFor", DopplerStatusReport(DopplerStatus.ERROR, null))
-        assertTrue(statusText(panel).contains("Could not reach Doppler."))
-    }
+    fun `test status errors show detail and fallback without requesting projects`() =
+        withPanel("status-error") { panel, cli ->
+            assertTrue(statusText(panel).contains("Account service unavailable"))
+            assertTrue(statusText(panel).contains("Retry"))
+            assertEquals(listOf("me"), cli.calls())
+            assertNull(field("authContextId").get(panel))
+            invokePanel(panel, "showStatusFor", DopplerStatusReport(DopplerStatus.ERROR, null))
+            assertTrue(statusText(panel).contains("Could not reach Doppler."))
+        }
 
-    fun `test empty project list shows retry and can recover on the next refresh`() = withPanel("empty-projects") { panel, cli ->
-        assertTrue(projectNodes(panel).isEmpty())
-        assertTrue(statusText(panel).contains("No Doppler projects found for this account."))
-        assertTrue(statusText(panel).contains("Retry"))
-        assertEquals(0, cli.callCount("configs"))
+    fun `test empty project list shows retry and can recover on the next refresh`() =
+        withPanel("empty-projects") { panel, cli ->
+            assertTrue(projectNodes(panel).isEmpty())
+            assertTrue(statusText(panel).contains("No Doppler projects found for this account."))
+            assertTrue(statusText(panel).contains("Retry"))
+            assertEquals(0, cli.callCount("configs"))
 
-        cli.setMode("ready")
-        panel.refresh(CliOperation.TREE_RETRY)
-        awaitRefresh(panel)
-        awaitConfigLoads(panel)
-        assertEquals(listOf("example"), projectSlugs(panel))
-        assertTrue(projectNodes(panel).single().loaded)
-    }
+            cli.setMode("ready")
+            panel.refresh(CliOperation.TREE_RETRY)
+            awaitRefresh(panel)
+            awaitConfigLoads(panel)
+            assertEquals(listOf("example"), projectSlugs(panel))
+            assertTrue(projectNodes(panel).single().loaded)
+        }
 
-    fun `test retry status link reloads projects after a failed startup`() = withPanel("project-failure") { panel, cli ->
-        assertTrue(statusText(panel).contains("Temporary project read failure"))
-        val status = field("statusPanel").get(panel) as com.intellij.ui.components.JBPanelWithEmptyText
-        cli.setMode("ready")
-        cli.clearCalls()
+    fun `test retry status link reloads projects after a failed startup`() =
+        withPanel("project-failure") { panel, cli ->
+            assertTrue(statusText(panel).contains("Temporary project read failure"))
+            val status = field("statusPanel").get(panel) as com.intellij.ui.components.JBPanelWithEmptyText
+            cli.setMode("ready")
+            cli.clearCalls()
 
-        clickStatusLink(panel, "Retry")
-        awaitRefresh(panel)
-        awaitConfigLoads(panel)
+            clickStatusLink(panel, "Retry")
+            awaitRefresh(panel)
+            awaitConfigLoads(panel)
 
-        assertEquals(listOf("example"), projectSlugs(panel))
-        assertTrue(projectNodes(panel).single().loaded)
-        assertEquals(DopplerFolderSetup("example", "dev"), folderSetupState().current)
-        assertEquals(1, cli.callCount("me"))
-        assertEquals(1, cli.callCount("projects"))
-        assertFalse(status.isVisible)
-    }
+            assertEquals(listOf("example"), projectSlugs(panel))
+            assertTrue(projectNodes(panel).single().loaded)
+            assertEquals(DopplerFolderSetup("example", "dev"), folderSetupState().current)
+            assertEquals(1, cli.callCount("me"))
+            assertEquals(1, cli.callCount("projects"))
+            assertFalse(status.isVisible)
+        }
 
-    fun `test authentication loss invalidates cached files and recovery reloads the tree`() = withPanel { panel, cli ->
-        val context = requireNotNull(field("authContextId").get(panel) as? String)
-        val fileSystem = DopplerFileSystem.getInstance()
-        val cached = fileSystem.obtain("cached", "dev", context)
-        cli.setMode("not-authenticated")
-        cli.clearCalls()
+    fun `test authentication loss invalidates cached files and recovery reloads the tree`() =
+        withPanel { panel, cli ->
+            val context = requireNotNull(field("authContextId").get(panel) as? String)
+            val fileSystem = DopplerFileSystem.getInstance()
+            val cached = fileSystem.obtain("cached", "dev", context)
+            cli.setMode("not-authenticated")
+            cli.clearCalls()
 
-        panel.refresh(CliOperation.TREE_WINDOW_FOCUS)
-        awaitRefresh(panel)
+            panel.refresh(CliOperation.TREE_WINDOW_FOCUS)
+            awaitRefresh(panel)
 
-        assertNull(field("authContextId").get(panel))
-        assertNull(fileSystem.findFileByPath(cached.path))
-        assertEquals(DopplerFolderSetup(), folderSetupState().current)
-        assertTrue(statusText(panel).contains("Not logged in to Doppler."))
-        assertEquals(listOf("me"), cli.calls())
+            assertNull(field("authContextId").get(panel))
+            assertNull(fileSystem.findFileByPath(cached.path))
+            assertEquals(DopplerFolderSetup(), folderSetupState().current)
+            assertTrue(statusText(panel).contains("Not logged in to Doppler."))
+            assertEquals(listOf("me"), cli.calls())
 
-        cli.setMode("ready")
-        cli.clearCalls()
-        panel.refresh(CliOperation.TREE_WINDOW_FOCUS)
-        awaitRefresh(panel)
-        awaitConfigLoads(panel)
+            cli.setMode("ready")
+            cli.clearCalls()
+            panel.refresh(CliOperation.TREE_WINDOW_FOCUS)
+            awaitRefresh(panel)
+            awaitConfigLoads(panel)
 
-        assertEquals(context, field("authContextId").get(panel))
-        assertEquals(1, cli.callCount("projects"))
-        assertEquals(1, cli.callCount("configure"))
-        assertEquals(1, cli.callCount("configs"))
-        assertEquals(DopplerFolderSetup("example", "dev"), folderSetupState().current)
-    }
+            assertEquals(context, field("authContextId").get(panel))
+            assertEquals(1, cli.callCount("projects"))
+            assertEquals(1, cli.callCount("configure"))
+            assertEquals(1, cli.callCount("configs"))
+            assertEquals(DopplerFolderSetup("example", "dev"), folderSetupState().current)
+        }
 
-    fun `test project read failure keeps tree nodes but forces a full reload on focus`() = withPanel { panel, cli ->
-        val node = projectNodes(panel).single()
-        cli.setMode("project-failure")
-        panel.refresh()
-        awaitRefresh(panel)
-
-        assertSame(node, projectNodes(panel).single())
-        assertNull(field("authContextId").get(panel))
-        assertTrue(statusText(panel).contains("Temporary project read failure"))
-        assertFalse(node.loading)
-
-        cli.setMode("ready")
-        cli.clearCalls()
-        panel.refresh(CliOperation.TREE_PANEL_FOCUS)
-        awaitRefresh(panel)
-        awaitConfigLoads(panel)
-
-        assertSame(node, projectNodes(panel).single())
-        assertTrue(node.loaded)
-        assertEquals(1, cli.callCount("projects"))
-        assertEquals(1, cli.callCount("configs"))
-    }
-
-    fun `test disposal removes both focus listeners and invalidates pending generations`() = withPanel { panel, _ ->
-        val manager = field("focusManager").get(panel) as java.awt.KeyboardFocusManager
-        val listener = field("focusListener").get(panel) as java.beans.PropertyChangeListener
-        val refreshGeneration = field("refreshGeneration").getInt(panel)
-        val configGeneration = field("configGeneration").getInt(panel)
-        assertTrue(manager.getPropertyChangeListeners("focusOwner").contains(listener))
-        assertTrue(manager.getPropertyChangeListeners("focusedWindow").contains(listener))
-
-        Disposer.dispose(panel)
-
-        assertFalse(manager.getPropertyChangeListeners("focusOwner").contains(listener))
-        assertFalse(manager.getPropertyChangeListeners("focusedWindow").contains(listener))
-        assertEquals(refreshGeneration + 1, field("refreshGeneration").getInt(panel))
-        assertEquals(configGeneration + 1, field("configGeneration").getInt(panel))
-    }
-
-    fun `test refresh ignores duplicate requests and requests after disposal`() = withPanel { panel, cli ->
-        cli.clearCalls()
-        val generation = field("refreshGeneration").getInt(panel)
-        field("refreshing").setBoolean(panel, true)
-        try {
+    fun `test project read failure keeps tree nodes but forces a full reload on focus`() =
+        withPanel { panel, cli ->
+            val node = projectNodes(panel).single()
+            cli.setMode("project-failure")
             panel.refresh()
-            assertEquals(generation, field("refreshGeneration").getInt(panel))
+            awaitRefresh(panel)
+
+            assertSame(node, projectNodes(panel).single())
+            assertNull(field("authContextId").get(panel))
+            assertTrue(statusText(panel).contains("Temporary project read failure"))
+            assertFalse(node.loading)
+
+            cli.setMode("ready")
+            cli.clearCalls()
+            panel.refresh(CliOperation.TREE_PANEL_FOCUS)
+            awaitRefresh(panel)
+            awaitConfigLoads(panel)
+
+            assertSame(node, projectNodes(panel).single())
+            assertTrue(node.loaded)
+            assertEquals(1, cli.callCount("projects"))
+            assertEquals(1, cli.callCount("configs"))
+        }
+
+    fun `test disposal removes both focus listeners and invalidates pending generations`() =
+        withPanel { panel, _ ->
+            val manager = field("focusManager").get(panel) as java.awt.KeyboardFocusManager
+            val listener = field("focusListener").get(panel) as java.beans.PropertyChangeListener
+            val refreshGeneration = field("refreshGeneration").getInt(panel)
+            val configGeneration = field("configGeneration").getInt(panel)
+            assertTrue(manager.getPropertyChangeListeners("focusOwner").contains(listener))
+            assertTrue(manager.getPropertyChangeListeners("focusedWindow").contains(listener))
+
+            Disposer.dispose(panel)
+
+            assertFalse(manager.getPropertyChangeListeners("focusOwner").contains(listener))
+            assertFalse(manager.getPropertyChangeListeners("focusedWindow").contains(listener))
+            assertEquals(refreshGeneration + 1, field("refreshGeneration").getInt(panel))
+            assertEquals(configGeneration + 1, field("configGeneration").getInt(panel))
+        }
+
+    fun `test refresh ignores duplicate requests and requests after disposal`() =
+        withPanel { panel, cli ->
+            cli.clearCalls()
+            val generation = field("refreshGeneration").getInt(panel)
+            field("refreshing").setBoolean(panel, true)
+            try {
+                panel.refresh()
+                assertEquals(generation, field("refreshGeneration").getInt(panel))
+                assertTrue(cli.calls().isEmpty())
+            } finally {
+                field("refreshing").setBoolean(panel, false)
+            }
+            Disposer.dispose(panel)
+            val disposedGeneration = field("refreshGeneration").getInt(panel)
+            panel.refresh()
+            assertEquals(disposedGeneration, field("refreshGeneration").getInt(panel))
             assertTrue(cli.calls().isEmpty())
-        } finally {
-            field("refreshing").setBoolean(panel, false)
         }
-        Disposer.dispose(panel)
-        val disposedGeneration = field("refreshGeneration").getInt(panel)
-        panel.refresh()
-        assertEquals(disposedGeneration, field("refreshGeneration").getInt(panel))
-        assertTrue(cli.calls().isEmpty())
-    }
 
-    fun `test stale refresh results failures and completion cannot change current state`() = withPanel { panel, cli ->
-        cli.clearCalls()
-        val generation = field("refreshGeneration").getInt(panel)
-        val setup = folderSetupState().current
-        val context = field("authContextId").get(panel)
-        applyRefreshResult(panel, generation - 1, listOf(DopplerProject("stale", "Stale", null)))
-        invokePanel(panel, "handleRefreshFailure", IllegalStateException("Stale failure"), generation - 1)
-        assertEquals(listOf("example"), projectSlugs(panel))
-        assertEquals(setup, folderSetupState().current)
-        assertEquals(context, field("authContextId").get(panel))
-        assertFalse(statusText(panel).contains("Stale failure"))
+    fun `test stale refresh results failures and completion cannot change current state`() =
+        withPanel { panel, cli ->
+            cli.clearCalls()
+            val generation = field("refreshGeneration").getInt(panel)
+            val setup = folderSetupState().current
+            val context = field("authContextId").get(panel)
+            applyRefreshResult(panel, generation - 1, listOf(DopplerProject("stale", "Stale", null)))
+            invokePanel(panel, "handleRefreshFailure", IllegalStateException("Stale failure"), generation - 1)
+            assertEquals(listOf("example"), projectSlugs(panel))
+            assertEquals(setup, folderSetupState().current)
+            assertEquals(context, field("authContextId").get(panel))
+            assertFalse(statusText(panel).contains("Stale failure"))
 
-        field("refreshing").setBoolean(panel, true)
-        try {
-            invokePanel(panel, "finishRefresh", generation - 1)
-            assertTrue(isRefreshing(panel))
-            invokePanel(panel, "finishRefresh", generation)
-            assertFalse(isRefreshing(panel))
-        } finally {
-            field("refreshing").setBoolean(panel, false)
+            field("refreshing").setBoolean(panel, true)
+            try {
+                invokePanel(panel, "finishRefresh", generation - 1)
+                assertTrue(isRefreshing(panel))
+                invokePanel(panel, "finishRefresh", generation)
+                assertFalse(isRefreshing(panel))
+            } finally {
+                field("refreshing").setBoolean(panel, false)
+            }
+            assertTrue(cli.calls().isEmpty())
         }
-        assertTrue(cli.calls().isEmpty())
-    }
 
     fun `test expanding a failed project retries configs and loaded projects are not fetched twice`() =
         withPanel("empty-setup") { panel, cli ->
@@ -233,18 +241,19 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             assertTrue(cli.calls().isEmpty())
         }
 
-    fun `test failed forced config reload preserves previously loaded children`() = withPanel { panel, cli ->
-        val node = projectNodes(panel).single()
-        val environment = node.getChildAt(0)
-        cli.clearCalls()
-        cli.setMode("config-failure")
-        loadConfigs(panel, node, force = true)
-        awaitConfigLoads(panel)
-        assertTrue(node.loaded)
-        assertFalse(node.configLoadFailed)
-        assertSame(environment, node.getChildAt(0))
-        assertEquals(1, cli.callCount("configs"))
-    }
+    fun `test failed forced config reload preserves previously loaded children`() =
+        withPanel { panel, cli ->
+            val node = projectNodes(panel).single()
+            val environment = node.getChildAt(0)
+            cli.clearCalls()
+            cli.setMode("config-failure")
+            loadConfigs(panel, node, force = true)
+            awaitConfigLoads(panel)
+            assertTrue(node.loaded)
+            assertFalse(node.configLoadFailed)
+            assertSame(environment, node.getChildAt(0))
+            assertEquals(1, cli.callCount("configs"))
+        }
 
     fun `test superseded config success and failure cannot replace newer configs`() {
         for (mode in listOf("blocked-stale-configs", "blocked-config-failure")) {
@@ -288,72 +297,84 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test reviewed installer can be cancelled without running or deleting it`() = withPanel { panel, cli ->
-        val path = createInstallerTempFile()
-        val installer = ReviewedInstaller(path, installerSha256(ByteArray(0)))
-        var confirmations = 0
-        TestDialogManager.setTestDialog(TestDialog { message ->
-            confirmations++
-            assertTrue(message.contains(path.fileName.toString()))
-            assertTrue(message.contains("administrator privileges"))
-            1
-        }, testRootDisposable)
-        try {
-            field("reviewedInstaller").set(panel, installer)
-            invokePanel(panel, "showInstallerReady", installer)
-            assertTrue(statusText(panel).contains("Review the downloaded installer"))
-            assertTrue(statusText(panel).contains("Run reviewed installer"))
-            assertTrue(statusText(panel).contains("Discard downloaded installer"))
-            cli.clearCalls()
-            invokePanel(panel, "runReviewedInstaller", installer)
-            assertEquals(1, confirmations)
-            assertSame(installer, field("reviewedInstaller").get(panel))
-            assertTrue(Files.exists(path))
-            assertTrue(cli.calls().isEmpty())
-        } finally {
-            deleteInstallerTempFile(path)
+    fun `test reviewed installer can be cancelled without running or deleting it`() =
+        withPanel { panel, cli ->
+            val path = createInstallerTempFile()
+            val installer = ReviewedInstaller(path, installerSha256(ByteArray(0)))
+            var confirmations = 0
+            TestDialogManager.setTestDialog(
+                TestDialog { message ->
+                    confirmations++
+                    assertTrue(message.contains(path.fileName.toString()))
+                    assertTrue(message.contains("administrator privileges"))
+                    1
+                },
+                testRootDisposable,
+            )
+            try {
+                field("reviewedInstaller").set(panel, installer)
+                invokePanel(panel, "showInstallerReady", installer)
+                assertTrue(statusText(panel).contains("Review the downloaded installer"))
+                assertTrue(statusText(panel).contains("Run reviewed installer"))
+                assertTrue(statusText(panel).contains("Discard downloaded installer"))
+                cli.clearCalls()
+                invokePanel(panel, "runReviewedInstaller", installer)
+                assertEquals(1, confirmations)
+                assertSame(installer, field("reviewedInstaller").get(panel))
+                assertTrue(Files.exists(path))
+                assertTrue(cli.calls().isEmpty())
+            } finally {
+                deleteInstallerTempFile(path)
+            }
         }
-    }
 
-    fun `test reviewed installer rejects stale missing and symlink files before confirmation`() = withPanel { panel, _ ->
-        val path = createInstallerTempFile()
-        val target = createInstallerTempFile()
-        val installer = ReviewedInstaller(path, "a".repeat(64))
-        var confirmations = 0
-        TestDialogManager.setTestDialog(TestDialog { confirmations++; 1 }, testRootDisposable)
-        try {
-            invokePanel(panel, "runReviewedInstaller", installer)
-            field("reviewedInstaller").set(panel, installer)
-            Files.delete(path)
-            invokePanel(panel, "runReviewedInstaller", installer)
-            Files.createSymbolicLink(path, target)
-            invokePanel(panel, "runReviewedInstaller", installer)
-            assertEquals(0, confirmations)
-            assertSame(installer, field("reviewedInstaller").get(panel))
-            assertTrue(Files.exists(target))
-        } finally {
-            Files.deleteIfExists(path)
-            deleteInstallerTempFile(target)
+    fun `test reviewed installer rejects stale missing and symlink files before confirmation`() =
+        withPanel { panel, _ ->
+            val path = createInstallerTempFile()
+            val target = createInstallerTempFile()
+            val installer = ReviewedInstaller(path, "a".repeat(64))
+            var confirmations = 0
+            TestDialogManager.setTestDialog(
+                TestDialog {
+                    confirmations++
+                    1
+                },
+                testRootDisposable,
+            )
+            try {
+                invokePanel(panel, "runReviewedInstaller", installer)
+                field("reviewedInstaller").set(panel, installer)
+                Files.delete(path)
+                invokePanel(panel, "runReviewedInstaller", installer)
+                Files.createSymbolicLink(path, target)
+                invokePanel(panel, "runReviewedInstaller", installer)
+                assertEquals(0, confirmations)
+                assertSame(installer, field("reviewedInstaller").get(panel))
+                assertTrue(Files.exists(target))
+            } finally {
+                Files.deleteIfExists(path)
+                deleteInstallerTempFile(target)
+            }
         }
-    }
 
-    fun `test discarding a reviewed installer removes only that file and clears its state`() = withPanel { panel, _ ->
-        val path = createInstallerTempFile()
-        val installer = ReviewedInstaller(path, "a".repeat(64))
-        try {
-            val status = field("statusPanel").get(panel) as com.intellij.ui.components.JBPanelWithEmptyText
-            status.emptyText.withUnscaledGapAfter(0)
-            status.emptyText.isCenterAlignText = false
-            field("reviewedInstaller").set(panel, installer)
-            invokePanel(panel, "showInstallerReady", installer)
-            clickStatusLink(panel, "Discard downloaded installer")
-            assertFalse(Files.exists(path))
-            assertNull(field("reviewedInstaller").get(panel))
-            assertEquals("Downloaded installer discarded.", statusText(panel))
-        } finally {
-            deleteInstallerTempFile(path)
+    fun `test discarding a reviewed installer removes only that file and clears its state`() =
+        withPanel { panel, _ ->
+            val path = createInstallerTempFile()
+            val installer = ReviewedInstaller(path, "a".repeat(64))
+            try {
+                val status = field("statusPanel").get(panel) as com.intellij.ui.components.JBPanelWithEmptyText
+                status.emptyText.withUnscaledGapAfter(0)
+                status.emptyText.isCenterAlignText = false
+                field("reviewedInstaller").set(panel, installer)
+                invokePanel(panel, "showInstallerReady", installer)
+                clickStatusLink(panel, "Discard downloaded installer")
+                assertFalse(Files.exists(path))
+                assertNull(field("reviewedInstaller").get(panel))
+                assertEquals("Downloaded installer discarded.", statusText(panel))
+            } finally {
+                deleteInstallerTempFile(path)
+            }
         }
-    }
 
     fun `test ready refresh loads projects and setup and invalidates stale cached files`() {
         assumeFalse(SystemInfo.isWindows)
@@ -402,7 +423,8 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             folderSetupState().update(configured)
             var notifications = 0
             project.messageBus.connect(testRootDisposable).subscribe(
-                DopplerFolderSetupState.TOPIC, DopplerFolderSetupListener { notifications++ },
+                DopplerFolderSetupState.TOPIC,
+                DopplerFolderSetupListener { notifications++ },
             )
             val panel = DopplerToolWindowPanel(project)
             try {
@@ -469,7 +491,8 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             state.update(DopplerFolderSetup("example", "dev"))
             var notifications = 0
             project.messageBus.connect(testRootDisposable).subscribe(
-                DopplerFolderSetupState.TOPIC, DopplerFolderSetupListener { notifications++ },
+                DopplerFolderSetupState.TOPIC,
+                DopplerFolderSetupListener { notifications++ },
             )
             val panel = DopplerToolWindowPanel(project)
             try {
@@ -607,12 +630,13 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                 cli.setMode("blocked-configs")
 
                 val loadFailure = AtomicReference<Throwable>()
-                val loadThread = Thread(
-                    { loadConfigs(panel, configured) },
-                    "Doppler config preload test",
-                ).apply {
-                    uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> loadFailure.set(error) }
-                }
+                val loadThread =
+                    Thread(
+                        { loadConfigs(panel, configured) },
+                        "Doppler config preload test",
+                    ).apply {
+                        uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> loadFailure.set(error) }
+                    }
                 loadThread.start()
                 awaitCall(cli, "configs")
                 assertTrue(configured.loading)
@@ -645,7 +669,11 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         withCli("empty-setup") { cli ->
             val panel = DopplerToolWindowPanel(project)
             val taskFailure = AtomicReference<Throwable>()
-            fun startTask(name: String, action: () -> Unit) = Thread(action, name).apply {
+
+            fun startTask(
+                name: String,
+                action: () -> Unit,
+            ) = Thread(action, name).apply {
                 uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> taskFailure.set(error) }
                 start()
             }
@@ -663,9 +691,10 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                 assertTrue(node.loading)
 
                 cli.setMode("blocked-projects")
-                refreshThread = startTask("Doppler full refresh test") {
-                    panel.refresh(CliOperation.TREE_REFRESH_BUTTON)
-                }
+                refreshThread =
+                    startTask("Doppler full refresh test") {
+                        panel.refresh(CliOperation.TREE_REFRESH_BUTTON)
+                    }
                 awaitCall(cli, "projects")
                 cli.releaseConfigs()
                 awaitConfigLoads(panel)
@@ -696,7 +725,10 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         }
     }
 
-    private fun withPanel(initialMode: String = "ready", test: (DopplerToolWindowPanel, FakeCli) -> Unit) {
+    private fun withPanel(
+        initialMode: String = "ready",
+        test: (DopplerToolWindowPanel, FakeCli) -> Unit,
+    ) {
         assumeFalse(SystemInfo.isWindows)
         withCli(initialMode) { cli ->
             val panel = DopplerToolWindowPanel(project)
@@ -720,10 +752,11 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         cli.clearCalls()
         cli.setMode(mode)
         val failure = AtomicReference<Throwable>()
-        val thread = Thread({ loadConfigs(panel, node) }, "Doppler pending config callback test").apply {
-            uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> failure.set(error) }
-            start()
-        }
+        val thread =
+            Thread({ loadConfigs(panel, node) }, "Doppler pending config callback test").apply {
+                uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> failure.set(error) }
+                start()
+            }
         try {
             awaitCall(cli, "configs")
             test()
@@ -734,14 +767,21 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         failure.get()?.let { throw AssertionError("Could not load configs", it) }
     }
 
-    private fun invokePanel(panel: DopplerToolWindowPanel, name: String, vararg arguments: Any) {
+    private fun invokePanel(
+        panel: DopplerToolWindowPanel,
+        name: String,
+        vararg arguments: Any,
+    ) {
         DopplerToolWindowPanel::class.java.declaredMethods
             .single { it.name == name && it.parameterCount == arguments.size }
             .apply { isAccessible = true }
             .invoke(panel, *arguments)
     }
 
-    private fun clickStatusLink(panel: DopplerToolWindowPanel, label: String) {
+    private fun clickStatusLink(
+        panel: DopplerToolWindowPanel,
+        label: String,
+    ) {
         val status = field("statusPanel").get(panel) as com.intellij.ui.components.JBPanelWithEmptyText
         status.setSize(800, 400)
         val graphics = BufferedImage(800, 400, BufferedImage.TYPE_INT_ARGB).createGraphics()
@@ -755,11 +795,15 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         val index = rows.indexOfFirst { it.getCharSequence(false).toString() == label }
         assertTrue("Expected status link: $label", index >= 0)
         val point = text.pointBelow
-        val gap = if (rows.size > 1) {
-            (text.preferredSize.height - rows.sumOf { it.preferredSize.height }) / (rows.size - 1)
-        } else 0
-        val y = point.y - text.preferredSize.height +
-            rows.take(index).sumOf { it.preferredSize.height } + index * gap + rows[index].preferredSize.height / 2
+        val gap =
+            if (rows.size > 1) {
+                (text.preferredSize.height - rows.sumOf { it.preferredSize.height }) / (rows.size - 1)
+            } else {
+                0
+            }
+        val y =
+            point.y - text.preferredSize.height +
+                rows.take(index).sumOf { it.preferredSize.height } + index * gap + rows[index].preferredSize.height / 2
         val x = point.x + if (text.isCenterAlignText) text.preferredSize.width / 2 else rows[index].preferredSize.width / 2
         val pressed = MouseEvent(status, MouseEvent.MOUSE_PRESSED, 1, 0, x, y, 1, false, MouseEvent.BUTTON1)
         val released = MouseEvent(status, MouseEvent.MOUSE_RELEASED, 2, 0, x, y, 1, false, MouseEvent.BUTTON1)
@@ -767,7 +811,10 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         status.mouseListeners.forEach { it.mouseReleased(released) }
     }
 
-    private fun withCli(initialMode: String, test: (FakeCli) -> Unit) {
+    private fun withCli(
+        initialMode: String,
+        test: (FakeCli) -> Unit,
+    ) {
         val cli = FakeCli(initialMode)
         val settings = DopplerSettings.getInstance()
         val originalPath = settings.cliPath
@@ -802,7 +849,10 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         assertFalse("Config preloading should finish", projectNodes(panel).any { it.loading })
     }
 
-    private fun awaitCall(cli: FakeCli, command: String) {
+    private fun awaitCall(
+        cli: FakeCli,
+        command: String,
+    ) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
         while (cli.callCount(command) == 0 && System.nanoTime() < deadline) {
             UIUtil.dispatchAllInvocationEvents()
@@ -811,21 +861,29 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         assertTrue("Expected Doppler CLI call: $command", cli.callCount(command) > 0)
     }
 
-    private fun awaitOpenConfig(projectSlug: String, configName: String): DopplerSecretsFile {
+    private fun awaitOpenConfig(
+        projectSlug: String,
+        configName: String,
+    ): DopplerSecretsFile {
         val manager = FileEditorManager.getInstance(project)
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
         var opened: DopplerSecretsFile? = null
         while (opened == null && System.nanoTime() < deadline) {
             UIUtil.dispatchAllInvocationEvents()
-            opened = manager.openFiles.filterIsInstance<DopplerSecretsFile>()
-                .firstOrNull { it.projectSlug == projectSlug && it.configName == configName }
+            opened =
+                manager.openFiles
+                    .filterIsInstance<DopplerSecretsFile>()
+                    .firstOrNull { it.projectSlug == projectSlug && it.configName == configName }
             if (opened == null) Thread.sleep(10)
         }
         assertNotNull("Config click should open its Doppler editor", opened)
         return requireNotNull(opened)
     }
 
-    private fun clickConfig(panel: DopplerToolWindowPanel, node: ConfigNode) {
+    private fun clickConfig(
+        panel: DopplerToolWindowPanel,
+        node: ConfigNode,
+    ) {
         val tree = field("tree").get(panel) as JTree
         val environment = node.parent as EnvironmentNode
         val projectNode = environment.parent as ProjectNode
@@ -834,51 +892,65 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         tree.expandPath(TreePath(environment.path))
         tree.doLayout()
         val bounds = requireNotNull(tree.getPathBounds(TreePath(node.path)))
-        val event = MouseEvent(
-            tree,
-            MouseEvent.MOUSE_CLICKED,
-            System.currentTimeMillis(),
-            0,
-            bounds.x + bounds.width / 2,
-            bounds.y + bounds.height / 2,
-            1,
-            false,
-            MouseEvent.BUTTON1,
-        )
-        tree.mouseListeners.filterIsInstance<DopplerTreeClickListener>().single().mouseClicked(event)
+        val event =
+            MouseEvent(
+                tree,
+                MouseEvent.MOUSE_CLICKED,
+                System.currentTimeMillis(),
+                0,
+                bounds.x + bounds.width / 2,
+                bounds.y + bounds.height / 2,
+                1,
+                false,
+                MouseEvent.BUTTON1,
+            )
+        tree.mouseListeners
+            .filterIsInstance<DopplerTreeClickListener>()
+            .single()
+            .mouseClicked(event)
     }
 
-    private fun isRefreshing(panel: DopplerToolWindowPanel): Boolean =
-        field("refreshing").getBoolean(panel)
+    private fun isRefreshing(panel: DopplerToolWindowPanel): Boolean = field("refreshing").getBoolean(panel)
 
-    private fun loadConfigs(panel: DopplerToolWindowPanel, node: ProjectNode, force: Boolean = false) {
-        DopplerToolWindowPanel::class.java.getDeclaredMethod(
-            "loadConfigs",
-            ProjectNode::class.java,
-            Boolean::class.javaPrimitiveType,
-            CliOperation::class.java,
-        ).apply { isAccessible = true }.invoke(panel, node, force, CliOperation.TREE_EXPAND)
+    private fun loadConfigs(
+        panel: DopplerToolWindowPanel,
+        node: ProjectNode,
+        force: Boolean = false,
+    ) {
+        DopplerToolWindowPanel::class.java
+            .getDeclaredMethod(
+                "loadConfigs",
+                ProjectNode::class.java,
+                Boolean::class.javaPrimitiveType,
+                CliOperation::class.java,
+            ).apply { isAccessible = true }
+            .invoke(panel, node, force, CliOperation.TREE_EXPAND)
     }
 
-    private fun applyRefreshResult(panel: DopplerToolWindowPanel, generation: Int, projects: List<DopplerProject>) {
+    private fun applyRefreshResult(
+        panel: DopplerToolWindowPanel,
+        generation: Int,
+        projects: List<DopplerProject>,
+    ) {
         val resultClass = DopplerToolWindowPanel::class.java.declaredClasses.single { it.simpleName == "RefreshResult" }
-        val result = resultClass.declaredConstructors.single { it.parameterCount == 4 }.apply { isAccessible = true }.newInstance(
-            DopplerStatusReport(DopplerStatus.READY, null, "replacement-context"),
-            projects,
-            DopplerFolderSetup("replacement", "dev"),
-            false,
-        )
-        DopplerToolWindowPanel::class.java.getDeclaredMethod(
-            "applyRefreshResult",
-            resultClass,
-            CliOperation::class.java,
-            Int::class.javaPrimitiveType,
-        ).apply { isAccessible = true }.invoke(panel, result, CliOperation.TREE_REFRESH_BUTTON, generation)
+        val result =
+            resultClass.declaredConstructors.single { it.parameterCount == 4 }.apply { isAccessible = true }.newInstance(
+                DopplerStatusReport(DopplerStatus.READY, null, "replacement-context"),
+                projects,
+                DopplerFolderSetup("replacement", "dev"),
+                false,
+            )
+        DopplerToolWindowPanel::class.java
+            .getDeclaredMethod(
+                "applyRefreshResult",
+                resultClass,
+                CliOperation::class.java,
+                Int::class.javaPrimitiveType,
+            ).apply { isAccessible = true }
+            .invoke(panel, result, CliOperation.TREE_REFRESH_BUTTON, generation)
     }
 
-    private fun projectSlugs(panel: DopplerToolWindowPanel): List<String> {
-        return projectNodes(panel).map { it.dopplerProject.slug }
-    }
+    private fun projectSlugs(panel: DopplerToolWindowPanel): List<String> = projectNodes(panel).map { it.dopplerProject.slug }
 
     private fun projectNodes(panel: DopplerToolWindowPanel): List<ProjectNode> {
         val root = field("rootNode").get(panel) as DefaultMutableTreeNode
@@ -892,13 +964,16 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             .joinToString("\n") { it.getCharSequence(false).toString() }
     }
 
-    private fun field(name: String) = DopplerToolWindowPanel::class.java.getDeclaredField(name).apply {
-        isAccessible = true
-    }
+    private fun field(name: String) =
+        DopplerToolWindowPanel::class.java.getDeclaredField(name).apply {
+            isAccessible = true
+        }
 
     private fun folderSetupState() = DopplerFolderSetupState.getInstance(project)
 
-    private class FakeCli(initialMode: String) : AutoCloseable {
+    private class FakeCli(
+        initialMode: String,
+    ) : AutoCloseable {
         private val directory = Files.createTempDirectory("doppler-tree-refresh-")
         val executable: Path = directory.resolve("doppler")
         private val modeFile = directory.resolve("mode")
@@ -909,7 +984,9 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
         init {
             Files.writeString(modeFile, initialMode)
             Files.writeString(callsFile, "")
-            Files.writeString(executable, """
+            Files.writeString(
+                executable,
+                """
                 #!/bin/sh
                 mode="${'$'}(cat '$modeFile')"
                 printf '%s\n' "${'$'}1" >> '$callsFile'
@@ -991,7 +1068,8 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                     ;;
                   *) exit 1 ;;
                 esac
-            """.trimIndent())
+                """.trimIndent(),
+            )
             check(executable.toFile().setExecutable(true))
         }
 

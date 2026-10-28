@@ -15,43 +15,43 @@ import org.junit.Test
  * read back as null.
  */
 class ParseSecretsTest {
-
-    private val realPayload = """
-    {
-      "DB_URL": {
-        "computed": "psql://app@localhost/appdb",
-        "computedValueType": { "type": "url" },
-        "computedVisibility": "masked",
-        "note": "",
-        "raw": "psql://app@localhost/appdb",
-        "rawValueType": { "type": "url" },
-        "rawVisibility": "masked"
-      },
-      "LOGGING": {
-        "computed": "dev",
-        "computedValueType": { "type": "string" },
-        "computedVisibility": "unmasked",
-        "note": "",
-        "raw": "${'$'}{DOPPLER_ENVIRONMENT}",
-        "rawValueType": { "type": "string" },
-        "rawVisibility": "unmasked"
-      },
-      "LOCKED_DOWN": {
-        "computed": null,
-        "computedVisibility": "restricted",
-        "note": "",
-        "raw": null,
-        "rawVisibility": "restricted"
-      },
-      "DOPPLER_PROJECT": {
-        "computed": "example-project",
-        "computedVisibility": "unmasked",
-        "note": "",
-        "raw": "example-project",
-        "rawVisibility": "unmasked"
-      }
-    }
-    """.trimIndent()
+    private val realPayload =
+        """
+        {
+          "DB_URL": {
+            "computed": "psql://app@localhost/appdb",
+            "computedValueType": { "type": "url" },
+            "computedVisibility": "masked",
+            "note": "",
+            "raw": "psql://app@localhost/appdb",
+            "rawValueType": { "type": "url" },
+            "rawVisibility": "masked"
+          },
+          "LOGGING": {
+            "computed": "dev",
+            "computedValueType": { "type": "string" },
+            "computedVisibility": "unmasked",
+            "note": "",
+            "raw": "${'$'}{DOPPLER_ENVIRONMENT}",
+            "rawValueType": { "type": "string" },
+            "rawVisibility": "unmasked"
+          },
+          "LOCKED_DOWN": {
+            "computed": null,
+            "computedVisibility": "restricted",
+            "note": "",
+            "raw": null,
+            "rawVisibility": "restricted"
+          },
+          "DOPPLER_PROJECT": {
+            "computed": "example-project",
+            "computedVisibility": "unmasked",
+            "note": "",
+            "raw": "example-project",
+            "rawVisibility": "unmasked"
+          }
+        }
+        """.trimIndent()
 
     private fun parse() = parseSecrets(JsonParser.parseString(realPayload))
 
@@ -94,9 +94,10 @@ class ParseSecretsTest {
 
     @Test
     fun `tolerates a secrets wrapper containing a secret named raw`() {
-        val wrapped = JsonParser.parseString(
-            """{"secrets": {"raw": {"raw": "1", "computed": "1"}}}""",
-        )
+        val wrapped =
+            JsonParser.parseString(
+                """{"secrets": {"raw": {"raw": "1", "computed": "1"}}}""",
+            )
         val secret = parseSecrets(wrapped).single()
         assertEquals("raw", secret.name)
         assertEquals("1", secret.raw)
@@ -111,9 +112,10 @@ class ParseSecretsTest {
 
     @Test
     fun `parses an object secret named secrets from the bare map`() {
-        val secrets = parseSecrets(
-            JsonParser.parseString("""{"secrets": {"raw": "value", "computed": "value"}}"""),
-        )
+        val secrets =
+            parseSecrets(
+                JsonParser.parseString("""{"secrets": {"raw": "value", "computed": "value"}}"""),
+            )
         assertEquals(listOf("secrets"), secrets.map { it.name })
         assertEquals("value", secrets.single().raw)
     }
@@ -147,9 +149,10 @@ class ParseSecretsTest {
 
     @Test
     fun `restricted visibility permits omitted raw values`() {
-        val secrets = parseSecrets(
-            JsonParser.parseString("""{"A": {"rawVisibility": "restricted", "computed": null}}"""),
-        )
+        val secrets =
+            parseSecrets(
+                JsonParser.parseString("""{"A": {"rawVisibility": "restricted", "computed": null}}"""),
+            )
         assertTrue(secrets.single().restricted)
     }
 }

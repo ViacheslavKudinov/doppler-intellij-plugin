@@ -15,7 +15,9 @@ import com.vk.doppler.settings.DopplerInjectionSettings
 
 /** Fetches fresh secrets per launch without retaining them or modifying a stored RunConfiguration. */
 @Service(Service.Level.PROJECT)
-class DopplerInjectionService(private val project: Project) {
+class DopplerInjectionService(
+    private val project: Project,
+) {
     internal fun mergeEnvironment(existing: Map<String, String>): Map<String, String> {
         if (project.isDisposed || !TrustedProjects.isProjectTrusted(project)) {
             return existing
@@ -28,9 +30,14 @@ class DopplerInjectionService(private val project: Project) {
         if (ApplicationManager.getApplication().isDispatchThread) {
             var result: Map<String, String> = existing
             var failure: ExecutionException? = null
-            val completed = ProgressManager.getInstance().runProcessWithProgressSynchronously({
-                try { result = loadAndMerge(existing) } catch (error: ExecutionException) { failure = error }
-            }, "Loading Doppler environment", true, project)
+            val completed =
+                ProgressManager.getInstance().runProcessWithProgressSynchronously({
+                    try {
+                        result = loadAndMerge(existing)
+                    } catch (error: ExecutionException) {
+                        failure = error
+                    }
+                }, "Loading Doppler environment", true, project)
             if (!completed) throw ExecutionException("Doppler environment injection was cancelled.")
             failure?.let { throw it }
             return result
@@ -70,7 +77,9 @@ class DopplerInjectionService(private val project: Project) {
             return mergeInjectionEnvironment(existing, named)
         } catch (_: DopplerCliException) {
             // CLI output and arbitrary causes can contain secrets; do not attach them to an IDE exception.
-            throw ExecutionException("Could not load the Doppler environment. Check CLI login and Settings | Tools | Doppler | Folder Setup.")
+            throw ExecutionException(
+                "Could not load the Doppler environment. Check CLI login and Settings | Tools | Doppler | Folder Setup.",
+            )
         }
     }
 
@@ -87,7 +96,9 @@ class DopplerInjectionService(private val project: Project) {
         }
         val named = applySecretNameMapping(secrets, mappings)
         if (named.size != secrets.size) {
-            throw ExecutionException("Custom Doppler name mappings conflict with existing secret names. Choose unique new names in Settings | Tools | Doppler | Run and Debug.")
+            throw ExecutionException(
+                "Custom Doppler name mappings conflict with existing secret names. Choose unique new names in Settings | Tools | Doppler | Run and Debug.",
+            )
         }
         return named
     }
@@ -98,5 +109,7 @@ class DopplerInjectionService(private val project: Project) {
 }
 
 /** Explicit run configuration values win; neither input map is modified. */
-internal fun mergeInjectionEnvironment(existing: Map<String, String>, secrets: Map<String, String>): Map<String, String> =
-    HashMap(secrets).apply { putAll(existing) }
+internal fun mergeInjectionEnvironment(
+    existing: Map<String, String>,
+    secrets: Map<String, String>,
+): Map<String, String> = HashMap(secrets).apply { putAll(existing) }

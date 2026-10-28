@@ -1,6 +1,10 @@
 package com.vk.doppler.cli
 
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class CliCallLogTest {
@@ -17,28 +21,45 @@ class CliCallLogTest {
     fun `injection logs supported name transformer choices and redacts unknown operands`() {
         for (transformer in DopplerNameTransformer.entries.filter { it.cliName != null }) {
             val logs = mutableListOf<String>()
-            traceCliCall(listOf("secrets", "download", "--name-transformer", transformer.cliName!!),
-                true, logs::add, CliOperation.RUN_INJECTION) { report -> report(0, false) }
+            traceCliCall(
+                listOf("secrets", "download", "--name-transformer", transformer.cliName!!),
+                true,
+                logs::add,
+                CliOperation.RUN_INJECTION,
+            ) { report -> report(0, false) }
             assertTrue(logs.first().contains("START doppler secrets download --name-transformer ${transformer.cliName}"))
             assertTrue(logs.last().contains("exit=0 timeout=false result=success"))
         }
-        assertEquals("doppler secrets download --name-transformer <redacted>",
-            sanitizedCliCommand(listOf("secrets", "download", "--name-transformer", "synthetic-sensitive-operand")))
+        assertEquals(
+            "doppler secrets download --name-transformer <redacted>",
+            sanitizedCliCommand(listOf("secrets", "download", "--name-transformer", "synthetic-sensitive-operand")),
+        )
     }
 
     @Test
     fun `injection logs folder lookup account checks and download without secrets or output`() {
         val logs = mutableListOf<String>()
         val scope = listOf("--scope", "/private/injection-folder", "--json", "--no-check-version")
-        val calls = listOf(
-            listOf("configure", "get", "project", "config") + scope,
-            listOf("me") + scope,
-            listOf("configure", "get", "project", "config") + scope,
-            listOf("secrets", "download", "--no-file", "--no-fallback", "--format", "json",
-                "--project", "private-project", "--config", "private-config") + scope,
-            listOf("configure", "get", "project", "config") + scope,
-            listOf("me") + scope,
-        )
+        val calls =
+            listOf(
+                listOf("configure", "get", "project", "config") + scope,
+                listOf("me") + scope,
+                listOf("configure", "get", "project", "config") + scope,
+                listOf(
+                    "secrets",
+                    "download",
+                    "--no-file",
+                    "--no-fallback",
+                    "--format",
+                    "json",
+                    "--project",
+                    "private-project",
+                    "--config",
+                    "private-config",
+                ) + scope,
+                listOf("configure", "get", "project", "config") + scope,
+                listOf("me") + scope,
+            )
         for (args in calls) {
             traceCliCall(args, true, logs::add, CliOperation.RUN_INJECTION) { report ->
                 report(0, false)
@@ -53,8 +74,11 @@ class CliCallLogTest {
         assertTrue(logs[6].contains("START doppler secrets download --no-file --no-fallback"))
         assertTrue(logs[8].contains("START doppler configure get"))
         assertTrue(logs[10].contains("START doppler me"))
-        assertTrue(logs.filterIndexed { index, _ -> index % 2 == 1 }
-            .all { it.contains("END durationMs=") && it.contains("exit=0 timeout=false result=success") })
+        assertTrue(
+            logs
+                .filterIndexed { index, _ -> index % 2 == 1 }
+                .all { it.contains("END durationMs=") && it.contains("exit=0 timeout=false result=success") },
+        )
         for (sensitive in listOf("/private/injection-folder", "private-project", "private-config", "synthetic-secret-output")) {
             assertFalse(logs.joinToString().contains(sensitive))
         }
@@ -64,8 +88,21 @@ class CliCallLogTest {
     fun `folder setup logs reads writes and clears without exposing scope or values`() {
         for (action in listOf("get", "set", "unset")) {
             val logs = mutableListOf<String>()
-            traceCliCall(listOf("configure", action, "--scope", "/private/example-folder", "--json", "--", "project=private-project", "config=private-config"),
-                true, logs::add, CliOperation.FOLDER_SETUP) { report -> report(0, false) }
+            traceCliCall(
+                listOf(
+                    "configure",
+                    action,
+                    "--scope",
+                    "/private/example-folder",
+                    "--json",
+                    "--",
+                    "project=private-project",
+                    "config=private-config",
+                ),
+                true,
+                logs::add,
+                CliOperation.FOLDER_SETUP,
+            ) { report -> report(0, false) }
             assertTrue(logs.first().contains("START doppler configure $action"))
             assertTrue(logs.last().contains("END durationMs="))
             assertTrue(logs.last().contains("exit=0 timeout=false result=success"))
@@ -78,15 +115,25 @@ class CliCallLogTest {
     @Test
     fun `refresh account check includes all open config contexts with masked names`() {
         val logs = mutableListOf<String>()
-        traceCliCall(listOf("me"), true, logs::add, CliOperation.AUTO_REFRESH,
-            relatedConfigs = listOf(
-                CliLogContext("backend", "production", "production"),
-                CliLogContext("frontend", "development"),
-            )) { report -> report(0, false) }
+        traceCliCall(
+            listOf("me"),
+            true,
+            logs::add,
+            CliOperation.AUTO_REFRESH,
+            relatedConfigs =
+                listOf(
+                    CliLogContext("backend", "production", "production"),
+                    CliLogContext("frontend", "development"),
+                ),
+        ) { report -> report(0, false) }
         assertEquals(2, logs.size)
         for (line in logs) {
-            assertTrue(line.contains("openConfigs=[{project=\"back....\" config=\"produc....\" env=\"produc....\"}, " +
-                "{project=\"fron....\" config=\"develo....\"}]"))
+            assertTrue(
+                line.contains(
+                    "openConfigs=[{project=\"back....\" config=\"produc....\" env=\"produc....\"}, " +
+                        "{project=\"fron....\" config=\"develo....\"}]",
+                ),
+            )
             for (name in listOf("backend", "frontend", "production", "development")) {
                 assertFalse(line.contains(name))
             }
@@ -96,10 +143,19 @@ class CliCallLogTest {
 
     @Test
     fun `event labels are included in both start and finish entries`() {
-        for (operation in listOf(CliOperation.TREE_STARTUP, CliOperation.TREE_PANEL_FOCUS,
-            CliOperation.TREE_WINDOW_FOCUS, CliOperation.TREE_REFRESH_BUTTON, CliOperation.TREE_RETRY,
-            CliOperation.TREE_EXPAND, CliOperation.AUTO_REFRESH, CliOperation.CONFIG_RELOAD,
-            CliOperation.FOLDER_SETUP, CliOperation.FOLDER_SETUP_POLL, CliOperation.RUN_INJECTION)) {
+        for (operation in listOf(
+            CliOperation.TREE_STARTUP,
+            CliOperation.TREE_PANEL_FOCUS,
+            CliOperation.TREE_WINDOW_FOCUS,
+            CliOperation.TREE_REFRESH_BUTTON,
+            CliOperation.TREE_RETRY,
+            CliOperation.TREE_EXPAND,
+            CliOperation.AUTO_REFRESH,
+            CliOperation.CONFIG_RELOAD,
+            CliOperation.FOLDER_SETUP,
+            CliOperation.FOLDER_SETUP_POLL,
+            CliOperation.RUN_INJECTION,
+        )) {
             val logs = mutableListOf<String>()
             traceCliCall(listOf("me"), true, logs::add, operation) { report -> report(0, false) }
             assertEquals(2, logs.size)
@@ -110,12 +166,27 @@ class CliCallLogTest {
     @Test
     fun `logs masked metadata and timing without secrets or output`() {
         val logs = mutableListOf<String>()
-        val result = traceCliCall(
-            listOf("secrets", "set", "--project", "private-project", "--config", "private-config",
-                "--json", "--", "SECRET_NAME=synthetic-value"),
-            true, logs::add, CliOperation.SAVE,
-            CliLogContext("private-project", "private-config", "production"),
-        ) { report -> report(0, false); "synthetic-output" }
+        val result =
+            traceCliCall(
+                listOf(
+                    "secrets",
+                    "set",
+                    "--project",
+                    "private-project",
+                    "--config",
+                    "private-config",
+                    "--json",
+                    "--",
+                    "SECRET_NAME=synthetic-value",
+                ),
+                true,
+                logs::add,
+                CliOperation.SAVE,
+                CliLogContext("private-project", "private-config", "production"),
+            ) { report ->
+                report(0, false)
+                "synthetic-output"
+            }
         assertEquals("synthetic-output", result)
         assertEquals(2, logs.size)
         assertTrue(logs[0].contains("START doppler secrets set --project \"private-p....\" --config \"private-....\""))
@@ -133,10 +204,11 @@ class CliCallLogTest {
 
     @Test
     fun `disabled tracing executes without emitting logs`() {
-        val result = traceCliCall(listOf("me"), false, { fail("Logging must be disabled") }) { report ->
-            report(0, false)
-            42
-        }
+        val result =
+            traceCliCall(listOf("me"), false, { fail("Logging must be disabled") }) { report ->
+                report(0, false)
+                42
+            }
         assertEquals(42, result)
     }
 
@@ -159,9 +231,20 @@ class CliCallLogTest {
 
     @Test
     fun `unknown flags and newline injection are redacted`() {
-        assertEquals("doppler secrets --project \"--r....\" <redacted> <redacted> -- <redacted>",
-            sanitizedCliCommand(listOf("secrets", "--project", "--raw", "--token=synthetic-token",
-                "injected\nlog", "--", "--json")))
+        assertEquals(
+            "doppler secrets --project \"--r....\" <redacted> <redacted> -- <redacted>",
+            sanitizedCliCommand(
+                listOf(
+                    "secrets",
+                    "--project",
+                    "--raw",
+                    "--token=synthetic-token",
+                    "injected\nlog",
+                    "--",
+                    "--json",
+                ),
+            ),
+        )
     }
 
     @Test
@@ -177,8 +260,13 @@ class CliCallLogTest {
     @Test
     fun `masked metadata escapes controls quotes and backslashes on account checks`() {
         val logs = mutableListOf<String>()
-        traceCliCall(listOf("me"), true, logs::add, CliOperation.AUTO_REFRESH,
-            CliLogContext("a\n\r\t\"\\\u2028\u202eabcdefghijklmno")) { report -> report(0, false) }
+        traceCliCall(
+            listOf("me"),
+            true,
+            logs::add,
+            CliOperation.AUTO_REFRESH,
+            CliLogContext("a\n\r\t\"\\\u2028\u202eabcdefghijklmno"),
+        ) { report -> report(0, false) }
         assertEquals(2, logs.size)
         for (line in logs) {
             assertFalse(line.any { it.isISOControl() || it == '\u2028' || it == '\u202e' })

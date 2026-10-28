@@ -40,9 +40,10 @@ private object SecretReferenceProvider : CompletionProvider<CompletionParameters
         val reference = SecretReferenceParser.contextAt(text, parameters.offset) ?: return
 
         val secretReferenceService = SecretReferenceService.getInstance()
-        val index = secretReferenceService.namesFor(file.authContextId) {
-            SecretReferencePopup.scheduleLater(project, editor)
-        }
+        val index =
+            secretReferenceService.namesFor(file.authContextId) {
+                SecretReferencePopup.scheduleLater(project, editor)
+            }
         if (secretReferenceService.isLoading()) {
             ApplicationManager.getApplication().invokeLater({
                 if (!project.isDisposed && !editor.isDisposed) {
@@ -57,12 +58,13 @@ private object SecretReferenceProvider : CompletionProvider<CompletionParameters
                 }
             }, ModalityState.defaultModalityState())
         }
-        val candidates = SecretReferenceCandidates.find(
-            SecretReferenceLocation(file.projectSlug, file.configName),
-            SecretReferenceParser.secretNames(text),
-            index,
-            reference.prefix,
-        )
+        val candidates =
+            SecretReferenceCandidates.find(
+                SecretReferenceLocation(file.projectSlug, file.configName),
+                SecretReferenceParser.secretNames(text),
+                index,
+                reference.prefix,
+            )
 
         val matcher = result.withPrefixMatcher(reference.prefix)
         matcher.restartCompletionOnAnyPrefixChange()
@@ -74,7 +76,8 @@ private object SecretReferenceProvider : CompletionProvider<CompletionParameters
 
 internal fun secretReferenceLookupElement(candidate: SecretReferenceCandidate): LookupElement =
     PrioritizedLookupElement.withPriority(
-        LookupElementBuilder.create(candidate, candidate.reference)
+        LookupElementBuilder
+            .create(candidate, candidate.reference)
             .withTypeText(candidate.origin, true)
             .withInsertHandler(CloseReferenceInsertHandler),
         candidate.scope.priority,
@@ -82,7 +85,10 @@ internal fun secretReferenceLookupElement(candidate: SecretReferenceCandidate): 
 
 /** Finishes a completed reference with its closing brace and moves the caret past it. */
 private object CloseReferenceInsertHandler : InsertHandler<LookupElement> {
-    override fun handleInsert(context: InsertionContext, item: LookupElement) {
+    override fun handleInsert(
+        context: InsertionContext,
+        item: LookupElement,
+    ) {
         val document = context.document
         val tail = context.tailOffset
         val closing = SecretReferenceParser.closingAfter(document.charsSequence, tail)
@@ -93,17 +99,25 @@ private object CloseReferenceInsertHandler : InsertHandler<LookupElement> {
 }
 
 internal object SecretReferencePopup {
-
     /** Opens the completion popup if the caret is still inside an unclosed reference. */
-    fun schedule(project: Project, editor: Editor) {
+    fun schedule(
+        project: Project,
+        editor: Editor,
+    ) {
         if (project.isDisposed || !SecretReferenceEditorFocus.isActive(editor)) return
-        AutoPopupController.getInstance(project).scheduleAutoPopup(editor, Condition { file ->
-            SecretReferenceEditorFocus.isActive(editor) && file.virtualFile is DopplerSecretsFile &&
-                SecretReferenceParser.contextAt(editor.document.charsSequence, editor.caretModel.offset) != null
-        })
+        AutoPopupController.getInstance(project).scheduleAutoPopup(
+            editor,
+            Condition { file ->
+                SecretReferenceEditorFocus.isActive(editor) && file.virtualFile is DopplerSecretsFile &&
+                    SecretReferenceParser.contextAt(editor.document.charsSequence, editor.caretModel.offset) != null
+            },
+        )
     }
 
-    fun scheduleLater(project: Project, editor: Editor) {
+    fun scheduleLater(
+        project: Project,
+        editor: Editor,
+    ) {
         ApplicationManager.getApplication().invokeLater(
             {
                 if (!project.isDisposed && !editor.isDisposed) schedule(project, editor)

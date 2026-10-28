@@ -15,7 +15,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
 class DopplerSecretNamesLoaderTest {
-
     private class FakeApi : DopplerNamesApi {
         var projects: List<DopplerProject> = emptyList()
         var configs: Map<String, List<DopplerConfig>> = emptyMap()
@@ -33,13 +32,21 @@ class DopplerSecretNamesLoaderTest {
             return projects
         }
 
-        override fun listConfigs(authContextId: String, projectSlug: String): List<DopplerConfig> {
+        override fun listConfigs(
+            authContextId: String,
+            projectSlug: String,
+        ): List<DopplerConfig> {
             requestedAuthContexts += authContextId
             configFailures[projectSlug]?.let { throw it }
             return configs[projectSlug].orEmpty()
         }
 
-        override fun listSecretNames(authContextId: String, projectSlug: String, configName: String, environment: String): Set<String> {
+        override fun listSecretNames(
+            authContextId: String,
+            projectSlug: String,
+            configName: String,
+            environment: String,
+        ): Set<String> {
             requestedAuthContexts += authContextId
             secretReads.incrementAndGet()
             readOrder += projectSlug to configName
@@ -60,20 +67,24 @@ class DopplerSecretNamesLoaderTest {
     }
 
     private fun project(slug: String) = DopplerProject(slug, slug, null)
+
     private fun config(name: String) = DopplerConfig(name, name)
+
     private fun generic(message: String = "boom") = DopplerCliException(message)
 
     private fun populate() {
         api.projects = listOf(project("app"), project("other"))
-        api.configs = mapOf(
-            "app" to listOf(config("api"), config("worker")),
-            "other" to listOf(config("backend")),
-        )
-        api.names = mapOf(
-            ("app" to "api") to setOf("A", "B"),
-            ("app" to "worker") to setOf("QUEUE"),
-            ("other" to "backend") to setOf("DATABASE_URL"),
-        )
+        api.configs =
+            mapOf(
+                "app" to listOf(config("api"), config("worker")),
+                "other" to listOf(config("backend")),
+            )
+        api.names =
+            mapOf(
+                ("app" to "api") to setOf("A", "B"),
+                ("app" to "worker") to setOf("QUEUE"),
+                ("other" to "backend") to setOf("DATABASE_URL"),
+            )
     }
 
     @Test
@@ -173,9 +184,10 @@ class DopplerSecretNamesLoaderTest {
     @Test
     fun `permission style failures do not abort the whole load`() {
         populate()
-        api.secretFailures = mapOf(
-            ("app" to "api") to DopplerCliException("forbidden", DopplerCliException.Kind.NOT_AUTHENTICATED),
-        )
+        api.secretFailures =
+            mapOf(
+                ("app" to "api") to DopplerCliException("forbidden", DopplerCliException.Kind.NOT_AUTHENTICATED),
+            )
 
         assertEquals(setOf("worker"), loader.load("ctx", {}, {}, emptyMap()).getValue("app").keys)
     }
@@ -183,9 +195,10 @@ class DopplerSecretNamesLoaderTest {
     @Test
     fun `a missing cli aborts the load`() {
         populate()
-        api.secretFailures = mapOf(
-            ("other" to "backend") to DopplerCliException("missing", DopplerCliException.Kind.CLI_NOT_FOUND),
-        )
+        api.secretFailures =
+            mapOf(
+                ("other" to "backend") to DopplerCliException("missing", DopplerCliException.Kind.CLI_NOT_FOUND),
+            )
 
         try {
             loader.load("ctx", {}, {}, emptyMap())
@@ -198,9 +211,10 @@ class DopplerSecretNamesLoaderTest {
     @Test
     fun `an account change while reading aborts the load`() {
         populate()
-        api.configFailures = mapOf(
-            "other" to DopplerCliException("changed", DopplerCliException.Kind.AUTH_CONTEXT_CHANGED),
-        )
+        api.configFailures =
+            mapOf(
+                "other" to DopplerCliException("changed", DopplerCliException.Kind.AUTH_CONTEXT_CHANGED),
+            )
 
         try {
             loader.load("ctx", {}, {}, emptyMap())
@@ -214,12 +228,13 @@ class DopplerSecretNamesLoaderTest {
     fun `each config and secret request carries the expected account context`() {
         populate()
         var checks = 0
-        val counting = object : DopplerNamesApi by api {
-            override fun currentAuthContextId(): String {
-                checks++
-                return "ctx"
+        val counting =
+            object : DopplerNamesApi by api {
+                override fun currentAuthContextId(): String {
+                    checks++
+                    return "ctx"
+                }
             }
-        }
 
         DopplerSecretNamesLoader(counting, pool).load("ctx", {}, {}, emptyMap())
 
@@ -286,7 +301,9 @@ class DopplerSecretNamesLoaderTest {
         // The API surface only exposes names; reading values would need a different method.
         assertEquals(
             setOf("listProjects", "listConfigs", "listSecretNames", "currentAuthContextId"),
-            DopplerNamesApi::class.java.methods.map { it.name }.toSet(),
+            DopplerNamesApi::class.java.methods
+                .map { it.name }
+                .toSet(),
         )
     }
 }

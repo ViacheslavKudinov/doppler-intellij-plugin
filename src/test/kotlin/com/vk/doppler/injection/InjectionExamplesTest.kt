@@ -19,10 +19,17 @@ class InjectionExamplesTest : TestCase() {
         assertExample(listOf("plain", "extra"), plain, 2)
     }
 
-    private fun assertExample(arguments: List<String>, variables: Map<String, String>, expectedExit: Int) {
+    private fun assertExample(
+        arguments: List<String>,
+        variables: Map<String, String>,
+        expectedExit: Int,
+    ) {
         val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
-        val source = Path.of("examples", "java-maven", "src", "main", "java", "com", "vk", "doppler", "examples", "InjectionExample.java")
-            .toAbsolutePath().toString()
+        val source =
+            Path
+                .of("examples", "java-maven", "src", "main", "java", "com", "vk", "doppler", "examples", "InjectionExample.java")
+                .toAbsolutePath()
+                .toString()
         val builder = ProcessBuilder(listOf(java, source) + arguments)
         builder.environment().apply {
             listOf("EXAMPLE_MESSAGE", "EXAMPLE_NUMBER", "APP_MESSAGE", "APP_NUMBER").forEach { remove(it) }

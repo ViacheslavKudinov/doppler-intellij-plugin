@@ -5,7 +5,7 @@ import com.vk.doppler.editor.DopplerFileSystem
 import com.vk.doppler.editor.SecretsDocumentFormat
 
 class SecretReferenceTypedHandlerTest : BasePlatformTestCase() {
-    fun `test typing repeatedly inside existing reference requests completion each time`() {
+    fun testTypingRepeatedlyInsideExistingReferenceRequestsCompletionEachTime() {
         val file = DopplerFileSystem.getInstance().obtain("completion", "repeat", "test-context")
         val text = "VALUE: \${API"
         file.setServerContent(text, emptyMap())
@@ -28,7 +28,7 @@ class SecretReferenceTypedHandlerTest : BasePlatformTestCase() {
         assertEquals(3, attempts)
     }
 
-    fun `test ordinary file does not trigger Doppler completion`() {
+    fun testOrdinaryFileDoesNotTriggerDopplerCompletion() {
         myFixture.configureByText("ordinary.txt", "VALUE: \${API<caret>")
         var attempts = 0
         val handler = DopplerSecretReferenceTypedHandler { _, _ -> attempts++ }

@@ -17,7 +17,7 @@ class DopplerSaveConflictTest : BasePlatformTestCase() {
         return service
     }
 
-    fun `test successful save still drains queued save against the committed baseline`() {
+    fun testSuccessfulSaveStillDrainsQueuedSaveAgainstTheCommittedBaseline() {
         val baseline = mapOf("A" to "old")
         val edited = "A: mine"
         val file = DopplerFileSystem.getInstance().obtain("conflict", "success", "test-context")
@@ -41,14 +41,15 @@ class DopplerSaveConflictTest : BasePlatformTestCase() {
         assertFalse(file.hasPendingSync)
     }
 
-    fun `test remote additions modifications and deletions survive queued and later saves`() {
+    fun testRemoteAdditionsModificationsAndDeletionsSurviveQueuedAndLaterSaves() {
         val baseline = mapOf("A" to "old", "B" to "old-b")
         val edited = "A: mine\nB: old-b"
-        val remoteStates = listOf(
-            baseline + ("TEAMMATE" to "new"),
-            baseline + ("B" to "teammate"),
-            baseline - "B",
-        )
+        val remoteStates =
+            listOf(
+                baseline + ("TEAMMATE" to "new"),
+                baseline + ("B" to "teammate"),
+                baseline - "B",
+            )
         for ((index, remote) in remoteStates.withIndex()) {
             val file = DopplerFileSystem.getInstance().obtain("conflict", "dev-$index", "test-context")
             file.setServerContent(edited, baseline)
@@ -61,12 +62,17 @@ class DopplerSaveConflictTest : BasePlatformTestCase() {
                 file.pushInProgress.set(true)
                 if (attempt == 0) service.push(file, edited)
                 val changes = SecretChanges.between(file.remoteSnapshot, SecretsDocumentFormat.parse(edited))
-                val task = service.createPushTask(file, edited, file.remoteSnapshot, changes) {
-                    applyChangesWithOptimisticLock(
-                        file.remoteSnapshot, changes, {}, { remote },
-                        { writes++ }, { _, _ -> writes++ },
-                    )
-                }
+                val task =
+                    service.createPushTask(file, edited, file.remoteSnapshot, changes) {
+                        applyChangesWithOptimisticLock(
+                            file.remoteSnapshot,
+                            changes,
+                            {},
+                            { remote },
+                            { writes++ },
+                            { _, _ -> writes++ },
+                        )
+                    }
                 try {
                     task.run(EmptyProgressIndicator())
                     fail("Expected remote conflict")
@@ -86,7 +92,7 @@ class DopplerSaveConflictTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test partial failure preserves baseline and cancels queued save`() {
+    fun testPartialFailurePreservesBaselineAndCancelsQueuedSave() {
         val baseline = mapOf("A" to "old", "B" to "old-b")
         val edited = "A: mine\nB: mine-b"
         val file = DopplerFileSystem.getInstance().obtain("conflict", "partial", "test-context")
@@ -98,10 +104,11 @@ class DopplerSaveConflictTest : BasePlatformTestCase() {
         service.push(file, edited)
         val remote = baseline.toMutableMap()
         val changes = SecretChanges.between(baseline, SecretsDocumentFormat.parse(edited))
-        val task = service.createPushTask(file, edited, baseline, changes) {
-            remote["A"] = "mine"
-            throw DopplerCliException("Synthetic partial failure", DopplerCliException.Kind.GENERIC)
-        }
+        val task =
+            service.createPushTask(file, edited, baseline, changes) {
+                remote["A"] = "mine"
+                throw DopplerCliException("Synthetic partial failure", DopplerCliException.Kind.GENERIC)
+            }
         try {
             task.run(EmptyProgressIndicator())
             fail("Expected partial failure")
@@ -118,7 +125,7 @@ class DopplerSaveConflictTest : BasePlatformTestCase() {
         assertNull(file.pendingPushText.get())
     }
 
-    fun `test corrected edit saves after a confirmed partial write without discarding local edits`() {
+    fun testCorrectedEditSavesAfterAConfirmedPartialWriteWithoutDiscardingLocalEdits() {
         val baseline = mapOf("A" to "old", "B" to "old-b")
         val edited = "A: mine\nB: rejected"
         val file = DopplerFileSystem.getInstance().obtain("conflict", "confirmed-partial", "test-context")
@@ -129,16 +136,21 @@ class DopplerSaveConflictTest : BasePlatformTestCase() {
         file.pushInProgress.set(true)
         val remote = baseline.toMutableMap()
         val changes = SecretChanges.between(baseline, SecretsDocumentFormat.parse(edited))
-        val failedTask = service.createPushTask(file, edited, baseline, changes) {
-            applyChangesWithOptimisticLock(
-                baseline, changes, {}, { remote.toMap() }, {},
-                { name, value ->
-                    if (name == "B") throw DopplerCliException("Synthetic rejected edit")
-                    remote[name] = value
-                },
-                onSnapshotAdvanced = { file.remoteSnapshot = it },
-            )
-        }
+        val failedTask =
+            service.createPushTask(file, edited, baseline, changes) {
+                applyChangesWithOptimisticLock(
+                    baseline,
+                    changes,
+                    {},
+                    { remote.toMap() },
+                    {},
+                    { name, value ->
+                        if (name == "B") throw DopplerCliException("Synthetic rejected edit")
+                        remote[name] = value
+                    },
+                    onSnapshotAdvanced = { file.remoteSnapshot = it },
+                )
+            }
         try {
             failedTask.run(EmptyProgressIndicator())
             fail("Expected rejected edit")
@@ -158,13 +170,18 @@ class DopplerSaveConflictTest : BasePlatformTestCase() {
         val remaining = SecretChanges.between(expected, SecretsDocumentFormat.parse(corrected))
         assertEquals(mapOf("B" to "corrected"), remaining.upserted)
         file.pushInProgress.set(true)
-        val retry = service.createPushTask(file, corrected, expected, remaining) {
-            applyChangesWithOptimisticLock(
-                expected, remaining, {}, { remote.toMap() }, {},
-                { name, value -> remote[name] = value },
-                onSnapshotAdvanced = { file.remoteSnapshot = it },
-            )
-        }
+        val retry =
+            service.createPushTask(file, corrected, expected, remaining) {
+                applyChangesWithOptimisticLock(
+                    expected,
+                    remaining,
+                    {},
+                    { remote.toMap() },
+                    {},
+                    { name, value -> remote[name] = value },
+                    onSnapshotAdvanced = { file.remoteSnapshot = it },
+                )
+            }
         retry.run(EmptyProgressIndicator())
         retry.onSuccess()
         retry.onFinished()

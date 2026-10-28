@@ -1,9 +1,9 @@
 package com.vk.doppler.settings
 
-import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.ide.DataManager
-import com.intellij.openapi.options.ex.Settings
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
+import com.intellij.openapi.options.BoundConfigurable
+import com.intellij.openapi.options.ex.Settings
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
@@ -14,15 +14,14 @@ import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.ui.dsl.builder.bindIntText
-import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.bindSelected
+import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import com.vk.doppler.service.DopplerService
 import com.vk.doppler.service.DopplerStatus
 import com.vk.doppler.service.DopplerStatusReport
 
 class DopplerConfigurable : BoundConfigurable("Doppler") {
-
     private val settings = DopplerSettings.getInstance()
 
     private var cliPathField: TextFieldWithBrowseButton? = null
@@ -32,64 +31,72 @@ class DopplerConfigurable : BoundConfigurable("Doppler") {
         super.disposeUIResources()
     }
 
-    override fun createPanel(): DialogPanel = panel {
-        group("Project settings") {
-            row {
-                link("Folder Setup…") { event ->
-                    val component = event.source as java.awt.Component
-                    val dialog = Settings.KEY.getData(DataManager.getInstance().getDataContext(component))
-                    val folderSettings = dialog?.find(DopplerFolderSetupConfigurable::class.java)
-                    if (folderSettings != null) {
-                        dialog.select(folderSettings)
-                    } else {
-                        Messages.showInfoMessage(component, "Open an IDE project to configure its Doppler folder setup.", "Doppler")
-                    }
-                }.comment("Choose the Doppler project and config associated with this IDE project folder.")
+    override fun createPanel(): DialogPanel =
+        panel {
+            group("Project settings") {
+                row {
+                    link("Folder Setup…") { event ->
+                        val component = event.source as java.awt.Component
+                        val dialog = Settings.KEY.getData(DataManager.getInstance().getDataContext(component))
+                        val folderSettings = dialog?.find(DopplerFolderSetupConfigurable::class.java)
+                        if (folderSettings != null) {
+                            dialog.select(folderSettings)
+                        } else {
+                            Messages.showInfoMessage(component, "Open an IDE project to configure its Doppler folder setup.", "Doppler")
+                        }
+                    }.comment("Choose the Doppler project and config associated with this IDE project folder.")
+                }
+                row {
+                    link("Run and Debug…") { event ->
+                        val component = event.source as java.awt.Component
+                        val dialog = Settings.KEY.getData(DataManager.getInstance().getDataContext(component))
+                        val injectionSettings = dialog?.find(DopplerInjectionConfigurable::class.java)
+                        if (injectionSettings != null) {
+                            dialog.select(injectionSettings)
+                        } else {
+                            Messages.showInfoMessage(
+                                component,
+                                "Open an IDE project to configure its Doppler Run and Debug injection.",
+                                "Doppler",
+                            )
+                        }
+                    }.comment("Configure automatic environment injection for Run and Debug.")
+                }
+            }
+            row("Doppler CLI path:") {
+                textFieldWithBrowseButton(
+                    fileChooserDescriptor =
+                        FileChooserDescriptor(true, false, false, false, false, false)
+                            .withTitle("Select Doppler CLI Executable"),
+                ).applyToComponent { cliPathField = this }
+                    .bindText(settings::cliPath)
+                    .align(AlignX.FILL)
+                    .comment(
+                        "Leave empty to auto-detect the <code>doppler</code> binary on PATH and in common " +
+                            "install locations. Authentication is handled by <code>doppler login</code>; " +
+                            "this plugin never stores your token.",
+                    )
             }
             row {
-                link("Run and Debug…") { event ->
-                    val component = event.source as java.awt.Component
-                    val dialog = Settings.KEY.getData(DataManager.getInstance().getDataContext(component))
-                    val injectionSettings = dialog?.find(DopplerInjectionConfigurable::class.java)
-                    if (injectionSettings != null) {
-                        dialog.select(injectionSettings)
-                    } else {
-                        Messages.showInfoMessage(component, "Open an IDE project to configure its Doppler Run and Debug injection.", "Doppler")
-                    }
-                }.comment("Configure automatic environment injection for Run and Debug.")
+                intTextField(range = 0..3600)
+                    .bindIntText(settings::refreshIntervalSeconds)
+                    .label("Re-read open configs every:")
+                    .gap(RightGap.SMALL)
+                label("seconds (0 disables auto-refresh)")
+            }
+            row {
+                button("Test Connection") { testConnection() }
+            }
+            row {
+                checkBox("Log CLI calls")
+                    .bindSelected(settings::logCliCalls)
+                    .comment(
+                        "Log commands, durations, and exit status to idea.log. " +
+                            "Project, config, and environment names show only their first 60%. " +
+                            "Secret values and CLI output are never included. Open Help → Show Log in Finder/Explorer to view it.",
+                    )
             }
         }
-        row("Doppler CLI path:") {
-            textFieldWithBrowseButton(
-                fileChooserDescriptor = FileChooserDescriptor(true, false, false, false, false, false)
-                    .withTitle("Select Doppler CLI Executable"),
-            )
-                .applyToComponent { cliPathField = this }
-                .bindText(settings::cliPath)
-                .align(AlignX.FILL)
-                .comment(
-                    "Leave empty to auto-detect the <code>doppler</code> binary on PATH and in common " +
-                        "install locations. Authentication is handled by <code>doppler login</code>; " +
-                        "this plugin never stores your token.",
-                )
-        }
-        row {
-            intTextField(range = 0..3600)
-                .bindIntText(settings::refreshIntervalSeconds)
-                .label("Re-read open configs every:")
-                .gap(RightGap.SMALL)
-            label("seconds (0 disables auto-refresh)")
-        }
-        row {
-            button("Test Connection") { testConnection() }
-        }
-        row {
-            checkBox("Log CLI calls")
-                .bindSelected(settings::logCliCalls)
-                .comment("Log commands, durations, and exit status to idea.log. Project, config, and environment names show only their first 60%. " +
-                    "Secret values and CLI output are never included. Open Help → Show Log in Finder/Explorer to view it.")
-        }
-    }
 
     private fun testConnection() {
         cliPathField?.let { settings.cliPath = it.text }

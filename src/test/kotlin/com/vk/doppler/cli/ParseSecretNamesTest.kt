@@ -8,7 +8,6 @@ import org.junit.Test
 
 /** Pins the payload of `doppler secrets --json --only-names` (CLI v3.77): `{"NAME": {}}`. */
 class ParseSecretNamesTest {
-
     private fun parse(payload: String) = parseSecretNames(JsonParser.parseString(payload))
 
     @Test

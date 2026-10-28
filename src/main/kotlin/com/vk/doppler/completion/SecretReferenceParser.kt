@@ -1,20 +1,28 @@
 package com.vk.doppler.completion
 
-internal data class SecretReferenceContext(val prefix: String)
+internal data class SecretReferenceContext(
+    val prefix: String,
+)
 
 /** What to do after a reference was completed: drop leftovers, add `}` and place the caret. */
-internal data class ReferenceClosing(val removeUntil: Int, val insertBrace: Boolean, val caretOffset: Int)
+internal data class ReferenceClosing(
+    val removeUntil: Int,
+    val insertBrace: Boolean,
+    val caretOffset: Int,
+)
 
 /** Text-only helpers for `${...}` references, kept free of IDE types so they can be unit tested. */
 internal object SecretReferenceParser {
-
     private val KEY = Regex("^\"?([A-Za-z0-9_/:.-]+)\"?:(?=\\s|$)", RegexOption.MULTILINE)
 
     /**
      * The reference being typed at [caretOffset], or `null` when the caret is not inside an
      * unclosed `${` on its own line. Whitespace is not allowed inside the braces.
      */
-    fun contextAt(text: CharSequence, caretOffset: Int): SecretReferenceContext? {
+    fun contextAt(
+        text: CharSequence,
+        caretOffset: Int,
+    ): SecretReferenceContext? {
         if (caretOffset !in 0..text.length) return null
         var lineStart = caretOffset
         while (lineStart > 0 && text[lineStart - 1] != '\n') lineStart--
@@ -36,7 +44,10 @@ internal object SecretReferenceParser {
     }
 
     /** Offset of the `}` that closes a reference continuing at [from], if the rest is one token. */
-    fun closingBraceOffset(text: CharSequence, from: Int): Int? {
+    fun closingBraceOffset(
+        text: CharSequence,
+        from: Int,
+    ): Int? {
         for (index in from until text.length) {
             val char = text[index]
             if (char == '}') return index
@@ -45,7 +56,10 @@ internal object SecretReferenceParser {
         return null
     }
 
-    fun closingAfter(text: CharSequence, tailOffset: Int): ReferenceClosing {
+    fun closingAfter(
+        text: CharSequence,
+        tailOffset: Int,
+    ): ReferenceClosing {
         val close = closingBraceOffset(text, tailOffset)
         return if (close != null) {
             ReferenceClosing(removeUntil = close, insertBrace = false, caretOffset = tailOffset + 1)
@@ -55,6 +69,5 @@ internal object SecretReferenceParser {
     }
 
     /** Top-level secret names of the editor document, read without a full YAML parse. */
-    fun secretNames(text: CharSequence): Set<String> =
-        KEY.findAll(text).mapTo(linkedSetOf()) { it.groupValues[1] }
+    fun secretNames(text: CharSequence): Set<String> = KEY.findAll(text).mapTo(linkedSetOf()) { it.groupValues[1] }
 }

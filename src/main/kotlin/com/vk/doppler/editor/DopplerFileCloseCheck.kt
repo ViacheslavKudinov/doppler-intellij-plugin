@@ -12,9 +12,10 @@ class DopplerFileCloseCheck : VirtualFilePreCloseCheck {
     override fun canCloseFile(file: VirtualFile): Boolean {
         val config = file as? DopplerSecretsFile ?: return true
         if (!hasChanges(config)) return true
-        val project = ProjectManager.getInstance().openProjects.firstOrNull {
-            !it.isDisposed && FileEditorManagerEx.getInstanceEx(it).isFileOpen(config)
-        } ?: return false
+        val project =
+            ProjectManager.getInstance().openProjects.firstOrNull {
+                !it.isDisposed && FileEditorManagerEx.getInstanceEx(it).isFileOpen(config)
+            } ?: return false
         return confirmClose(config, project) {
             Messages.showDialog(
                 project,
@@ -27,7 +28,11 @@ class DopplerFileCloseCheck : VirtualFilePreCloseCheck {
         }
     }
 
-    internal fun confirmClose(file: DopplerSecretsFile, project: Project, choose: () -> Int): Boolean {
+    internal fun confirmClose(
+        file: DopplerSecretsFile,
+        project: Project,
+        choose: () -> Int,
+    ): Boolean {
         if (!hasChanges(file)) return true
         val service = DopplerSecretsEditorService.getInstance(project)
         service.cancelCloseRequest(file)
@@ -37,22 +42,32 @@ class DopplerFileCloseCheck : VirtualFilePreCloseCheck {
                 val window = manager.currentWindow?.takeIf { it.isFileOpen(file) }
                 service.saveBeforeClose(file) {
                     if (!project.isDisposed) {
-                        if (window != null && !window.isDisposed) manager.closeFile(file, window)
-                        else manager.closeFile(file)
+                        if (window != null && !window.isDisposed) {
+                            manager.closeFile(file, window)
+                        } else {
+                            manager.closeFile(file)
+                        }
                     }
                 }
             }
+
             1 -> {
                 if (file.pushInProgress.get()) {
-                    Messages.showWarningDialog(project, "Wait for the current Doppler sync before discarding changes.",
-                        "Doppler Sync in Progress")
+                    Messages.showWarningDialog(
+                        project,
+                        "Wait for the current Doppler sync before discarding changes.",
+                        "Doppler Sync in Progress",
+                    )
                     false
                 } else {
                     service.discardLocalChanges(file)
                     true
                 }
             }
-            else -> false
+
+            else -> {
+                false
+            }
         }
     }
 

@@ -13,7 +13,6 @@ import com.intellij.openapi.components.service
 @Service(Service.Level.APP)
 @State(name = "DopplerSettings", storages = [Storage("doppler.xml")])
 class DopplerSettings : PersistentStateComponent<DopplerSettings.State> {
-
     data class State(
         var cliPath: String = "",
         var refreshIntervalSeconds: Int = 5,
@@ -36,7 +35,9 @@ class DopplerSettings : PersistentStateComponent<DopplerSettings.State> {
 
     var logCliCalls: Boolean
         get() = state.logCliCalls
-        set(value) { state.logCliCalls = value }
+        set(value) {
+            state.logCliCalls = value
+        }
 
     /** How often open configs are re-read from Doppler. `0` disables auto-refresh. */
     var refreshIntervalSeconds: Int

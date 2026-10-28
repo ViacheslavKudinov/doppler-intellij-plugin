@@ -9,10 +9,10 @@ import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessListener
 import com.intellij.openapi.diagnostic.thisLogger
-import java.security.MessageDigest
-import java.nio.charset.StandardCharsets
-import java.util.concurrent.atomic.AtomicReference
 import com.vk.doppler.settings.DopplerSettings
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Thin wrapper around the `doppler` binary.
@@ -27,7 +27,6 @@ class DopplerCli(
     private val relatedConfigs: List<CliLogContext> = emptyList(),
     private val scope: String? = null,
 ) {
-
     companion object {
         private const val DEFAULT_TIMEOUT_MS = 30_000
         private const val PROJECT_OPTION = "--project"
@@ -38,16 +37,17 @@ class DopplerCli(
          * Doppler returns this (exit 1) when no token is configured for the scope.
          * Matched case-insensitively against the `error` payload.
          */
-        private val AUTH_ERROR_MARKERS = listOf(
-            "you must provide a token",
-            "invalid auth token",
-            "doppler login",
-            "unauthorized",
-            "forbidden",
-            "not authorized",
-            "access denied",
-            "permission denied",
-        )
+        private val AUTH_ERROR_MARKERS =
+            listOf(
+                "you must provide a token",
+                "invalid auth token",
+                "doppler login",
+                "unauthorized",
+                "forbidden",
+                "not authorized",
+                "access denied",
+                "permission denied",
+            )
     }
 
     fun version(): String {
@@ -65,21 +65,26 @@ class DopplerCli(
 
     /** Reads identity and its fingerprint in one call, without retaining authentication fields. */
     fun accountInfo(): DopplerAccountInfo {
-        val me = runJson(listOf("me")) as? JsonObject
-            ?: throw DopplerCliException("The Doppler CLI returned invalid account information.")
-        val workplace = me.get("workplace") as? JsonObject
-            ?: throw DopplerCliException("The Doppler CLI returned incomplete account information.")
-        val identity = listOf(
-            me.string("slug"),
-            me.string("type"),
-            me.string("token_preview"),
-            workplace.string("slug"),
-        )
+        val me =
+            runJson(listOf("me")) as? JsonObject
+                ?: throw DopplerCliException("The Doppler CLI returned invalid account information.")
+        val workplace =
+            me.get("workplace") as? JsonObject
+                ?: throw DopplerCliException("The Doppler CLI returned incomplete account information.")
+        val identity =
+            listOf(
+                me.string("slug"),
+                me.string("type"),
+                me.string("token_preview"),
+                workplace.string("slug"),
+            )
         if (identity.any { it.isNullOrBlank() }) {
             throw DopplerCliException("The Doppler CLI returned incomplete account information.")
         }
-        val bytes = MessageDigest.getInstance("SHA-256")
-            .digest(identity.joinToString("\u0000").toByteArray(StandardCharsets.UTF_8))
+        val bytes =
+            MessageDigest
+                .getInstance("SHA-256")
+                .digest(identity.joinToString("\u0000").toByteArray(StandardCharsets.UTF_8))
         return DopplerAccountInfo(
             authContextId = bytes.joinToString("") { "%02x".format(it) },
             slug = requireNotNull(identity[0]),
@@ -92,35 +97,42 @@ class DopplerCli(
 
     fun listProjects(): List<DopplerProject> {
         val element = runJson(listOf("projects"))
-        return unwrapArray(element, "projects").mapNotNull { item ->
-            val obj = item as? JsonObject ?: return@mapNotNull null
-            val slug = obj.string("slug") ?: obj.string("name") ?: return@mapNotNull null
-            DopplerProject(
-                slug = slug,
-                name = obj.string("name") ?: slug,
-                description = obj.string("description"),
-            )
-        }.sortedBy { it.displayName.lowercase() }
+        return unwrapArray(element, "projects")
+            .mapNotNull { item ->
+                val obj = item as? JsonObject ?: return@mapNotNull null
+                val slug = obj.string("slug") ?: obj.string("name") ?: return@mapNotNull null
+                DopplerProject(
+                    slug = slug,
+                    name = obj.string("name") ?: slug,
+                    description = obj.string("description"),
+                )
+            }.sortedBy { it.displayName.lowercase() }
     }
 
     fun listConfigs(projectSlug: String): List<DopplerConfig> {
         val element = runJson(listOf("configs", PROJECT_OPTION, projectSlug))
-        return unwrapArray(element, "configs").mapNotNull { item ->
-            val obj = item as? JsonObject ?: return@mapNotNull null
-            val name = obj.string("name") ?: return@mapNotNull null
-            DopplerConfig(
-                name = name,
-                environment = obj.string("environment") ?: obj.string("stage") ?: name,
-            )
-        }.sortedBy { it.name.lowercase() }
+        return unwrapArray(element, "configs")
+            .mapNotNull { item ->
+                val obj = item as? JsonObject ?: return@mapNotNull null
+                val name = obj.string("name") ?: return@mapNotNull null
+                DopplerConfig(
+                    name = name,
+                    environment = obj.string("environment") ?: obj.string("stage") ?: name,
+                )
+            }.sortedBy { it.name.lowercase() }
     }
 
     /** Reads only the two non-sensitive settings, including inherited folder defaults. */
-    fun folderSetup(folder: String): DopplerFolderSetup = parseFolderSetup(
-        runJson(listOf("configure", "get", "project", "config", SCOPE_OPTION, folder)),
-    )
+    fun folderSetup(folder: String): DopplerFolderSetup =
+        parseFolderSetup(
+            runJson(listOf("configure", "get", "project", "config", SCOPE_OPTION, folder)),
+        )
 
-    fun setFolderSetup(folder: String, projectSlug: String, configName: String) {
+    fun setFolderSetup(
+        folder: String,
+        projectSlug: String,
+        configName: String,
+    ) {
         for (value in listOf(projectSlug, configName)) {
             require(value.isNotBlank() && value.none { it == '=' || it.isISOControl() }) {
                 "Invalid Doppler project or config name"
@@ -142,12 +154,16 @@ class DopplerCli(
     }
 
     /** Reads all non-reserved secrets for a config. */
-    fun listSecrets(projectSlug: String, configName: String): List<DopplerSecret> {
+    fun listSecrets(
+        projectSlug: String,
+        configName: String,
+    ): List<DopplerSecret> {
         // Without --raw the CLI omits the `raw` field entirely and only returns interpolated
         // `computed` values, which would discard Doppler's ${REFERENCE} syntax on save.
-        val element = runJson(
-            listOf("secrets", PROJECT_OPTION, projectSlug, CONFIG_OPTION, configName, "--raw")
-        )
+        val element =
+            runJson(
+                listOf("secrets", PROJECT_OPTION, projectSlug, CONFIG_OPTION, configName, "--raw"),
+            )
         return parseSecrets(element)
     }
 
@@ -157,7 +173,19 @@ class DopplerCli(
         configName: String,
         nameTransformer: DopplerNameTransformer = DopplerNameTransformer.NONE,
     ): Map<String, String> {
-        val args = mutableListOf("secrets", "download", "--no-file", "--no-fallback", "--format", "json", PROJECT_OPTION, projectSlug, CONFIG_OPTION, configName)
+        val args =
+            mutableListOf(
+                "secrets",
+                "download",
+                "--no-file",
+                "--no-fallback",
+                "--format",
+                "json",
+                PROJECT_OPTION,
+                projectSlug,
+                CONFIG_OPTION,
+                configName,
+            )
         nameTransformer.cliName?.let { args.addAll(listOf("--name-transformer", it)) }
         val result = runJson(args)
         val values = result as? JsonObject ?: throw DopplerCliException("Invalid Doppler environment response.")
@@ -172,10 +200,14 @@ class DopplerCli(
     }
 
     /** Reads only the secret names of a config; the CLI never returns the values. */
-    fun listSecretNames(projectSlug: String, configName: String): Set<String> {
-        val element = runJson(
-            listOf("secrets", "--only-names", PROJECT_OPTION, projectSlug, CONFIG_OPTION, configName)
-        )
+    fun listSecretNames(
+        projectSlug: String,
+        configName: String,
+    ): Set<String> {
+        val element =
+            runJson(
+                listOf("secrets", "--only-names", PROJECT_OPTION, projectSlug, CONFIG_OPTION, configName),
+            )
         return parseSecretNames(element)
     }
 
@@ -183,7 +215,12 @@ class DopplerCli(
      * Sets a single secret. The value is streamed over stdin so it never appears in the
      * process arguments, where it would be readable by other local users.
      */
-    fun setSecret(projectSlug: String, configName: String, name: String, value: String) {
+    fun setSecret(
+        projectSlug: String,
+        configName: String,
+        name: String,
+        value: String,
+    ) {
         require(!DopplerReservedSecrets.isReserved(name)) { "Cannot write reserved secret $name" }
         requireValidName(name)
         runRaw(
@@ -193,7 +230,11 @@ class DopplerCli(
         )
     }
 
-    fun deleteSecrets(projectSlug: String, configName: String, names: Collection<String>) {
+    fun deleteSecrets(
+        projectSlug: String,
+        configName: String,
+        names: Collection<String>,
+    ) {
         if (names.isEmpty()) return
         val safeNames = names.filterNot { DopplerReservedSecrets.isReserved(it) }
         if (safeNames.isEmpty()) return
@@ -214,7 +255,10 @@ class DopplerCli(
         }
     }
 
-    private fun runJson(args: List<String>, stdin: String? = null): JsonElement {
+    private fun runJson(
+        args: List<String>,
+        stdin: String? = null,
+    ): JsonElement {
         val raw = runRaw(args, stdin, json = true)
         if (raw.isBlank()) throw DopplerCliException("The Doppler CLI returned no JSON output.")
         return try {
@@ -224,7 +268,11 @@ class DopplerCli(
         }
     }
 
-    private fun runRaw(args: List<String>, stdin: String?, json: Boolean): String {
+    private fun runRaw(
+        args: List<String>,
+        stdin: String?,
+        json: Boolean,
+    ): String {
         val parameters = args.toMutableList()
         scope?.let { parameters.addAll(listOf(SCOPE_OPTION, it)) }
         if (json) {
@@ -236,43 +284,53 @@ class DopplerCli(
                 parameters.addAll(terminatorIndex, jsonFlags)
             }
         }
-        return traceCliCall(parameters, DopplerSettings.getInstance().logCliCalls, { thisLogger().info(it) }, operation, logContext, relatedConfigs) { reportExit ->
+        return traceCliCall(parameters, DopplerSettings.getInstance().logCliCalls, {
+            thisLogger().info(it)
+        }, operation, logContext, relatedConfigs) { reportExit ->
             executeRaw(parameters, stdin, reportExit)
         }
     }
 
-    private fun executeRaw(parameters: List<String>, stdin: String?, reportExit: (Int, Boolean) -> Unit): String {
-        val commandLine = GeneralCommandLine(executablePath)
-            .withParameters(parameters)
-            .withCharset(StandardCharsets.UTF_8)
+    private fun executeRaw(
+        parameters: List<String>,
+        stdin: String?,
+        reportExit: (Int, Boolean) -> Unit,
+    ): String {
+        val commandLine =
+            GeneralCommandLine(executablePath)
+                .withParameters(parameters)
+                .withCharset(StandardCharsets.UTF_8)
 
-        val handler = try {
-            CapturingProcessHandler(commandLine)
-        } catch (e: Exception) {
-            throw DopplerCliException(
-                "Could not start the Doppler CLI at $executablePath.",
-                DopplerCliException.Kind.CLI_NOT_FOUND,
-                e,
-            )
-        }
+        val handler =
+            try {
+                CapturingProcessHandler(commandLine)
+            } catch (e: Exception) {
+                throw DopplerCliException(
+                    "Could not start the Doppler CLI at $executablePath.",
+                    DopplerCliException.Kind.CLI_NOT_FOUND,
+                    e,
+                )
+            }
 
         val stdinFailure = AtomicReference<Exception?>(null)
         if (stdin != null) {
             val payload = stdin.toByteArray(StandardCharsets.UTF_8)
-            handler.addProcessListener(object : ProcessListener {
-                override fun startNotified(event: ProcessEvent) {
-                    try {
-                        handler.processInput.use { stream ->
-                            stream.write(payload)
-                            stream.flush()
+            handler.addProcessListener(
+                object : ProcessListener {
+                    override fun startNotified(event: ProcessEvent) {
+                        try {
+                            handler.processInput.use { stream ->
+                                stream.write(payload)
+                                stream.flush()
+                            }
+                        } catch (e: Exception) {
+                            stdinFailure.set(e)
+                            // Never leave the CLI blocked on (or acting on) a truncated value.
+                            handler.destroyProcess()
                         }
-                    } catch (e: Exception) {
-                        stdinFailure.set(e)
-                        // Never leave the CLI blocked on (or acting on) a truncated value.
-                        handler.destroyProcess()
                     }
-                }
-            })
+                },
+            )
         }
 
         val output = handler.runProcess(DEFAULT_TIMEOUT_MS, true)
@@ -291,9 +349,10 @@ class DopplerCli(
         // The CLI reports failures as {"error": "..."} and exits non-zero.
         val errorMessage = extractError(stdout) ?: extractError(stderr)
         if (output.exitCode != 0 || errorMessage != null) {
-            val message = errorMessage
-                ?: stderr.takeIf { it.isNotBlank() }
-                ?: "The Doppler CLI exited with code ${output.exitCode}."
+            val message =
+                errorMessage
+                    ?: stderr.takeIf { it.isNotBlank() }
+                    ?: "The Doppler CLI exited with code ${output.exitCode}."
             throw DopplerCliException(message.trim(), classify(message))
         }
         return stdout
@@ -318,11 +377,26 @@ class DopplerCli(
         }
     }
 
-    private fun unwrapArray(element: JsonElement, wrapperKey: String): List<JsonElement> = when {
-        element.isJsonArray -> element.asJsonArray.toList()
-        element.isJsonObject -> element.asJsonObject.getAsJsonArray(wrapperKey)?.toList().orEmpty()
-        else -> emptyList()
-    }
+    private fun unwrapArray(
+        element: JsonElement,
+        wrapperKey: String,
+    ): List<JsonElement> =
+        when {
+            element.isJsonArray -> {
+                element.asJsonArray.toList()
+            }
+
+            element.isJsonObject -> {
+                element.asJsonObject
+                    .getAsJsonArray(wrapperKey)
+                    ?.toList()
+                    .orEmpty()
+            }
+
+            else -> {
+                emptyList()
+            }
+        }
 
     private fun JsonObject.string(key: String): String? {
         val value = get(key) ?: return null
@@ -330,13 +404,21 @@ class DopplerCli(
     }
 }
 
-data class DopplerFolderSetup(val projectSlug: String? = null, val configName: String? = null) {
+data class DopplerFolderSetup(
+    val projectSlug: String? = null,
+    val configName: String? = null,
+) {
     fun matchesProject(slug: String): Boolean = projectSlug == slug
-    fun matchesConfig(slug: String, name: String): Boolean = projectSlug == slug && configName == name
+
+    fun matchesConfig(
+        slug: String,
+        name: String,
+    ): Boolean = projectSlug == slug && configName == name
 }
 
 internal fun parseFolderSetup(element: JsonElement): DopplerFolderSetup {
     val root = element as? JsonObject ?: throw DopplerCliException("Expected Doppler folder configuration.")
+
     fun option(key: String): String? {
         val value = root.get("enclave.$key") ?: root.get(key) ?: return null
         if (!value.isJsonPrimitive || !value.asJsonPrimitive.isString) {
@@ -353,43 +435,51 @@ internal fun parseFolderSetup(element: JsonElement): DopplerFolderSetup {
  * Exposed separately from process execution so the exact CLI payload shape can be tested.
  */
 internal fun parseSecrets(element: JsonElement): List<DopplerSecret> {
-    val root = element as? JsonObject
-        ?: throw DopplerCliException("Expected a Doppler secrets object.")
+    val root =
+        element as? JsonObject
+            ?: throw DopplerCliException("Expected a Doppler secrets object.")
     // Prefer the documented bare map when `secrets` is itself a secret value.
     val wrappedMap = root.get("secrets") as? JsonObject
-    val map = if (
-        root.size() == 1 &&
-        wrappedMap != null &&
-        !root.get("secrets").isSecretValue() &&
-        wrappedMap.entrySet().all { (_, value) -> value.isSecretValue() }
-    ) {
-        wrappedMap
-    } else {
-        root
-    }
-
-    return map.entrySet().mapNotNull { (name, value) ->
-        if (DopplerReservedSecrets.isReserved(name)) return@mapNotNull null
-        when {
-            value is JsonObject -> {
-                if (!value.has("raw") && value.stringOrNull("rawVisibility") != "restricted") {
-                    throw DopplerCliException("Doppler secrets output is missing a raw value. Ensure the CLI supports --raw.")
-                }
-                DopplerSecret(
-                    name = name,
-                    // `raw` is null only when the secret is restricted and cannot be read back.
-                    raw = value.stringOrNull("raw"),
-                    computed = value.stringOrNull("computed"),
-                    note = value.stringOrNull("note"),
-                )
-            }
-            value != null && value.isJsonPrimitive -> {
-                val text = value.asString
-                DopplerSecret(name = name, raw = text, computed = text, note = null)
-            }
-            else -> throw DopplerCliException("Doppler secrets output contains an invalid value.")
+    val map =
+        if (
+            root.size() == 1 &&
+            wrappedMap != null &&
+            !root.get("secrets").isSecretValue() &&
+            wrappedMap.entrySet().all { (_, value) -> value.isSecretValue() }
+        ) {
+            wrappedMap
+        } else {
+            root
         }
-    }.sortedBy { it.name }
+
+    return map
+        .entrySet()
+        .mapNotNull { (name, value) ->
+            if (DopplerReservedSecrets.isReserved(name)) return@mapNotNull null
+            when {
+                value is JsonObject -> {
+                    if (!value.has("raw") && value.stringOrNull("rawVisibility") != "restricted") {
+                        throw DopplerCliException("Doppler secrets output is missing a raw value. Ensure the CLI supports --raw.")
+                    }
+                    DopplerSecret(
+                        name = name,
+                        // `raw` is null only when the secret is restricted and cannot be read back.
+                        raw = value.stringOrNull("raw"),
+                        computed = value.stringOrNull("computed"),
+                        note = value.stringOrNull("note"),
+                    )
+                }
+
+                value != null && value.isJsonPrimitive -> {
+                    val text = value.asString
+                    DopplerSecret(name = name, raw = text, computed = text, note = null)
+                }
+
+                else -> {
+                    throw DopplerCliException("Doppler secrets output contains an invalid value.")
+                }
+            }
+        }.sortedBy { it.name }
 }
 
 /**
@@ -397,22 +487,31 @@ internal fun parseSecrets(element: JsonElement): List<DopplerSecret> {
  * the set of names. Values are never read, so nothing secret is held in memory.
  */
 internal fun parseSecretNames(element: JsonElement): Set<String> {
-    val root = element as? JsonObject
-        ?: throw DopplerCliException("Expected a Doppler secrets object.")
+    val root =
+        element as? JsonObject
+            ?: throw DopplerCliException("Expected a Doppler secrets object.")
     return root.keySet().filterNotTo(linkedSetOf()) { DopplerReservedSecrets.isReserved(it) }
 }
 
-private fun JsonElement.isSecretValue(): Boolean = when {
-    isJsonPrimitive -> true
-    isJsonObject -> {
-        val rawValue = asJsonObject.get("raw")
-        val hasValidRawValue = rawValue != null && (rawValue.isJsonNull || rawValue.isJsonPrimitive)
-        val isRestrictedWithoutRaw = rawValue == null &&
-            asJsonObject.get("rawVisibility")?.let { it.isJsonPrimitive && it.asString == "restricted" } == true
-        hasValidRawValue || isRestrictedWithoutRaw
+private fun JsonElement.isSecretValue(): Boolean =
+    when {
+        isJsonPrimitive -> {
+            true
+        }
+
+        isJsonObject -> {
+            val rawValue = asJsonObject.get("raw")
+            val hasValidRawValue = rawValue != null && (rawValue.isJsonNull || rawValue.isJsonPrimitive)
+            val isRestrictedWithoutRaw =
+                rawValue == null &&
+                    asJsonObject.get("rawVisibility")?.let { it.isJsonPrimitive && it.asString == "restricted" } == true
+            hasValidRawValue || isRestrictedWithoutRaw
+        }
+
+        else -> {
+            false
+        }
     }
-    else -> false
-}
 
 private fun JsonObject.stringOrNull(key: String): String? {
     val value = get(key) ?: return null

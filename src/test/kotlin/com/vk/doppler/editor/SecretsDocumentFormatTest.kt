@@ -9,8 +9,10 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 class SecretsDocumentFormatTest {
-
-    private fun secret(name: String, raw: String?) = DopplerSecret(name, raw, raw, null)
+    private fun secret(
+        name: String,
+        raw: String?,
+    ) = DopplerSecret(name, raw, raw, null)
 
     private fun parseValues(text: String) = SecretsDocumentFormat.parse(text).values
 
@@ -24,18 +26,19 @@ class SecretsDocumentFormatTest {
 
     @Test
     fun `round trips values that would break dotenv parsing`() {
-        val secrets = listOf(
-            secret("MULTILINE", "-----BEGIN KEY-----\nabc\n-----END KEY-----"),
-            secret("WITH_HASH", "pa#ss word"),
-            secret("WITH_QUOTES", """he said "hi""""),
-            secret("WITH_COLON", "psql://app@localhost/appdb"),
-            secret("EMPTY", ""),
-            secret("REFERENCE", "\${DOPPLER_ENVIRONMENT}"),
-            secret("LEADING_SPACE", "  padded  "),
-            secret("NUMERIC", "8080"),
-            secret("BOOLISH", "true"),
-            secret("NULLISH", "null"),
-        )
+        val secrets =
+            listOf(
+                secret("MULTILINE", "-----BEGIN KEY-----\nabc\n-----END KEY-----"),
+                secret("WITH_HASH", "pa#ss word"),
+                secret("WITH_QUOTES", """he said "hi""""),
+                secret("WITH_COLON", "psql://app@localhost/appdb"),
+                secret("EMPTY", ""),
+                secret("REFERENCE", "\${DOPPLER_ENVIRONMENT}"),
+                secret("LEADING_SPACE", "  padded  "),
+                secret("NUMERIC", "8080"),
+                secret("BOOLISH", "true"),
+                secret("NULLISH", "null"),
+            )
 
         val parsed = parseValues(SecretsDocumentFormat.serialize(secrets))
 
@@ -60,17 +63,21 @@ class SecretsDocumentFormatTest {
 
     @Test
     fun `awkward multiline values fall back to a form that still round trips`() {
-        val awkward = listOf(
-            "trailing spaces   \nsecond line",
-            "ends with newline\n",
-            "ends with blank line\n\n",
-            "  leading indent\nsecond",
-            "\ttab first\nsecond",
-        )
+        val awkward =
+            listOf(
+                "trailing spaces   \nsecond line",
+                "ends with newline\n",
+                "ends with blank line\n\n",
+                "  leading indent\nsecond",
+                "\ttab first\nsecond",
+            )
         for (value in awkward) {
             val text = SecretsDocumentFormat.serialize(listOf(secret("X", value)))
-            assertEquals("round trip failed for ${value.replace("\n", "\\n")}",
-                mapOf("X" to value), parseValues(text))
+            assertEquals(
+                "round trip failed for ${value.replace("\n", "\\n")}",
+                mapOf("X" to value),
+                parseValues(text),
+            )
         }
     }
 
@@ -91,9 +98,10 @@ class SecretsDocumentFormatTest {
 
     @Test
     fun `accepts the supported secret name characters`() {
-        val parsed = parseValues(
-            "1ABC: value\n-A: value\nA-B: value\nA/B: value\n\"A:B\": value\nA.B: value\nA_B: value",
-        )
+        val parsed =
+            parseValues(
+                "1ABC: value\n-A: value\nA-B: value\nA/B: value\n\"A:B\": value\nA.B: value\nA_B: value",
+            )
 
         assertEquals(setOf("1ABC", "-A", "A-B", "A/B", "A:B", "A.B", "A_B"), parsed.keys)
     }
@@ -171,15 +179,16 @@ class SecretsDocumentFormatTest {
 
     @Test
     fun `an emptied value is a clear, a literal null is not`() {
-        val parsed = SecretsDocumentFormat.parse(
-            """
-            CLEARED:
-            RESTRICTED: null
-            TILDE: ~
-            EMPTY_STRING: ""
-            NORMAL: v
-            """.trimIndent()
-        )
+        val parsed =
+            SecretsDocumentFormat.parse(
+                """
+                CLEARED:
+                RESTRICTED: null
+                TILDE: ~
+                EMPTY_STRING: ""
+                NORMAL: v
+                """.trimIndent(),
+            )
 
         assertEquals(setOf("CLEARED"), parsed.cleared)
         assertEquals(

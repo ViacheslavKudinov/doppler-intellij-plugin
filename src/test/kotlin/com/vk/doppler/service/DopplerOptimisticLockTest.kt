@@ -10,21 +10,21 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 class DopplerOptimisticLockTest {
-
     @Test
     fun `remote change before save aborts without writing`() {
         val writes = mutableListOf<String>()
 
-        val error = expectConflict {
-            applyChangesWithOptimisticLock(
-                expectedSnapshot = mapOf("API_KEY" to "old"),
-                changes = SecretChanges(mapOf("API_KEY" to "mine"), emptySet()),
-                checkAuthContext = {},
-                loadSnapshot = { mapOf("API_KEY" to "teammate-change") },
-                deleteSecrets = { writes += "delete" },
-                setSecret = { _, _ -> writes += "set" },
-            )
-        }
+        val error =
+            expectConflict {
+                applyChangesWithOptimisticLock(
+                    expectedSnapshot = mapOf("API_KEY" to "old"),
+                    changes = SecretChanges(mapOf("API_KEY" to "mine"), emptySet()),
+                    checkAuthContext = {},
+                    loadSnapshot = { mapOf("API_KEY" to "teammate-change") },
+                    deleteSecrets = { writes += "delete" },
+                    setSecret = { _, _ -> writes += "set" },
+                )
+            }
 
         assertEquals(DopplerCliException.Kind.REMOTE_CHANGED, error.kind)
         assertEquals(emptyList<String>(), writes)
@@ -39,10 +39,11 @@ class DopplerOptimisticLockTest {
 
         applyChangesWithOptimisticLock(
             expectedSnapshot = remote.toMap(),
-            changes = SecretChanges(
-                upserted = linkedMapOf("A" to "new-a", "B" to "new-b"),
-                removed = emptySet(),
-            ),
+            changes =
+                SecretChanges(
+                    upserted = linkedMapOf("A" to "new-a", "B" to "new-b"),
+                    removed = emptySet(),
+                ),
             checkAuthContext = { accountChecks++ },
             loadSnapshot = {
                 assertEquals(1, accountChecks)
@@ -95,28 +96,30 @@ class DopplerOptimisticLockTest {
 
     @Test
     fun `account mismatch prevents snapshot reads and all writes`() {
-        val error = expectConflict {
-            applyChangesWithOptimisticLock(
-                expectedSnapshot = mapOf("OLD" to "value"),
-                changes = SecretChanges(mapOf("NEW" to "value"), setOf("OLD")),
-                checkAuthContext = {
-                    throw DopplerCliException("Account changed", DopplerCliException.Kind.AUTH_CONTEXT_CHANGED)
-                },
-                loadSnapshot = { throw AssertionError("Must not read another account's secrets") },
-                deleteSecrets = { throw AssertionError("Must not delete") },
-                setSecret = { _, _ -> throw AssertionError("Must not write") },
-            )
-        }
+        val error =
+            expectConflict {
+                applyChangesWithOptimisticLock(
+                    expectedSnapshot = mapOf("OLD" to "value"),
+                    changes = SecretChanges(mapOf("NEW" to "value"), setOf("OLD")),
+                    checkAuthContext = {
+                        throw DopplerCliException("Account changed", DopplerCliException.Kind.AUTH_CONTEXT_CHANGED)
+                    },
+                    loadSnapshot = { throw AssertionError("Must not read another account's secrets") },
+                    deleteSecrets = { throw AssertionError("Must not delete") },
+                    setSecret = { _, _ -> throw AssertionError("Must not write") },
+                )
+            }
         assertEquals(DopplerCliException.Kind.AUTH_CONTEXT_CHANGED, error.kind)
     }
 
-    private fun expectConflict(block: () -> Unit): DopplerCliException = try {
-        block()
-        fail("Expected a remote-change conflict")
-        throw AssertionError("unreachable")
-    } catch (error: DopplerCliException) {
-        error
-    }
+    private fun expectConflict(block: () -> Unit): DopplerCliException =
+        try {
+            block()
+            fail("Expected a remote-change conflict")
+            throw AssertionError("unreachable")
+        } catch (error: DopplerCliException) {
+            error
+        }
 
     @Test
     fun `corrected save can retry after confirmed writes precede a rejected edit`() {
@@ -164,7 +167,12 @@ class DopplerOptimisticLockTest {
         expectConflict {
             applyChangesWithOptimisticLock(
                 expectedSnapshot = baseline,
-                changes = SecretChanges.between(baseline, com.vk.doppler.editor.SecretsDocumentFormat.parse("TESTq: synthetic")),
+                changes =
+                    SecretChanges.between(
+                        baseline,
+                        com.vk.doppler.editor.SecretsDocumentFormat
+                            .parse("TESTq: synthetic"),
+                    ),
                 checkAuthContext = {},
                 loadSnapshot = { remote.toMap() },
                 deleteSecrets = { fail("Must not delete before a replacement succeeds") },
@@ -181,7 +189,12 @@ class DopplerOptimisticLockTest {
         val writes = mutableListOf<String>()
         applyChangesWithOptimisticLock(
             expectedSnapshot = baseline,
-            changes = SecretChanges.between(baseline, com.vk.doppler.editor.SecretsDocumentFormat.parse("TESTQ: synthetic")),
+            changes =
+                SecretChanges.between(
+                    baseline,
+                    com.vk.doppler.editor.SecretsDocumentFormat
+                        .parse("TESTQ: synthetic"),
+                ),
             checkAuthContext = {},
             loadSnapshot = { remote.toMap() },
             deleteSecrets = { names ->
@@ -207,10 +220,11 @@ class DopplerOptimisticLockTest {
         expectConflict {
             applyChangesWithOptimisticLock(
                 expectedSnapshot = baseline,
-                changes = SecretChanges(
-                    linkedMapOf("NEW_FIRST" to "synthetic-first", "NEW_SECOND" to "synthetic-second"),
-                    setOf("FIRST", "SECOND"),
-                ),
+                changes =
+                    SecretChanges(
+                        linkedMapOf("NEW_FIRST" to "synthetic-first", "NEW_SECOND" to "synthetic-second"),
+                        setOf("FIRST", "SECOND"),
+                    ),
                 checkAuthContext = {},
                 loadSnapshot = { remote.toMap() },
                 deleteSecrets = { fail("Must not delete unless all replacements succeed") },
@@ -279,17 +293,18 @@ class DopplerOptimisticLockTest {
     fun `replacement authentication failures retain their original kind`() {
         for (kind in listOf(DopplerCliException.Kind.NOT_AUTHENTICATED, DopplerCliException.Kind.AUTH_CONTEXT_CHANGED)) {
             val original = DopplerCliException("Synthetic authentication failure", kind)
-            val error = expectConflict {
-                applyChangesWithOptimisticLock(
-                    expectedSnapshot = mapOf("OLD_NAME" to "synthetic-value"),
-                    changes = SecretChanges(mapOf("NEW_NAME" to "synthetic-value"), setOf("OLD_NAME")),
-                    checkAuthContext = {},
-                    loadSnapshot = { mapOf("OLD_NAME" to "synthetic-value") },
-                    deleteSecrets = { fail("Must not delete after authentication failure") },
-                    setSecret = { _, _ -> throw original },
-                    onSnapshotAdvanced = { fail("A rejected write must not advance the baseline") },
-                )
-            }
+            val error =
+                expectConflict {
+                    applyChangesWithOptimisticLock(
+                        expectedSnapshot = mapOf("OLD_NAME" to "synthetic-value"),
+                        changes = SecretChanges(mapOf("NEW_NAME" to "synthetic-value"), setOf("OLD_NAME")),
+                        checkAuthContext = {},
+                        loadSnapshot = { mapOf("OLD_NAME" to "synthetic-value") },
+                        deleteSecrets = { fail("Must not delete after authentication failure") },
+                        setSecret = { _, _ -> throw original },
+                        onSnapshotAdvanced = { fail("A rejected write must not advance the baseline") },
+                    )
+                }
             assertSame(original, error)
         }
     }
@@ -314,17 +329,18 @@ class DopplerOptimisticLockTest {
         }
         assertEquals(mapOf("A" to "mine", "B" to "old-b"), baseline)
         remote["TEAMMATE"] = "external"
-        val error = expectConflict {
-            applyChangesWithOptimisticLock(
-                expectedSnapshot = baseline,
-                changes = SecretChanges(mapOf("B" to "corrected"), emptySet()),
-                checkAuthContext = {},
-                loadSnapshot = { remote.toMap() },
-                deleteSecrets = { fail("Must not delete after conflict") },
-                setSecret = { _, _ -> fail("Must not write after conflict") },
-                onSnapshotAdvanced = { fail("Must not advance after conflict") },
-            )
-        }
+        val error =
+            expectConflict {
+                applyChangesWithOptimisticLock(
+                    expectedSnapshot = baseline,
+                    changes = SecretChanges(mapOf("B" to "corrected"), emptySet()),
+                    checkAuthContext = {},
+                    loadSnapshot = { remote.toMap() },
+                    deleteSecrets = { fail("Must not delete after conflict") },
+                    setSecret = { _, _ -> fail("Must not write after conflict") },
+                    onSnapshotAdvanced = { fail("Must not advance after conflict") },
+                )
+            }
         assertEquals(DopplerCliException.Kind.REMOTE_CHANGED, error.kind)
         assertEquals("external", remote["TEAMMATE"])
     }

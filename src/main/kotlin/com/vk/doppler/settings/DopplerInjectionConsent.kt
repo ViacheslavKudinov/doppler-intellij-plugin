@@ -11,7 +11,10 @@ import com.intellij.openapi.components.service
 @Service(Service.Level.APP)
 @State(name = "DopplerInjectionConsent", storages = [Storage("doppler-injection-consent.xml", roamingType = RoamingType.DISABLED)])
 class DopplerInjectionConsent : PersistentStateComponent<DopplerInjectionConsent.State> {
-    data class State(var approvedProjects: MutableSet<String> = linkedSetOf())
+    data class State(
+        var approvedProjects: MutableSet<String> = linkedSetOf(),
+    )
+
     private var consent = State()
 
     @Synchronized
@@ -26,7 +29,10 @@ class DopplerInjectionConsent : PersistentStateComponent<DopplerInjectionConsent
     internal fun isGranted(projectPath: String?): Boolean = projectPath != null && projectPath in consent.approvedProjects
 
     @Synchronized
-    internal fun setGranted(projectPath: String?, granted: Boolean) {
+    internal fun setGranted(
+        projectPath: String?,
+        granted: Boolean,
+    ) {
         if (projectPath.isNullOrBlank()) return
         if (granted) consent.approvedProjects.add(projectPath) else consent.approvedProjects.remove(projectPath)
     }

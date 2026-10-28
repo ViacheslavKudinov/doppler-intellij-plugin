@@ -1,19 +1,18 @@
 package com.vk.doppler.cli
 
-import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
-import org.junit.Assume.assumeFalse
-import java.nio.file.Files
-import com.vk.doppler.settings.DopplerSettings
-import com.vk.doppler.service.DopplerService
-import com.vk.doppler.service.DopplerStatus
 import com.vk.doppler.editor.DopplerFileSystem
 import com.vk.doppler.editor.DopplerSecretsEditorService
 import com.vk.doppler.editor.SecretsDocumentFormat
+import com.vk.doppler.service.DopplerService
+import com.vk.doppler.service.DopplerStatus
+import com.vk.doppler.settings.DopplerSettings
+import org.junit.Assume.assumeFalse
+import java.nio.file.Files
 
 class DopplerCliExecutionTest : BasePlatformTestCase() {
-
     fun `test tree validated config open skips the redundant account preflight`() {
         checkTreeValidatedConfigOpen("stable", listOf("secrets", "me"), expectedAuthChange = false)
     }
@@ -38,7 +37,9 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
             Files.deleteIfExists(executable)
             Files.deleteIfExists(calls)
         }
-        Files.writeString(executable, """
+        Files.writeString(
+            executable,
+            """
             #!/bin/sh
             printf '%s\n' "${'$'}1" >> '$calls'
             case "${'$'}1" in
@@ -56,15 +57,17 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
                 ;;
               *) exit 1 ;;
             esac
-        """.trimIndent())
+            """.trimIndent(),
+        )
         assertTrue(executable.toFile().setExecutable(true))
         val settings = DopplerSettings.getInstance()
         val originalPath = settings.cliPath
         try {
             settings.cliPath = executable.toString()
-            val expectedContext = cli(
-                """printf '%s' '{"slug":"test","type":"personal","token_preview":"synthetic","workplace":{"slug":"test"}}'""",
-            ).authContextId()
+            val expectedContext =
+                cli(
+                    """printf '%s' '{"slug":"test","type":"personal","token_preview":"synthetic","workplace":{"slug":"test"}}'""",
+                ).authContextId()
             if (expectedAuthChange) {
                 try {
                     DopplerService.getInstance().loadSecretsAfterTreeValidation(
@@ -77,11 +80,12 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
                     assertEquals(DopplerCliException.Kind.AUTH_CONTEXT_CHANGED, error.kind)
                 }
             } else {
-                val snapshot = DopplerService.getInstance().loadSecretsAfterTreeValidation(
-                    "open-test",
-                    mode,
-                    expectedContext,
-                )
+                val snapshot =
+                    DopplerService.getInstance().loadSecretsAfterTreeValidation(
+                        "open-test",
+                        mode,
+                        expectedContext,
+                    )
                 assertEquals(expectedContext, snapshot.authContextId)
                 assertEmpty(snapshot.secrets)
             }
@@ -120,7 +124,9 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
             Files.deleteIfExists(executable)
             Files.deleteIfExists(calls)
         }
-        Files.writeString(executable, """
+        Files.writeString(
+            executable,
+            """
             #!/bin/sh
             printf '%s\n' "${'$'}1" >> '$calls'
             case "${'$'}1" in
@@ -140,14 +146,18 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
                                 ;;
               *) exit 1 ;;
             esac
-        """.trimIndent())
+            """.trimIndent(),
+        )
         assertTrue(executable.toFile().setExecutable(true))
         val settings = DopplerSettings.getInstance()
         val originalPath = settings.cliPath
         try {
             settings.cliPath = executable.toString()
             // Establish the expected identity independently of the refresh under test.
-            val identity = cli("""printf '%s' '{"slug":"test","type":"personal","token_preview":"synthetic","workplace":{"slug":"test"}}'""").authContextId()
+            val identity =
+                cli(
+                    """printf '%s' '{"slug":"test","type":"personal","token_preview":"synthetic","workplace":{"slug":"test"}}'""",
+                ).authContextId()
             val file = DopplerFileSystem.getInstance().obtain("refresh-test", mode, identity)
             file.setServerContent(SecretsDocumentFormat.serialize(emptyMap()), emptyMap())
             val other = DopplerFileSystem.getInstance().obtain("refresh-test", "$mode-other", identity)
@@ -168,7 +178,9 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
             Files.deleteIfExists(executable)
             Files.deleteIfExists(calls)
         }
-        Files.writeString(executable, """
+        Files.writeString(
+            executable,
+            """
             #!/bin/sh
             printf '%s\n' "${'$'}1" >> '$calls'
             case "${'$'}1" in
@@ -177,7 +189,8 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
               --version) printf 'test-version' ;;
               *) exit 1 ;;
             esac
-        """.trimIndent())
+            """.trimIndent(),
+        )
         assertTrue(executable.toFile().setExecutable(true))
         val settings = DopplerSettings.getInstance()
         val originalPath = settings.cliPath
@@ -221,7 +234,10 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
 
     fun `test account info exposes identity and workplace name without token preview`() {
         assumeFalse(SystemInfo.isWindows)
-        val cli = cli("""printf '%s' '{"name":"VK-MacBook-Air-M4-13","slug":"alice","type":"personal","token_preview":"synthetic-preview","workplace":{"slug":"team","name":"Example Team"}}'""")
+        val cli =
+            cli(
+                """printf '%s' '{"name":"VK-MacBook-Air-M4-13","slug":"alice","type":"personal","token_preview":"synthetic-preview","workplace":{"slug":"team","name":"Example Team"}}'""",
+            )
         val account = cli.accountInfo()
         assertEquals("alice", account.slug)
         assertEquals("VK-MacBook-Air-M4-13", account.name)
@@ -241,18 +257,21 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
     }
 
     fun `test auth context fingerprint ignores volatile me fields`() {
-        val first = cli(
-            "printf '%s' '{\"slug\":\"alice\",\"type\":\"personal\",\"token_preview\":\"dp.preview\"," +
-                "\"workplace\":{\"slug\":\"team\"},\"created_at\":\"yesterday\",\"last_seen_at\":\"one\"}'",
-        )
-        val second = cli(
-            "printf '%s' '{\"slug\":\"alice\",\"type\":\"personal\",\"token_preview\":\"dp.preview\"," +
-                "\"workplace\":{\"slug\":\"team\"},\"created_at\":\"today\",\"last_seen_at\":\"two\"}'",
-        )
-        val otherAccount = cli(
-            "printf '%s' '{\"slug\":\"bob\",\"type\":\"personal\",\"token_preview\":\"dp.other\"," +
-                "\"workplace\":{\"slug\":\"team\"}}'",
-        )
+        val first =
+            cli(
+                "printf '%s' '{\"slug\":\"alice\",\"type\":\"personal\",\"token_preview\":\"dp.preview\"," +
+                    "\"workplace\":{\"slug\":\"team\"},\"created_at\":\"yesterday\",\"last_seen_at\":\"one\"}'",
+            )
+        val second =
+            cli(
+                "printf '%s' '{\"slug\":\"alice\",\"type\":\"personal\",\"token_preview\":\"dp.preview\"," +
+                    "\"workplace\":{\"slug\":\"team\"},\"created_at\":\"today\",\"last_seen_at\":\"two\"}'",
+            )
+        val otherAccount =
+            cli(
+                "printf '%s' '{\"slug\":\"bob\",\"type\":\"personal\",\"token_preview\":\"dp.other\"," +
+                    "\"workplace\":{\"slug\":\"team\"}}'",
+            )
 
         assertEquals(first.authContextId(), second.authContextId())
         assertFalse(first.authContextId() == otherAccount.authContextId())
@@ -289,14 +308,35 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
         for (name in listOf("--config", "-h")) {
             cli.setSecret("project", "config", name, "synthetic-value")
             assertEquals(
-                listOf("secrets", "set", "--project", "project", "--config", "config",
-                    "--json", "--no-check-version", "--", name),
+                listOf(
+                    "secrets",
+                    "set",
+                    "--project",
+                    "project",
+                    "--config",
+                    "config",
+                    "--json",
+                    "--no-check-version",
+                    "--",
+                    name,
+                ),
                 Files.readAllLines(marker),
             )
             cli.deleteSecrets("project", "config", listOf(name))
             assertEquals(
-                listOf("secrets", "delete", "--yes", "--project", "project", "--config", "config",
-                    "--json", "--no-check-version", "--", name),
+                listOf(
+                    "secrets",
+                    "delete",
+                    "--yes",
+                    "--project",
+                    "project",
+                    "--config",
+                    "config",
+                    "--json",
+                    "--no-check-version",
+                    "--",
+                    name,
+                ),
                 Files.readAllLines(marker),
             )
         }

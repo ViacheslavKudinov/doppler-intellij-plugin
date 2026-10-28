@@ -11,7 +11,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SecretNameMappingTest {
-    private fun pair(name: String, newName: String) = SecretNameMapping(name, newName)
+    private fun pair(
+        name: String,
+        newName: String,
+    ) = SecretNameMapping(name, newName)
 
     @Test fun `matching secrets are renamed with their values and others keep their names`() {
         val secrets = mapOf("DB_URL" to "u", "API_KEY" to "k", "OTHER" to "o")
@@ -77,15 +80,17 @@ class SecretNameMappingTest {
     }
 
     @Test fun `new names follow the same validation as edited secret names`() {
-        val names = listOf("valid_NAME9", "path/name:part.ext-key", "9KEY", "HAS SPACE", " NAME", "NAME ", "HAS=EQUALS", "KEY@HOST", "caf\u00e9") +
-            DopplerReservedSecrets.NAMES
+        val names =
+            listOf("valid_NAME9", "path/name:part.ext-key", "9KEY", "HAS SPACE", " NAME", "NAME ", "HAS=EQUALS", "KEY@HOST", "caf\u00e9") +
+                DopplerReservedSecrets.NAMES
         for (name in names) {
-            val acceptedByEditor = try {
-                SecretsDocumentFormat.parse("\"$name\": synthetic")
-                true
-            } catch (_: SecretsFormatException) {
-                false
-            }
+            val acceptedByEditor =
+                try {
+                    SecretsDocumentFormat.parse("\"$name\": synthetic")
+                    true
+                } catch (_: SecretsFormatException) {
+                    false
+                }
             assertEquals(name, acceptedByEditor, validateSecretNameMappings(listOf(pair("SOURCE", name))) == null)
             val secrets = mapOf("SOURCE" to "synthetic")
             assertEquals(

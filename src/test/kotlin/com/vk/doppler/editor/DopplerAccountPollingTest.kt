@@ -29,13 +29,18 @@ class DopplerAccountPollingTest : BasePlatformTestCase() {
         return service to file
     }
 
-    fun `test account switch clears dirty selected config without fetching values`() {
+    fun testAccountSwitchClearsDirtySelectedConfigWithoutFetchingValues() {
         val (service, file) = openConfig()
         val document = myFixture.editor.document
         WriteAction.run<RuntimeException> { document.setText("A: edited") }
-        service.pollOpenConfigs(30_000, 5,
+        service.pollOpenConfigs(
+            30_000,
+            5,
             refreshableFiles = { service.autoRefreshFiles(true, arrayOf(file)) },
-            refresh = { fail("Dirty config must not fetch values"); false },
+            refresh = {
+                fail("Dirty config must not fetch values")
+                false
+            },
             validateAccount = { "new-account" },
         )
         assertTrue(file.isInvalidated)
@@ -43,28 +48,41 @@ class DopplerAccountPollingTest : BasePlatformTestCase() {
         assertEquals(DopplerSecretsFile.EMPTY_DOCUMENT, document.text)
     }
 
-    fun `test logout clears config when an ordinary file is selected`() {
+    fun testLogoutClearsConfigWhenAnOrdinaryFileIsSelected() {
         val (service, file) = openConfig()
         val document = myFixture.editor.document
-        service.pollOpenConfigs(30_000, 5,
+        service.pollOpenConfigs(
+            30_000,
+            5,
             refreshableFiles = { service.autoRefreshFiles(true, arrayOf(LightVirtualFile("ordinary.txt"))) },
-            refresh = { fail("Ordinary selection must not fetch values"); false },
+            refresh = {
+                fail("Ordinary selection must not fetch values")
+                false
+            },
             validateAccount = { throw DopplerCliException("Logged out", DopplerCliException.Kind.NOT_AUTHENTICATED) },
         )
         assertTrue(file.isInvalidated)
         assertEquals(DopplerSecretsFile.EMPTY_DOCUMENT, document.text)
     }
 
-    fun `test inactive window and disabled value refresh still validate account at limited cadence`() {
+    fun testInactiveWindowAndDisabledValueRefreshStillValidateAccountAtLimitedCadence() {
         val (service, file) = openConfig()
         val document = myFixture.editor.document
         WriteAction.run<RuntimeException> { document.setText("A: edited") }
         var checks = 0
         for (now in listOf(30_000L, 31_000L, 59_999L, 60_000L)) {
-            service.pollOpenConfigs(now, 0,
+            service.pollOpenConfigs(
+                now,
+                0,
                 refreshableFiles = { service.autoRefreshFiles(false, arrayOf(file)) },
-                refresh = { fail("Disabled refresh must not fetch values"); false },
-                validateAccount = { checks++; "old-account" },
+                refresh = {
+                    fail("Disabled refresh must not fetch values")
+                    false
+                },
+                validateAccount = {
+                    checks++
+                    "old-account"
+                },
             )
         }
         assertEquals(2, checks)
@@ -73,52 +91,81 @@ class DopplerAccountPollingTest : BasePlatformTestCase() {
         assertEquals(mapOf("A" to "old"), file.remoteSnapshot)
     }
 
-    fun `test value refresh satisfies account check until fallback interval elapses`() {
+    fun testValueRefreshSatisfiesAccountCheckUntilFallbackIntervalElapses() {
         val (service, file) = openConfig()
         var refreshes = 0
         var checks = 0
-        service.pollOpenConfigs(30_000, 5,
+        service.pollOpenConfigs(
+            30_000,
+            5,
             refreshableFiles = { listOf(file) },
-            refresh = { refreshes++; true },
-            validateAccount = { fail("Value refresh already checks authentication"); "old-account" },
+            refresh = {
+                refreshes++
+                true
+            },
+            validateAccount = {
+                fail("Value refresh already checks authentication")
+                "old-account"
+            },
         )
         for (now in listOf(31_000L, 59_999L, 60_000L)) {
-            service.pollOpenConfigs(now, 5,
+            service.pollOpenConfigs(
+                now,
+                5,
                 refreshableFiles = { emptyList() },
-                refresh = { fail("No selected config"); false },
-                validateAccount = { checks++; "old-account" },
+                refresh = {
+                    fail("No selected config")
+                    false
+                },
+                validateAccount = {
+                    checks++
+                    "old-account"
+                },
             )
         }
         assertEquals(1, refreshes)
         assertEquals(1, checks)
     }
 
-    fun `test failed refresh immediately detects account switch in other open config`() {
+    fun testFailedRefreshImmediatelyDetectsAccountSwitchInOtherOpenConfig() {
         checkFailedRefresh({ "new-account" }, true)
     }
 
-    fun `test failed refresh clears other open config when account validation fails`() {
+    fun testFailedRefreshClearsOtherOpenConfigWhenAccountValidationFails() {
         checkFailedRefresh({ throw DopplerCliException("Account lookup failed") }, true)
     }
 
-    fun `test failed refresh preserves other open config when account is unchanged`() {
+    fun testFailedRefreshPreservesOtherOpenConfigWhenAccountIsUnchanged() {
         checkFailedRefresh({ "old-account" }, false)
     }
 
-    private fun checkFailedRefresh(validateAccount: () -> String, otherInvalidated: Boolean) {
+    private fun checkFailedRefresh(
+        validateAccount: () -> String,
+        otherInvalidated: Boolean,
+    ) {
         val (service, other) = openConfig("other")
         val document = FileDocumentManager.getInstance().getDocument(other)!!
         val (_, selected) = openConfig()
-        service.pollOpenConfigs(30_000, 5,
+        service.pollOpenConfigs(
+            30_000,
+            5,
             refreshableFiles = { listOf(selected) },
             refresh = { true },
-            validateAccount = { fail("Successful refresh already validates the account"); "old-account" },
+            validateAccount = {
+                fail("Successful refresh already validates the account")
+                "old-account"
+            },
         )
         var checks = 0
-        service.pollOpenConfigs(35_000, 5,
+        service.pollOpenConfigs(
+            35_000,
+            5,
             refreshableFiles = { listOf(selected) },
             refresh = { false },
-            validateAccount = { checks++; validateAccount() },
+            validateAccount = {
+                checks++
+                validateAccount()
+            },
         )
         assertEquals(1, checks)
         assertEquals(otherInvalidated, other.isInvalidated)
@@ -131,14 +178,25 @@ class DopplerAccountPollingTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test no open configs makes no account or value requests`() {
+    fun testNoOpenConfigsMakesNoAccountOrValueRequests() {
         val (service, file) = openConfig()
         DopplerSecretsEditorService.invalidateCachedFiles(null)
         assertFalse(service.owns(file))
-        service.pollOpenConfigs(30_000, 5,
-            refreshableFiles = { fail("No configs to refresh"); emptyList() },
-            refresh = { fail("No configs to refresh"); false },
-            validateAccount = { fail("No account check needed"); "old-account" },
+        service.pollOpenConfigs(
+            30_000,
+            5,
+            refreshableFiles = {
+                fail("No configs to refresh")
+                emptyList()
+            },
+            refresh = {
+                fail("No configs to refresh")
+                false
+            },
+            validateAccount = {
+                fail("No account check needed")
+                "old-account"
+            },
         )
     }
 }

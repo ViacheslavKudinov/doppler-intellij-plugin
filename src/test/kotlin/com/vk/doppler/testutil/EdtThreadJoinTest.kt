@@ -8,16 +8,17 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.swing.SwingUtilities
 
 class EdtThreadJoinTest : BasePlatformTestCase() {
-    fun `test joining on EDT dispatches callbacks needed by the worker`() {
+    fun testJoiningOnEdtDispatchesCallbacksNeededByTheWorker() {
         assertTrue(SwingUtilities.isEventDispatchThread())
         val callbackRan = AtomicBoolean()
         val failure = AtomicReference<Throwable>()
-        val thread = Thread({
-            SwingUtilities.invokeAndWait { callbackRan.set(true) }
-        }, "EDT-dependent test worker").apply {
-            uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> failure.set(error) }
-            start()
-        }
+        val thread =
+            Thread({
+                SwingUtilities.invokeAndWait { callbackRan.set(true) }
+            }, "EDT-dependent test worker").apply {
+                uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> failure.set(error) }
+                start()
+            }
         try {
             joinWithEventDispatch(thread, "Worker should finish after its EDT callback")
             assertFalse(thread.isAlive)
@@ -30,13 +31,17 @@ class EdtThreadJoinTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test already completed worker needs no waiting`() {
-        val thread = Thread("Completed test worker").apply { start(); join(1_000) }
+    fun testAlreadyCompletedWorkerNeedsNoWaiting() {
+        val thread =
+            Thread("Completed test worker").apply {
+                start()
+                join(1_000)
+            }
         assertFalse(thread.isAlive)
         joinWithEventDispatch(thread, "Completed worker should not time out", timeoutMillis = 0)
     }
 
-    fun `test timeout reports the caller message without stopping the worker`() {
+    fun testTimeoutReportsTheCallerMessageWithoutStoppingTheWorker() {
         val release = CountDownLatch(1)
         val thread = Thread({ release.await() }, "Blocked test worker").apply { start() }
         try {
@@ -54,7 +59,7 @@ class EdtThreadJoinTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test negative timeout is rejected`() {
+    fun testNegativeTimeoutIsRejected() {
         try {
             joinWithEventDispatch(Thread(), "Unused assertion", timeoutMillis = -1)
             fail("Negative timeouts must be rejected")

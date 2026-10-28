@@ -1,36 +1,38 @@
 package com.vk.doppler.completion
 
 import com.intellij.codeInsight.lookup.LookupElementBuilder
-import com.intellij.codeInsight.lookup.LookupManager
 import com.intellij.codeInsight.lookup.LookupEvent
 import com.intellij.codeInsight.lookup.LookupListener
+import com.intellij.codeInsight.lookup.LookupManager
 import com.intellij.codeInsight.lookup.impl.LookupImpl
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.psi.PsiDocumentManager
-import com.intellij.testFramework.runInEdtAndWait
 import com.intellij.openapi.application.TransactionGuard
 import com.intellij.openapi.application.TransactionGuardImpl
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.testFramework.runInEdtAndWait
 import com.vk.doppler.editor.DopplerFileSystem
 import java.awt.event.MouseEvent
 import javax.swing.SwingUtilities
 
 class SecretReferenceClickSelectionTest : BasePlatformTestCase() {
-    override fun runInDispatchThread(): Boolean = name != "test single click from raw EDT permits completion PSI commit"
+    override fun runInDispatchThread(): Boolean = name != "testSingleClickFromRawEdtPermitsCompletionPsiCommit"
 
-    fun `test single click from raw EDT permits completion PSI commit`() {
+    fun testSingleClickFromRawEdtPermitsCompletionPsiCommit() {
         lateinit var lookup: LookupImpl
         var committed = false
         runInEdtAndWait {
             lookup = lookup()
-            lookup.addLookupListener(object : LookupListener {
-                override fun itemSelected(event: LookupEvent) {
-                    // The real completion insertion pipeline commits PSI here.
-                    ApplicationManager.getApplication().assertWriteIntentLockAcquired()
-                    PsiDocumentManager.getInstance(project).commitDocument(myFixture.editor.document)
-                    committed = true
-                }
-            })
+            lookup.addLookupListener(
+                object : LookupListener {
+                    override fun itemSelected(event: LookupEvent) {
+                        // The real completion insertion pipeline commits PSI here.
+                        ApplicationManager.getApplication().assertWriteIntentLockAcquired()
+                        PsiDocumentManager.getInstance(project).commitDocument(myFixture.editor.document)
+                        committed = true
+                    }
+                },
+            )
         }
         try {
             SwingUtilities.invokeAndWait {
@@ -53,7 +55,10 @@ class SecretReferenceClickSelectionTest : BasePlatformTestCase() {
         }
     }
 
-    private fun lookup(doppler: Boolean = true, marked: Boolean = true): LookupImpl {
+    private fun lookup(
+        doppler: Boolean = true,
+        marked: Boolean = true,
+    ): LookupImpl {
         if (doppler) {
             val file = DopplerFileSystem.getInstance().obtain("click", "dev", "test-context")
             file.setServerContent("VALUE: \${", emptyMap())
@@ -62,24 +67,43 @@ class SecretReferenceClickSelectionTest : BasePlatformTestCase() {
         } else {
             myFixture.configureByText("ordinary.txt", "VALUE: \${<caret>")
         }
-        val item = if (marked) secretReferenceLookupElement(
-            SecretReferenceCandidate("API_KEY", SecretReferenceScope.CONFIG, "click/dev"),
-        ) else LookupElementBuilder.create("ordinary")
+        val item =
+            if (marked) {
+                secretReferenceLookupElement(
+                    SecretReferenceCandidate("API_KEY", SecretReferenceScope.CONFIG, "click/dev"),
+                )
+            } else {
+                LookupElementBuilder.create("ordinary")
+            }
         return LookupManager.getInstance(project).showLookup(myFixture.editor, item) as LookupImpl
     }
 
-    private fun click(lookup: LookupImpl, button: Int = MouseEvent.BUTTON1, count: Int = 1, below: Boolean = false) {
+    private fun click(
+        lookup: LookupImpl,
+        button: Int = MouseEvent.BUTTON1,
+        count: Int = 1,
+        below: Boolean = false,
+    ) {
         val list = lookup.list
         // Headless lookups have no laid-out native window; give row hit-testing real bounds.
         list.setSize(600, 200)
         val bounds = requireNotNull(list.getCellBounds(0, 0))
-        val event = MouseEvent(list, MouseEvent.MOUSE_CLICKED, 0, 0,
-            bounds.x + 2, if (below) bounds.y + bounds.height + 20 else bounds.y + 2,
-            count, false, button)
+        val event =
+            MouseEvent(
+                list,
+                MouseEvent.MOUSE_CLICKED,
+                0,
+                0,
+                bounds.x + 2,
+                if (below) bounds.y + bounds.height + 20 else bounds.y + 2,
+                count,
+                false,
+                button,
+            )
         list.mouseListeners.forEach { it.mouseClicked(event) }
     }
 
-    fun `test single click accepts selected reference through the lookup`() {
+    fun testSingleClickAcceptsSelectedReferenceThroughTheLookup() {
         val lookup = lookup()
         click(lookup)
         // showLookup tests acceptance without the full completion contributor insertion pipeline.
@@ -87,7 +111,7 @@ class SecretReferenceClickSelectionTest : BasePlatformTestCase() {
         assertTrue(lookup.isLookupDisposed)
     }
 
-    fun `test right double and empty space clicks do not trigger single click insertion`() {
+    fun testRightDoubleAndEmptySpaceClicksDoNotTriggerSingleClickInsertion() {
         val lookup = lookup()
         try {
             click(lookup, MouseEvent.BUTTON3)
@@ -99,7 +123,7 @@ class SecretReferenceClickSelectionTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test ordinary editor keeps normal click behavior`() {
+    fun testOrdinaryEditorKeepsNormalClickBehavior() {
         val lookup = lookup(doppler = false)
         try {
             click(lookup)
@@ -109,7 +133,7 @@ class SecretReferenceClickSelectionTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test unmarked suggestion in Doppler editor keeps normal click behavior`() {
+    fun testUnmarkedSuggestionInDopplerEditorKeepsNormalClickBehavior() {
         val lookup = lookup(marked = false)
         try {
             click(lookup)

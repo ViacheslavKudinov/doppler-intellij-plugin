@@ -1,30 +1,34 @@
 package com.vk.doppler.toolwindow
 
+import com.vk.doppler.DopplerIcons
 import com.vk.doppler.cli.DopplerConfig
 import com.vk.doppler.cli.DopplerProject
-import com.vk.doppler.DopplerIcons
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.beans.PropertyChangeEvent
 import java.awt.event.MouseEvent
+import java.beans.PropertyChangeEvent
 import javax.swing.JButton
 import javax.swing.JPanel
 import javax.swing.JTree
 import javax.swing.SwingUtilities
+import javax.swing.event.TreeModelEvent
+import javax.swing.event.TreeModelListener
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
 import javax.swing.tree.TreePath
-import javax.swing.event.TreeModelEvent
-import javax.swing.event.TreeModelListener
 
 class DopplerTreeStateTest {
     @Test
     fun `project descriptions are escaped and preserve folder setup tooltips`() {
         SwingUtilities.invokeAndWait {
-            val renderer = DopplerTreeCellRenderer { com.vk.doppler.cli.DopplerFolderSetup("backend", "dev") }
+            val renderer =
+                DopplerTreeCellRenderer {
+                    com.vk.doppler.cli
+                        .DopplerFolderSetup("backend", "dev")
+                }
             val tree = JTree()
             val node = ProjectNode(DopplerProject("backend", "Backend", "A <service> & \"details\""))
             renderer.getTreeCellRendererComponent(tree, node, false, false, true, 0, false)
@@ -34,7 +38,13 @@ class DopplerTreeStateTest {
             assertTrue(renderer.icon is com.intellij.ui.RowIcon)
 
             renderer.getTreeCellRendererComponent(
-                tree, ProjectNode(DopplerProject("other", "Other", " ")), false, false, true, 0, false,
+                tree,
+                ProjectNode(DopplerProject("other", "Other", " ")),
+                false,
+                false,
+                true,
+                0,
+                false,
             )
             assertEquals(null, renderer.toolTipText)
             assertSame(DopplerIcons.Project, renderer.icon)
@@ -49,8 +59,15 @@ class DopplerTreeStateTest {
             renderer.getTreeCellRendererComponent(tree, EnvironmentNode("production"), false, false, true, 0, false)
             assertEquals("production", renderer.getCharSequence(false).toString())
             assertSame(DopplerIcons.Environment, renderer.icon)
-            renderer.getTreeCellRendererComponent(tree, ConfigNode("backend", DopplerConfig("prod", "production")),
-                true, false, true, 0, false)
+            renderer.getTreeCellRendererComponent(
+                tree,
+                ConfigNode("backend", DopplerConfig("prod", "production")),
+                true,
+                false,
+                true,
+                0,
+                false,
+            )
             assertSame(DopplerIcons.ConfigSelected, renderer.icon)
             renderer.getTreeCellRendererComponent(tree, LoadingNode(), false, false, true, 0, false)
             assertEquals(LoadingNode().toString(), renderer.getCharSequence(false).toString())
@@ -61,9 +78,12 @@ class DopplerTreeStateTest {
     @Test
     fun `folder bookmark follows setup and does not leak to other tree rows`() {
         SwingUtilities.invokeAndWait {
-            var setup = com.vk.doppler.cli.DopplerFolderSetup("backend", "dev")
+            var setup =
+                com.vk.doppler.cli
+                    .DopplerFolderSetup("backend", "dev")
             val renderer = DopplerTreeCellRenderer { setup }
             val tree = JTree()
+
             fun render(node: Any) = renderer.getTreeCellRendererComponent(tree, node, false, false, true, 0, false)
             val project = ProjectNode(DopplerProject("backend", "Backend", null))
             val config = ConfigNode("backend", DopplerConfig("dev", "dev"))
@@ -75,7 +95,9 @@ class DopplerTreeStateTest {
             render(ConfigNode("other", DopplerConfig("dev", "dev")))
             assertFalse(renderer.icon is com.intellij.ui.RowIcon)
             assertEquals(null, renderer.toolTipText)
-            setup = com.vk.doppler.cli.DopplerFolderSetup()
+            setup =
+                com.vk.doppler.cli
+                    .DopplerFolderSetup()
             render(config)
             assertFalse(renderer.icon is com.intellij.ui.RowIcon)
             render(project)
@@ -89,10 +111,11 @@ class DopplerTreeStateTest {
             val root = DefaultMutableTreeNode()
             val project = projectNode()
             root.add(project)
-            val tree = JTree(root).apply {
-                isRootVisible = false
-                setSize(400, 300)
-            }
+            val tree =
+                JTree(root).apply {
+                    isRootVisible = false
+                    setSize(400, 300)
+                }
             val listener = DopplerTreeClickListener(tree) { error("Branch clicks must not open configs") }
             val projectPath = TreePath(project.path)
             tree.selectionPath = projectPath
@@ -119,10 +142,11 @@ class DopplerTreeStateTest {
             val root = DefaultMutableTreeNode()
             val project = projectNode()
             root.add(project)
-            val tree = JTree(root).apply {
-                isRootVisible = false
-                setSize(400, 300)
-            }
+            val tree =
+                JTree(root).apply {
+                    isRootVisible = false
+                    setSize(400, 300)
+                }
             var opens = 0
             val listener = DopplerTreeClickListener(tree) { opens++ }
             val environment = project.getChildAt(0) as EnvironmentNode
@@ -133,13 +157,35 @@ class DopplerTreeStateTest {
             clickLabel(tree, listener, configPath, 2)
             assertEquals(1, opens)
             val configBounds = requireNotNull(tree.getPathBounds(configPath))
-            listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
-                configBounds.x - 1, configBounds.y + configBounds.height / 2, 1, false, MouseEvent.BUTTON1))
+            listener.mouseClicked(
+                MouseEvent(
+                    tree,
+                    MouseEvent.MOUSE_CLICKED,
+                    0,
+                    0,
+                    configBounds.x - 1,
+                    configBounds.y + configBounds.height / 2,
+                    1,
+                    false,
+                    MouseEvent.BUTTON1,
+                ),
+            )
             assertEquals("Indentation clicks must not open a config", 1, opens)
             val projectPath = TreePath(project.path)
             val bounds = requireNotNull(tree.getPathBounds(projectPath))
-            listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
-                bounds.x + bounds.width + 1, bounds.y + bounds.height / 2, 1, false, MouseEvent.BUTTON1))
+            listener.mouseClicked(
+                MouseEvent(
+                    tree,
+                    MouseEvent.MOUSE_CLICKED,
+                    0,
+                    0,
+                    bounds.x + bounds.width + 1,
+                    bounds.y + bounds.height / 2,
+                    1,
+                    false,
+                    MouseEvent.BUTTON1,
+                ),
+            )
             assertTrue(tree.isExpanded(projectPath))
         }
     }
@@ -150,39 +196,80 @@ class DopplerTreeStateTest {
             val root = DefaultMutableTreeNode()
             val project = projectNode()
             root.add(project)
-            val tree = JTree(root).apply {
-                isRootVisible = false
-                showsRootHandles = true
-                setUI(javax.swing.plaf.basic.BasicTreeUI())
-                (ui as javax.swing.plaf.basic.BasicTreeUI).apply {
-                    leftChildIndent = 12
-                    rightChildIndent = 18
-                    expandedIcon = javax.swing.ImageIcon(java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_ARGB))
-                    collapsedIcon = expandedIcon
+            val tree =
+                JTree(root).apply {
+                    isRootVisible = false
+                    showsRootHandles = true
+                    setUI(
+                        javax.swing.plaf.basic
+                            .BasicTreeUI(),
+                    )
+                    (ui as javax.swing.plaf.basic.BasicTreeUI).apply {
+                        leftChildIndent = 12
+                        rightChildIndent = 18
+                        expandedIcon = javax.swing.ImageIcon(java.awt.image.BufferedImage(8, 8, java.awt.image.BufferedImage.TYPE_INT_ARGB))
+                        collapsedIcon = expandedIcon
+                    }
+                    setSize(400, 300)
                 }
-                setSize(400, 300)
-            }
             val listener = DopplerTreeClickListener(tree) { error("Branch clicks must not open configs") }
             val projectPath = TreePath(project.path)
             tree.expandPath(projectPath)
             val environmentPath = TreePath((project.getChildAt(0) as EnvironmentNode).path)
             for (path in listOf(environmentPath, projectPath)) {
                 tree.expandPath(path)
-                val control = requireNotNull(com.intellij.util.ui.tree.TreeUtil.getExpandControlRange(tree, path))
+                val control =
+                    requireNotNull(
+                        com.intellij.util.ui.tree.TreeUtil
+                            .getExpandControlRange(tree, path),
+                    )
                 val initialBounds = requireNotNull(tree.getPathBounds(path))
-                listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
-                    (control.from + control.to) / 2, initialBounds.y + initialBounds.height / 2, 1, false, MouseEvent.BUTTON1))
+                listener.mouseClicked(
+                    MouseEvent(
+                        tree,
+                        MouseEvent.MOUSE_CLICKED,
+                        0,
+                        0,
+                        (control.from + control.to) / 2,
+                        initialBounds.y + initialBounds.height / 2,
+                        1,
+                        false,
+                        MouseEvent.BUTTON1,
+                    ),
+                )
                 assertTrue("The platform handles arrow clicks; the listener must not toggle again", tree.isExpanded(path))
                 val gap = (control.to + 1) until initialBounds.x
                 assertFalse("The regression must exercise the arrow-to-icon gap", gap.isEmpty())
                 for (horizontal in gap) {
-                    listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
-                        horizontal, initialBounds.y + initialBounds.height / 2, 1, false, MouseEvent.BUTTON3))
+                    listener.mouseClicked(
+                        MouseEvent(
+                            tree,
+                            MouseEvent.MOUSE_CLICKED,
+                            0,
+                            0,
+                            horizontal,
+                            initialBounds.y + initialBounds.height / 2,
+                            1,
+                            false,
+                            MouseEvent.BUTTON3,
+                        ),
+                    )
                     assertTrue("Right clicks must not toggle branches", tree.isExpanded(path))
                     repeat(2) { index ->
                         val bounds = requireNotNull(tree.getPathBounds(path))
-                        listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
-                            horizontal, bounds.y + bounds.height / 2, 1, false, MouseEvent.BUTTON1))
+                        listener.mouseClicked(
+                            MouseEvent(
+                                tree,
+                                MouseEvent.MOUSE_CLICKED,
+                                0,
+                                0,
+                                horizontal,
+                                bounds.y + bounds.height / 2,
+                                1,
+                                false,
+                                MouseEvent.BUTTON1,
+                            ),
+                        )
                         assertEquals(index == 1, tree.isExpanded(path))
                         assertEquals(path, tree.selectionPath)
                     }
@@ -191,10 +278,26 @@ class DopplerTreeStateTest {
         }
     }
 
-    private fun clickLabel(tree: JTree, listener: DopplerTreeClickListener, path: TreePath, clickCount: Int) {
+    private fun clickLabel(
+        tree: JTree,
+        listener: DopplerTreeClickListener,
+        path: TreePath,
+        clickCount: Int,
+    ) {
         val bounds = requireNotNull(tree.getPathBounds(path))
-        listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0,
-            bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, clickCount, false, MouseEvent.BUTTON1))
+        listener.mouseClicked(
+            MouseEvent(
+                tree,
+                MouseEvent.MOUSE_CLICKED,
+                0,
+                0,
+                bounds.x + bounds.width / 2,
+                bounds.y + bounds.height / 2,
+                clickCount,
+                false,
+                MouseEvent.BUTTON1,
+            ),
+        )
     }
 
     @Test
@@ -225,12 +328,25 @@ class DopplerTreeStateTest {
             val tree = JTree(model).apply { isRootVisible = false }
             tree.selectionPath = TreePath(config.path)
             var events = 0
-            model.addTreeModelListener(object : TreeModelListener {
-                override fun treeNodesChanged(event: TreeModelEvent) { events++ }
-                override fun treeNodesInserted(event: TreeModelEvent) { events++ }
-                override fun treeNodesRemoved(event: TreeModelEvent) { events++ }
-                override fun treeStructureChanged(event: TreeModelEvent) { events++ }
-            })
+            model.addTreeModelListener(
+                object : TreeModelListener {
+                    override fun treeNodesChanged(event: TreeModelEvent) {
+                        events++
+                    }
+
+                    override fun treeNodesInserted(event: TreeModelEvent) {
+                        events++
+                    }
+
+                    override fun treeNodesRemoved(event: TreeModelEvent) {
+                        events++
+                    }
+
+                    override fun treeStructureChanged(event: TreeModelEvent) {
+                        events++
+                    }
+                },
+            )
 
             assertFalse(updater.projects(projects))
             assertFalse(updater.configs(project, configs))
@@ -254,7 +370,12 @@ class DopplerTreeStateTest {
             assertTrue(updater.projects(listOf(DopplerProject("backend", "Renamed", null), DopplerProject("new", "New", null))))
             assertSame(project, root.getChildAt(0))
             assertEquals("Renamed", project.dopplerProject.name)
-            assertTrue(updater.configs(project, listOf(DopplerConfig("keep", "dev"), DopplerConfig("renamed", "dev"), DopplerConfig("stg", "stg"))))
+            assertTrue(
+                updater.configs(
+                    project,
+                    listOf(DopplerConfig("keep", "dev"), DopplerConfig("renamed", "dev"), DopplerConfig("stg", "stg")),
+                ),
+            )
             assertSame(environment, project.getChildAt(0))
             assertSame(kept, environment.getChildAt(0))
             assertEquals("renamed", (environment.getChildAt(1) as ConfigNode).config.name)
@@ -270,15 +391,20 @@ class DopplerTreeStateTest {
     fun `returning to the IDE refreshes a visible panel without changing its focus owner`() {
         SwingUtilities.invokeAndWait {
             var visible = true
-            val panel = object : JPanel() {
-                override fun isShowing() = visible
-            }
+            val panel =
+                object : JPanel() {
+                    override fun isShowing() = visible
+                }
             val window = JPanel().apply { add(panel) }
             val otherWindow = JPanel()
             val tree = JTree().also { panel.add(it) }
             var refreshes = 0
             val operations = mutableListOf<com.vk.doppler.cli.CliOperation>()
-            val listener = DopplerFocusRefreshListener(panel) { refreshes++; operations += it }
+            val listener =
+                DopplerFocusRefreshListener(panel) {
+                    refreshes++
+                    operations += it
+                }
 
             listener.propertyChange(PropertyChangeEvent(panel, "focusOwner", null, tree))
             assertEquals(1, refreshes)
@@ -290,8 +416,13 @@ class DopplerTreeStateTest {
             visible = false
             listener.propertyChange(PropertyChangeEvent(panel, "focusedWindow", otherWindow, window))
             assertEquals(2, refreshes)
-            assertEquals(listOf(com.vk.doppler.cli.CliOperation.TREE_PANEL_FOCUS,
-                com.vk.doppler.cli.CliOperation.TREE_WINDOW_FOCUS), operations)
+            assertEquals(
+                listOf(
+                    com.vk.doppler.cli.CliOperation.TREE_PANEL_FOCUS,
+                    com.vk.doppler.cli.CliOperation.TREE_WINDOW_FOCUS,
+                ),
+                operations,
+            )
         }
     }
 
@@ -400,9 +531,12 @@ class DopplerTreeStateTest {
         }
     }
 
-    private fun projectNode(): ProjectNode = ProjectNode(DopplerProject("backend", "Backend", null)).apply {
-        add(EnvironmentNode("dev").apply {
-            add(ConfigNode("backend", DopplerConfig("dev_personal", "dev")))
-        })
-    }
+    private fun projectNode(): ProjectNode =
+        ProjectNode(DopplerProject("backend", "Backend", null)).apply {
+            add(
+                EnvironmentNode("dev").apply {
+                    add(ConfigNode("backend", DopplerConfig("dev_personal", "dev")))
+                },
+            )
+        }
 }

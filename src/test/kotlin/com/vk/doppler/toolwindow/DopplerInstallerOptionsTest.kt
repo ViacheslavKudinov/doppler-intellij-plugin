@@ -125,8 +125,12 @@ class DopplerInstallerOptionsTest {
     @Test
     fun `installer cleanup rejects a normalized traversal outside the temp directory`() {
         val tempDirectory = Path.of(System.getProperty("java.io.tmpdir"))
-        val traversal = tempDirectory.resolve("nested").resolve("..").resolve("..")
-            .resolve("doppler-installer-victim.sh")
+        val traversal =
+            tempDirectory
+                .resolve("nested")
+                .resolve("..")
+                .resolve("..")
+                .resolve("doppler-installer-victim.sh")
 
         try {
             deleteInstallerTempFile(traversal)

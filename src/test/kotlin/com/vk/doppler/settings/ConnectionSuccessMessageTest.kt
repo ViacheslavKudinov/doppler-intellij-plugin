@@ -3,13 +3,22 @@ package com.vk.doppler.settings
 import com.vk.doppler.cli.DopplerAccountInfo
 import com.vk.doppler.service.DopplerStatus
 import com.vk.doppler.service.DopplerStatusReport
-import org.junit.Assert.*
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConnectionSuccessMessageTest {
     @Test
     fun `connection result shows identity slug type workplace and version`() {
-        val account = DopplerAccountInfo("fingerprint", "1e866244-6ff7-47bf-8566-48a8849e27f0", "personal", "team", "Example Team", "VK-MacBook-Air-M4-13")
+        val account =
+            DopplerAccountInfo(
+                "fingerprint",
+                "1e866244-6ff7-47bf-8566-48a8849e27f0",
+                "personal",
+                "team",
+                "Example Team",
+                "VK-MacBook-Air-M4-13",
+            )
         val text = connectionSuccessMessage(DopplerStatusReport(DopplerStatus.READY, "v1", account.authContextId, account))
         assertTrue(text.contains("Identity: VK-MacBook-Air-M4-13 (1e866244-6ff7-47bf-8566-48a8849e27f0)"))
         assertTrue(text.contains("Identity type: personal"))

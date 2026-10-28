@@ -1,35 +1,35 @@
 package com.vk.doppler.editor
 
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.command.WriteCommandAction
-import com.intellij.openapi.components.Service
-import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.AnActionResult
 import com.intellij.openapi.actionSystem.ex.AnActionListener
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
-import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.Disposable
-import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.openapi.wm.WindowManager
-import com.vk.doppler.cli.DopplerCliException
-import com.vk.doppler.cli.CliOperation
+import com.intellij.util.concurrency.AppExecutorUtil
 import com.vk.doppler.cli.CliLogContext
+import com.vk.doppler.cli.CliOperation
+import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.completion.SecretReferenceService
 import com.vk.doppler.notifications.DopplerNotifier
-import com.vk.doppler.service.DopplerService
 import com.vk.doppler.service.DopplerSecretsSnapshot
+import com.vk.doppler.service.DopplerService
 import com.vk.doppler.service.SecretChanges
 import com.vk.doppler.settings.DopplerFolderSetupState
 import com.vk.doppler.settings.DopplerSettings
@@ -44,8 +44,9 @@ private const val ACCOUNT_VALIDATION_INTERVAL_MS = 30_000L
  * Owns the in-memory secret editors for one IDE project and performs the two-way sync.
  */
 @Service(Service.Level.PROJECT)
-class DopplerSecretsEditorService(private val project: Project) : Disposable {
-
+class DopplerSecretsEditorService(
+    private val project: Project,
+) : Disposable {
     private val openPaths = ConcurrentHashMap.newKeySet<String>()
     private val closeAfterSync = mutableMapOf<DopplerSecretsFile, () -> Unit>()
     private val tabPresentation = DopplerEditorTabPresentation(project)
@@ -57,18 +58,26 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
 
     // A cheap fixed heartbeat; the configured interval is re-read on each tick so that changing
     // it in settings takes effect without rescheduling.
-    private val pollHandle: ScheduledFuture<*> = AppExecutorUtil.getAppScheduledExecutorService()
-        .scheduleWithFixedDelay(::pollOpenConfigs, HEARTBEAT_SECONDS, HEARTBEAT_SECONDS, TimeUnit.SECONDS)
+    private val pollHandle: ScheduledFuture<*> =
+        AppExecutorUtil
+            .getAppScheduledExecutorService()
+            .scheduleWithFixedDelay(::pollOpenConfigs, HEARTBEAT_SECONDS, HEARTBEAT_SECONDS, TimeUnit.SECONDS)
 
     init {
         project.messageBus.connect(this).subscribe(
             FileEditorManagerListener.FILE_EDITOR_MANAGER,
             object : FileEditorManagerListener {
-                override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
+                override fun fileOpened(
+                    source: FileEditorManager,
+                    file: VirtualFile,
+                ) {
                     tabPresentation.refresh()
                 }
 
-                override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
+                override fun fileClosed(
+                    source: FileEditorManager,
+                    file: VirtualFile,
+                ) {
                     tabPresentation.refresh()
                     if (file !is DopplerSecretsFile || source.isFileOpen(file)) return
                     openPaths.remove(file.path)
@@ -87,10 +96,15 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         ApplicationManager.getApplication().messageBus.connect(this).subscribe(
             AnActionListener.TOPIC,
             object : AnActionListener {
-                override fun afterActionPerformed(action: AnAction, event: AnActionEvent, result: AnActionResult) {
+                override fun afterActionPerformed(
+                    action: AnAction,
+                    event: AnActionEvent,
+                    result: AnActionResult,
+                ) {
                     if (ActionManager.getInstance().getId(action) != "SaveAll" || event.project !== project) return
-                    val file = FileEditorManager.getInstance(project).selectedEditor?.file as? DopplerSecretsFile
-                        ?: return
+                    val file =
+                        FileEditorManager.getInstance(project).selectedEditor?.file as? DopplerSecretsFile
+                            ?: return
                     syncPendingConfig(file)
                 }
             },
@@ -139,7 +153,13 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
 
     /** Re-reads the config from Doppler, discarding unsaved local edits. */
     fun reload(file: DopplerSecretsFile) {
-        runLoad(file.projectSlug, file.configName, "Reloading /${file.projectSlug}/${file.configName}…", file.environment, CliOperation.CONFIG_RELOAD) {
+        runLoad(
+            file.projectSlug,
+            file.configName,
+            "Reloading /${file.projectSlug}/${file.configName}…",
+            file.environment,
+            CliOperation.CONFIG_RELOAD,
+        ) {
             DopplerNotifier.info(project, "Reloaded /${file.projectSlug}/${file.configName} from Doppler.")
         }
     }
@@ -153,52 +173,64 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         treeAuthContextId: String? = null,
         onReady: (DopplerSecretsFile) -> Unit,
     ) {
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, title, true) {
-            private lateinit var snapshot: DopplerSecretsSnapshot
-            private lateinit var text: String
+        ProgressManager.getInstance().run(
+            object : Task.Backgroundable(project, title, true) {
+                private lateinit var snapshot: DopplerSecretsSnapshot
+                private lateinit var text: String
 
-            override fun run(indicator: ProgressIndicator) {
-                indicator.isIndeterminate = true
-                indicator.text = "Loading Doppler secrets for /$projectSlug/$configName…"
-                indicator.text2 = "Waiting for the Doppler CLI to return secret values"
-                val service = DopplerService.getInstance()
-                snapshot = if (treeAuthContextId != null) {
-                    service.loadSecretsAfterTreeValidation(
-                        projectSlug,
-                        configName,
-                        treeAuthContextId,
-                        operation,
-                        environment,
+                override fun run(indicator: ProgressIndicator) {
+                    indicator.isIndeterminate = true
+                    indicator.text = "Loading Doppler secrets for /$projectSlug/$configName…"
+                    indicator.text2 = "Waiting for the Doppler CLI to return secret values"
+                    val service = DopplerService.getInstance()
+                    snapshot =
+                        if (treeAuthContextId != null) {
+                            service.loadSecretsAfterTreeValidation(
+                                projectSlug,
+                                configName,
+                                treeAuthContextId,
+                                operation,
+                                environment,
+                            )
+                        } else {
+                            service.loadSecrets(projectSlug, configName, environment = environment, operation = operation)
+                        }
+                    text = SecretsDocumentFormat.serialize(snapshot.secrets)
+                }
+
+                override fun onSuccess() {
+                    invalidateCachedFiles(snapshot.authContextId)
+                    val file = DopplerFileSystem.getInstance().obtain(projectSlug, configName, snapshot.authContextId)
+                    if (file.pushInProgress.get()) {
+                        DopplerNotifier.error(project, "Wait for the current sync before reloading /$projectSlug/$configName.")
+                        return
+                    }
+                    onReady(
+                        materialize(
+                            projectSlug,
+                            configName,
+                            snapshot.authContextId,
+                            text,
+                            snapshot.secrets.associate { it.name to it.raw },
+                        ),
                     )
-                } else {
-                    service.loadSecrets(projectSlug, configName, environment = environment, operation = operation)
                 }
-                text = SecretsDocumentFormat.serialize(snapshot.secrets)
-            }
 
-            override fun onSuccess() {
-                invalidateCachedFiles(snapshot.authContextId)
-                val file = DopplerFileSystem.getInstance().obtain(projectSlug, configName, snapshot.authContextId)
-                if (file.pushInProgress.get()) {
-                    DopplerNotifier.error(project, "Wait for the current sync before reloading /$projectSlug/$configName.")
-                    return
+                override fun onThrowable(error: Throwable) {
+                    if (error is DopplerCliException && error.kind in
+                        setOf(
+                            DopplerCliException.Kind.NOT_AUTHENTICATED,
+                            DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
+                        )
+                    ) {
+                        invalidateCachedFiles(null)
+                    } else {
+                        invalidateConfig(projectSlug, configName)
+                    }
+                    DopplerNotifier.error(project, "Could not load /$projectSlug/$configName: ${error.message}")
                 }
-                onReady(materialize(projectSlug, configName, snapshot.authContextId, text, snapshot.secrets.associate { it.name to it.raw }))
-            }
-
-            override fun onThrowable(error: Throwable) {
-                if (error is DopplerCliException && error.kind in setOf(
-                        DopplerCliException.Kind.NOT_AUTHENTICATED,
-                        DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
-                    )
-                ) {
-                    invalidateCachedFiles(null)
-                } else {
-                    invalidateConfig(projectSlug, configName)
-                }
-                DopplerNotifier.error(project, "Could not load /$projectSlug/$configName: ${error.message}")
-            }
-        })
+            },
+        )
     }
 
     private fun materialize(
@@ -215,12 +247,17 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
 
     /** Keeps `${...}` completion in step with what the config actually contains on the server. */
     private fun publishSecretNames(file: DopplerSecretsFile) {
-        SecretReferenceService.getInstance()
+        SecretReferenceService
+            .getInstance()
             .update(file.authContextId, file.projectSlug, file.configName, file.remoteSnapshot.keys)
     }
 
     /** Replaces both the file and its open document with server state, without pushing back. */
-    private fun applyServerContent(file: DopplerSecretsFile, text: String, snapshot: Map<String, String?>) {
+    private fun applyServerContent(
+        file: DopplerSecretsFile,
+        text: String,
+        snapshot: Map<String, String?>,
+    ) {
         if (file.isInvalidated) return
         file.suppressPush = true
         try {
@@ -253,8 +290,12 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         validateAccount: () -> String = {
             DopplerService.getInstance().currentAuthContextId(
                 operation = CliOperation.ACCOUNT_VALIDATION,
-                relatedConfigs = DopplerFileSystem.getInstance().cachedFiles().filter(::owns)
-                    .map { CliLogContext(it.projectSlug, it.configName, it.environment) },
+                relatedConfigs =
+                    DopplerFileSystem
+                        .getInstance()
+                        .cachedFiles()
+                        .filter(::owns)
+                        .map { CliLogContext(it.projectSlug, it.configName, it.environment) },
             )
         },
     ) {
@@ -275,7 +316,10 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         }
 
         if (openPaths.isEmpty() ||
-            (!accountValidationRequired && now - lastAccountValidationAt < ACCOUNT_VALIDATION_INTERVAL_MS)) return
+            (!accountValidationRequired && now - lastAccountValidationAt < ACCOUNT_VALIDATION_INTERVAL_MS)
+        ) {
+            return
+        }
         lastAccountValidationAt = now
         try {
             invalidateCachedFiles(validateAccount())
@@ -286,18 +330,28 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         }
     }
 
-    private fun focusedRefreshFiles(): List<DopplerSecretsFile> = autoRefreshFiles(
-        WindowManager.getInstance().getFrame(project)?.isActive == true,
-        FileEditorManager.getInstance(project).selectedFiles,
-    )
+    private fun focusedRefreshFiles(): List<DopplerSecretsFile> =
+        autoRefreshFiles(
+            WindowManager.getInstance().getFrame(project)?.isActive == true,
+            FileEditorManager.getInstance(project).selectedFiles,
+        )
 
-    internal fun autoRefreshFiles(windowActive: Boolean, selectedFiles: Array<VirtualFile>): List<DopplerSecretsFile> =
-        if (!windowActive) emptyList()
-        else selectedFiles.filterIsInstance<DopplerSecretsFile>().filter(::canAutoRefresh)
+    internal fun autoRefreshFiles(
+        windowActive: Boolean,
+        selectedFiles: Array<VirtualFile>,
+    ): List<DopplerSecretsFile> =
+        if (!windowActive) {
+            emptyList()
+        } else {
+            selectedFiles.filterIsInstance<DopplerSecretsFile>().filter(::canAutoRefresh)
+        }
 
     internal fun canAutoRefresh(file: DopplerSecretsFile): Boolean {
         if (file.isInvalidated || file.pushInProgress.get() || file.hasPendingSync ||
-            file.pendingPushText.get() != null) return false
+            file.pendingPushText.get() != null
+        ) {
+            return false
+        }
         val document = FileDocumentManager.getInstance().getCachedDocument(file) ?: return true
         // The IDE's unsaved flag can remain set after undo restores the server content.
         return document.text == SecretsDocumentFormat.serialize(file.remoteSnapshot)
@@ -305,27 +359,30 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
 
     internal fun refreshFromServer(file: DopplerSecretsFile): Boolean {
         val snapshotBeforeFetch = file.remoteSnapshot
-        val loaded = try {
-            DopplerService.getInstance().loadSecrets(
-                file.projectSlug,
-                file.configName,
-                expectedAuthContextId = file.authContextId,
-                operation = CliOperation.AUTO_REFRESH,
-                environment = file.environment,
-            )
-        } catch (e: Exception) {
-            // Never keep a readable snapshot when its access cannot be revalidated.
-            thisLogger().debug("Doppler auto-refresh failed for ${file.path}", e)
-            if (e is DopplerCliException && e.kind in setOf(
-                    DopplerCliException.Kind.NOT_AUTHENTICATED,
-                    DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
-                )) {
-                invalidateCachedFiles(null)
-            } else {
-                invalidateCachedFile(file)
+        val loaded =
+            try {
+                DopplerService.getInstance().loadSecrets(
+                    file.projectSlug,
+                    file.configName,
+                    expectedAuthContextId = file.authContextId,
+                    operation = CliOperation.AUTO_REFRESH,
+                    environment = file.environment,
+                )
+            } catch (e: Exception) {
+                // Never keep a readable snapshot when its access cannot be revalidated.
+                thisLogger().debug("Doppler auto-refresh failed for ${file.path}", e)
+                if (e is DopplerCliException && e.kind in
+                    setOf(
+                        DopplerCliException.Kind.NOT_AUTHENTICATED,
+                        DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
+                    )
+                ) {
+                    invalidateCachedFiles(null)
+                } else {
+                    invalidateCachedFile(file)
+                }
+                return false
             }
-            return false
-        }
 
         // loadSecrets validates the account before and after reading; no separate preflight is needed.
         invalidateCachedFiles(loaded.authContextId)
@@ -341,7 +398,10 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         return true
     }
 
-    internal fun saveBeforeClose(file: DopplerSecretsFile, onSaved: () -> Unit): Boolean {
+    internal fun saveBeforeClose(
+        file: DopplerSecretsFile,
+        onSaved: () -> Unit,
+    ): Boolean {
         val documents = FileDocumentManager.getInstance()
         val document = documents.getCachedDocument(file) ?: return false
         closeAfterSync[file] = onSaved
@@ -370,7 +430,10 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
     }
 
     /** Pushes a saved document to Doppler as a minimal set of writes. */
-    fun push(file: DopplerSecretsFile, text: String) {
+    fun push(
+        file: DopplerSecretsFile,
+        text: String,
+    ) {
         if (file.isInvalidated) return
         file.hasPendingSync = true
         if (file.pushInProgress.get()) {
@@ -378,12 +441,13 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             return
         }
 
-        val edited = try {
-            SecretsDocumentFormat.parse(text)
-        } catch (e: SecretsFormatException) {
-            DopplerNotifier.error(project, "Not saved to Doppler - ${e.message}")
-            return
-        }
+        val edited =
+            try {
+                SecretsDocumentFormat.parse(text)
+            } catch (e: SecretsFormatException) {
+                DopplerNotifier.error(project, "Not saved to Doppler - ${e.message}")
+                return
+            }
 
         if (SecretChanges.unvaluedAdditions(file.remoteSnapshot, edited).isNotEmpty()) {
             DopplerNotifier.error(
@@ -417,8 +481,12 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
         changes: SecretChanges,
         applyChanges: () -> Unit = {
             DopplerService.getInstance().applyChanges(
-                file.authContextId, file.projectSlug, file.configName,
-                originalSnapshot, changes, environment = file.environment,
+                file.authContextId,
+                file.projectSlug,
+                file.configName,
+                originalSnapshot,
+                changes,
+                environment = file.environment,
                 onSnapshotAdvanced = { file.remoteSnapshot = it },
             )
         },
@@ -439,10 +507,15 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
                 if (file.isInvalidated) return
                 syncSucceeded = true
                 val latestDocument = FileDocumentManager.getInstance().getCachedDocument(file)
-                val hasNewerEdits = file.pendingPushText.get() != null ||
-                    (latestDocument != null &&
-                        (latestDocument.text != text ||
-                            FileDocumentManager.getInstance().isDocumentUnsaved(latestDocument)))
+                val hasNewerEdits =
+                    file.pendingPushText.get() != null ||
+                        (
+                            latestDocument != null &&
+                                (
+                                    latestDocument.text != text ||
+                                        FileDocumentManager.getInstance().isDocumentUnsaved(latestDocument)
+                                )
+                        )
                 file.hasPendingSync = hasNewerEdits
                 refreshedText?.let {
                     val snapshot = requireNotNull(refreshedSnapshot)
@@ -460,7 +533,8 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
                 closeAfterSync.remove(file)
                 // Keep only confirmed local writes in the baseline; never rebase onto unverified remote changes.
                 file.hasPendingSync = true
-                if (error is DopplerCliException && error.kind in setOf(
+                if (error is DopplerCliException && error.kind in
+                    setOf(
                         DopplerCliException.Kind.NOT_AUTHENTICATED,
                         DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
                     )
@@ -501,7 +575,10 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             invalidateFiles { it === file }
         }
 
-        private fun invalidateConfig(projectSlug: String, configName: String) {
+        private fun invalidateConfig(
+            projectSlug: String,
+            configName: String,
+        ) {
             invalidateFiles { it.projectSlug == projectSlug && it.configName == configName }
         }
 
@@ -510,40 +587,45 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
             val staleFiles = fileSystem.cachedFiles().filter(shouldInvalidate)
             if (staleFiles.isEmpty()) return
             val application = ApplicationManager.getApplication()
-            val invalidate = Runnable {
-                for (file in staleFiles) {
-                    file.suppressPush = true
-                    try {
-                        val documents = FileDocumentManager.getInstance()
-                        val document = documents.getCachedDocument(file)
-                        val owner = ProjectManager.getInstance().openProjects
-                            .firstOrNull { !it.isDisposed && FileEditorManager.getInstance(it).isFileOpen(file) }
-                        if (document != null) {
-                            val clearDocument = {
-                                document.setText(DopplerSecretsFile.EMPTY_DOCUMENT)
-                                documents.saveDocument(document)
-                            }
-                            if (owner != null) {
-                                WriteCommandAction.runWriteCommandAction(owner, "Clear Doppler secrets", null, clearDocument)
-                            } else {
-                                application.runWriteAction(clearDocument)
-                            }
-                        }
-                        for (openProject in ProjectManager.getInstance().openProjects) {
-                            openProject.getServiceIfCreated(DopplerSecretsEditorService::class.java)
-                                ?.let { service ->
-                                    service.openPaths.remove(file.path)
-                                    service.closeAfterSync.remove(file)
+            val invalidate =
+                Runnable {
+                    for (file in staleFiles) {
+                        file.suppressPush = true
+                        try {
+                            val documents = FileDocumentManager.getInstance()
+                            val document = documents.getCachedDocument(file)
+                            val owner =
+                                ProjectManager
+                                    .getInstance()
+                                    .openProjects
+                                    .firstOrNull { !it.isDisposed && FileEditorManager.getInstance(it).isFileOpen(file) }
+                            if (document != null) {
+                                val clearDocument = {
+                                    document.setText(DopplerSecretsFile.EMPTY_DOCUMENT)
+                                    documents.saveDocument(document)
                                 }
-                            FileEditorManager.getInstance(openProject).closeFile(file)
+                                if (owner != null) {
+                                    WriteCommandAction.runWriteCommandAction(owner, "Clear Doppler secrets", null, clearDocument)
+                                } else {
+                                    application.runWriteAction(clearDocument)
+                                }
+                            }
+                            for (openProject in ProjectManager.getInstance().openProjects) {
+                                openProject
+                                    .getServiceIfCreated(DopplerSecretsEditorService::class.java)
+                                    ?.let { service ->
+                                        service.openPaths.remove(file.path)
+                                        service.closeAfterSync.remove(file)
+                                    }
+                                FileEditorManager.getInstance(openProject).closeFile(file)
+                            }
+                            file.scrub()
+                            fileSystem.forget(file)
+                        } finally {
+                            file.suppressPush = false
                         }
-                        file.scrub()
-                        fileSystem.forget(file)
-                    } finally {
-                        file.suppressPush = false
                     }
                 }
-            }
             if (application.isDispatchThread) {
                 invalidate.run()
             } else {
@@ -553,14 +635,14 @@ class DopplerSecretsEditorService(private val project: Project) : Disposable {
 
         /** Locates the project whose tool window opened [file], so cached files remain shared safely. */
         fun findOwner(file: DopplerSecretsFile): DopplerSecretsEditorService? =
-            ProjectManager.getInstance().openProjects
+            ProjectManager
+                .getInstance()
+                .openProjects
                 .asSequence()
                 .filterNot { it.isDisposed }
                 .mapNotNull { it.getServiceIfCreated(DopplerSecretsEditorService::class.java) }
                 .firstOrNull { it.owns(file) }
 
-        fun getInstance(project: Project): DopplerSecretsEditorService =
-            project.getService(DopplerSecretsEditorService::class.java)
-
+        fun getInstance(project: Project): DopplerSecretsEditorService = project.getService(DopplerSecretsEditorService::class.java)
     }
 }

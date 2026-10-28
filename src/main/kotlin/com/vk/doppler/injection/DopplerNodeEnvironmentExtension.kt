@@ -13,11 +13,12 @@ class DopplerNodeEnvironmentExtension : AbstractNodeRunConfigurationExtension() 
     override fun createLaunchSession(
         configuration: AbstractNodeTargetRunProfile,
         environment: ExecutionEnvironment,
-    ): NodeRunConfigurationLaunchSession = object : NodeRunConfigurationLaunchSession() {
-        override fun addNodeOptionsTo(targetRun: NodeTargetRun) {
-            if (configuration.project.isDisposed) return
-            val merged = DopplerInjectionService.getInstance(configuration.project).mergeEnvironment(targetRun.envData.envs)
-            targetRun.envData = targetRun.envData.with(merged)
+    ): NodeRunConfigurationLaunchSession =
+        object : NodeRunConfigurationLaunchSession() {
+            override fun addNodeOptionsTo(targetRun: NodeTargetRun) {
+                if (configuration.project.isDisposed) return
+                val merged = DopplerInjectionService.getInstance(configuration.project).mergeEnvironment(targetRun.envData.envs)
+                targetRun.envData = targetRun.envData.with(merged)
+            }
         }
-    }
 }

@@ -18,12 +18,18 @@ class ParseFolderSetupTest {
 
     @Test
     fun `prefixed values take precedence including empty overrides`() {
-        assertEquals(DopplerFolderSetup("backend", "dev"), parse(
-            """{"enclave.project":"backend","enclave.config":"dev","project":"other","config":"prod"}""",
-        ))
-        assertEquals(DopplerFolderSetup(), parse(
-            """{"enclave.project":"","enclave.config":" ","project":"other","config":"prod"}""",
-        ))
+        assertEquals(
+            DopplerFolderSetup("backend", "dev"),
+            parse(
+                """{"enclave.project":"backend","enclave.config":"dev","project":"other","config":"prod"}""",
+            ),
+        )
+        assertEquals(
+            DopplerFolderSetup(),
+            parse(
+                """{"enclave.project":"","enclave.config":" ","project":"other","config":"prod"}""",
+            ),
+        )
     }
 
     @Test
@@ -44,9 +50,12 @@ class ParseFolderSetupTest {
 
     @Test
     fun `ignores unrelated response fields`() {
-        assertEquals(DopplerFolderSetup("backend", "dev"), parse(
-            """{"project":"backend","config":"dev","unrelated":{"nested":true}}""",
-        ))
+        assertEquals(
+            DopplerFolderSetup("backend", "dev"),
+            parse(
+                """{"project":"backend","config":"dev","unrelated":{"nested":true}}""",
+            ),
+        )
     }
 
     @Test

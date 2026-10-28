@@ -15,7 +15,9 @@ class DopplerJavaEnvironmentExtension : RunConfigurationExtension() {
         runnerSettings: RunnerSettings?,
     ) {
         if (configuration.project.isDisposed) return
-        javaParameters.env = DopplerInjectionService.getInstance(configuration.project)
-            .mergeEnvironment(javaParameters.env.orEmpty())
+        javaParameters.env =
+            DopplerInjectionService
+                .getInstance(configuration.project)
+                .mergeEnvironment(javaParameters.env.orEmpty())
     }
 }

@@ -4,7 +4,7 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import javax.swing.JPanel
 
 class SecretReferenceEditorFocusTest : BasePlatformTestCase() {
-    fun `test completion requires both active IDE window and focused editor`() {
+    fun testCompletionRequiresBothActiveIdeWindowAndFocusedEditor() {
         myFixture.configureByText("references.txt", "VALUE: \${<caret>")
         val editor = myFixture.editor
         assertTrue(SecretReferenceEditorFocus.isActive(editor, editor.contentComponent, true))

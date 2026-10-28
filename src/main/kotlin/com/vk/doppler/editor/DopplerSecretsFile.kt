@@ -24,7 +24,6 @@ class DopplerSecretsFile(
     val configName: String,
     val authContextId: String,
 ) : VirtualFile() {
-
     @Volatile
     var environment: String? = null
 
@@ -94,11 +93,19 @@ class DopplerSecretsFile(
 
     override fun getCharset(): Charset = StandardCharsets.UTF_8
 
-    override fun refresh(asynchronous: Boolean, recursive: Boolean, postRunnable: Runnable?) {
+    override fun refresh(
+        asynchronous: Boolean,
+        recursive: Boolean,
+        postRunnable: Runnable?,
+    ) {
         postRunnable?.run()
     }
 
-    override fun getOutputStream(requestor: Any?, newModificationStamp: Long, newTimeStamp: Long): OutputStream =
+    override fun getOutputStream(
+        requestor: Any?,
+        newModificationStamp: Long,
+        newTimeStamp: Long,
+    ): OutputStream =
         object : ByteArrayOutputStream() {
             override fun close() {
                 super.close()
@@ -112,7 +119,10 @@ class DopplerSecretsFile(
         }
 
     /** Replaces the content with server state without triggering a push back. */
-    fun setServerContent(text: String, snapshot: Map<String, String?>) {
+    fun setServerContent(
+        text: String,
+        snapshot: Map<String, String?>,
+    ) {
         isInvalidated = false
         remoteSnapshot = snapshot
         hasPendingSync = false
@@ -128,7 +138,11 @@ class DopplerSecretsFile(
         applyContent(EMPTY_DOCUMENT.toByteArray(StandardCharsets.UTF_8), newModificationStamp = -1, newTimeStamp = -1)
     }
 
-    private fun applyContent(bytes: ByteArray, newModificationStamp: Long, newTimeStamp: Long) {
+    private fun applyContent(
+        bytes: ByteArray,
+        newModificationStamp: Long,
+        newTimeStamp: Long,
+    ) {
         content = bytes
         modificationStamp = if (newModificationStamp >= 0) newModificationStamp else modificationStamp + 1
         timeStamp = if (newTimeStamp > 0) newTimeStamp else System.currentTimeMillis()
@@ -141,10 +155,13 @@ class DopplerSecretsFile(
         fun fileName(configName: String): String = "$configName.yaml"
 
         /** Encodes each identity component so names cannot change path boundaries or collide in the cache. */
-        fun pathFor(projectSlug: String, configName: String, authContextId: String): String =
+        fun pathFor(
+            projectSlug: String,
+            configName: String,
+            authContextId: String,
+        ): String =
             "/${encodePathComponent(projectSlug)}/${encodePathComponent(authContextId)}/${fileName(encodePathComponent(configName))}"
 
-        private fun encodePathComponent(value: String): String =
-            URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
+        private fun encodePathComponent(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
     }
 }

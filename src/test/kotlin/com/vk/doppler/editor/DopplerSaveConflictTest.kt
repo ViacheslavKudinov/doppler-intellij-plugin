@@ -1,12 +1,70 @@
 package com.vk.doppler.editor
 
+import com.intellij.notification.Notification
+import com.intellij.notification.NotificationType
+import com.intellij.notification.Notifications
 import com.intellij.openapi.progress.EmptyProgressIndicator
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.util.ui.UIUtil
 import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.service.SecretChanges
 import com.vk.doppler.service.applyChangesWithOptimisticLock
 
 class DopplerSaveConflictTest : BasePlatformTestCase() {
+    fun testFailureNotificationsNeverIncludeExceptionMessagesOrCauses() {
+        val notifications = mutableListOf<Notification>()
+        project.messageBus.connect(testRootDisposable).subscribe(
+            Notifications.TOPIC,
+            object : Notifications {
+                override fun notify(notification: Notification) {
+                    if (notification.groupId == "Doppler") notifications.add(notification)
+                }
+            },
+        )
+        val marker = "synthetic-sensitive-error-detail"
+        val recoveryMessages =
+            mapOf(
+                DopplerCliException.Kind.CLI_NOT_FOUND to "Check the Doppler CLI path in Settings.",
+                DopplerCliException.Kind.NOT_AUTHENTICATED to "Log in with the Doppler CLI, then try again.",
+                DopplerCliException.Kind.AUTH_CONTEXT_CHANGED to
+                    "The Doppler account changed. Reopen this config under the current account.",
+                DopplerCliException.Kind.REMOTE_CHANGED to
+                    "This config changed in Doppler. Your edits were kept. Reload and reconcile before saving again.",
+                DopplerCliException.Kind.GENERIC to "Check the Doppler CLI and try again.",
+            )
+        val failures =
+            recoveryMessages.map { (kind, message) ->
+                DopplerCliException(marker, kind, IllegalStateException(marker)) to message
+            } + (IllegalStateException(marker, IllegalArgumentException(marker)) to "Check the Doppler CLI and try again.")
+
+        for ((index, failure) in failures.withIndex()) {
+            val baseline = mapOf("A" to "old")
+            val edited = "A: mine"
+            val config = "sanitized-failure-$index"
+            val file = DopplerFileSystem.getInstance().obtain("conflict", config, "test-context")
+            file.setServerContent(edited, baseline)
+            myFixture.configureFromExistingVirtualFile(file)
+            val service = own(file)
+            file.hasPendingSync = true
+            file.pushInProgress.set(true)
+            val changes = SecretChanges.between(baseline, SecretsDocumentFormat.parse(edited))
+            val task = service.createPushTask(file, edited, baseline, changes) {}
+            val previousCount = notifications.size
+
+            task.onThrowable(failure.first)
+            UIUtil.dispatchAllInvocationEvents()
+
+            assertEquals(previousCount + 1, notifications.size)
+            val notification = notifications.last()
+            assertEquals(NotificationType.ERROR, notification.type)
+            assertEquals("Failed to sync /conflict/$config. ${failure.second}", notification.content)
+            assertFalse(notification.title.contains(marker))
+            assertFalse(notification.content.contains(marker))
+            task.onFinished()
+            notification.expire()
+        }
+    }
+
     // Model a config opened by the tool window, without invoking the real Doppler CLI.
     private fun own(file: DopplerSecretsFile): DopplerSecretsEditorService {
         val service = DopplerSecretsEditorService.getInstance(project)

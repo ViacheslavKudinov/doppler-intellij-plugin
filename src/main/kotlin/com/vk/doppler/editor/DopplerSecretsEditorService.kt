@@ -227,7 +227,7 @@ class DopplerSecretsEditorService(
                     } else {
                         invalidateConfig(projectSlug, configName)
                     }
-                    DopplerNotifier.error(project, "Could not load /$projectSlug/$configName: ${error.message}")
+                    DopplerNotifier.error(project, "Could not load /$projectSlug/$configName. ${failureRecoveryMessage(error)}")
                 }
             },
         )
@@ -541,7 +541,7 @@ class DopplerSecretsEditorService(
                 ) {
                     invalidateCachedFiles(null)
                 }
-                DopplerNotifier.error(project, "Failed to sync $label: ${error.message}")
+                DopplerNotifier.error(project, "Failed to sync $label. ${failureRecoveryMessage(error)}")
             }
 
             override fun onFinished() {
@@ -557,6 +557,29 @@ class DopplerSecretsEditorService(
             }
         }
     }
+
+    private fun failureRecoveryMessage(error: Throwable): String =
+        when ((error as? DopplerCliException)?.kind) {
+            DopplerCliException.Kind.CLI_NOT_FOUND -> {
+                "Check the Doppler CLI path in Settings."
+            }
+
+            DopplerCliException.Kind.NOT_AUTHENTICATED -> {
+                "Log in with the Doppler CLI, then try again."
+            }
+
+            DopplerCliException.Kind.AUTH_CONTEXT_CHANGED -> {
+                "The Doppler account changed. Reopen this config under the current account."
+            }
+
+            DopplerCliException.Kind.REMOTE_CHANGED -> {
+                "This config changed in Doppler. Your edits were kept. Reload and reconcile before saving again."
+            }
+
+            DopplerCliException.Kind.GENERIC, null -> {
+                "Check the Doppler CLI and try again."
+            }
+        }
 
     private fun syncPendingConfig(file: DopplerSecretsFile) {
         if (!owns(file)) return

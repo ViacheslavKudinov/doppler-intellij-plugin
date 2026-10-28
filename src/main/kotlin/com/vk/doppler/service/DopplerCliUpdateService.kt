@@ -53,31 +53,37 @@ internal class DopplerCliUpdateService {
                 override fun onSuccess() {
                     if (project?.isDisposed == true) return
                     val update = result
-                    if (update == null) {
-                        if (!automatic) {
-                            Messages.showErrorDialog(
-                                "Could not check for Doppler CLI updates. Check the CLI path and network connection.",
-                                "Doppler",
-                            )
-                        }
-                    } else if (update.available) {
-                        val notification =
-                            NotificationGroupManager
-                                .getInstance()
-                                .getNotificationGroup("Doppler")
-                                .createNotification(
-                                    "Doppler CLI update available",
-                                    "Installed: ${update.current}. Latest: ${update.latest}.",
-                                    NotificationType.INFORMATION,
+                    when {
+                        update == null -> {
+                            if (!automatic) {
+                                Messages.showErrorDialog(
+                                    "Could not check for Doppler CLI updates. Check the CLI path and network connection.",
+                                    "Doppler",
                                 )
-                        notification.addAction(
-                            NotificationAction.createSimpleExpiring("Update CLI") {
-                                confirmUpdate(project, requireNotNull(executable), update)
-                            },
-                        )
-                        if (automatic) notification.notify(project) else confirmUpdate(project, requireNotNull(executable), update)
-                    } else if (!automatic) {
-                        Messages.showInfoMessage("Doppler CLI ${update.current} is up to date.", "Doppler")
+                            }
+                        }
+
+                        update.available -> {
+                            val notification =
+                                NotificationGroupManager
+                                    .getInstance()
+                                    .getNotificationGroup("Doppler")
+                                    .createNotification(
+                                        "Doppler CLI update available",
+                                        "Installed: ${update.current}. Latest: ${update.latest}.",
+                                        NotificationType.INFORMATION,
+                                    )
+                            notification.addAction(
+                                NotificationAction.createSimpleExpiring("Update CLI") {
+                                    confirmUpdate(project, requireNotNull(executable), update)
+                                },
+                            )
+                            if (automatic) notification.notify(project) else confirmUpdate(project, requireNotNull(executable), update)
+                        }
+
+                        !automatic -> {
+                            Messages.showInfoMessage("Doppler CLI ${update.current} is up to date.", "Doppler")
+                        }
                     }
                 }
 

@@ -16,9 +16,9 @@ buildscript {
     }
     dependencies {
         // Patch CycloneDX's transitive Jackson dependencies on the build classpath.
-        classpath(platform("com.fasterxml.jackson:jackson-bom:${providers.gradleProperty("jacksonVersion").get()}"))
+        classpath(platform(libs.jackson.bom))
         constraints {
-            classpath("com.google.guava:guava:33.7.2-jre") {
+            classpath(libs.guava.get()) {
                 because("Fix GHSA-xxph-c9ww-hj94 in CycloneDX's transitive build dependency")
             }
         }
@@ -26,9 +26,9 @@ buildscript {
 }
 
 plugins {
-    id("org.jetbrains.kotlin.jvm")
+    alias(libs.plugins.kotlin)
     id("jacoco")
-    id("org.jetbrains.changelog")
+    alias(libs.plugins.changelog)
     id("org.jetbrains.intellij.platform")
     alias(libs.plugins.cyclonedx)
     alias(libs.plugins.ktlint)
@@ -53,10 +53,18 @@ kotlin {
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
     testImplementation(libs.junit)
+    constraints {
+        add("ktlint", libs.logback.classic.get()) {
+            because("Keep ktlint's Logback modules aligned with the patched logback-core version")
+        }
+        add("ktlint", libs.logback.core.get()) {
+            because("Fix object injection through HardenedObjectInputStream in ktlint's transitive dependency")
+        }
+    }
     // Patch the IDE test framework without bundling Jackson in the plugin.
     add(
         "intellijPlatformTestDependencies",
-        platform("com.fasterxml.jackson:jackson-bom:${providers.gradleProperty("jacksonVersion").get()}"),
+        platform(libs.jackson.bom),
     )
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html

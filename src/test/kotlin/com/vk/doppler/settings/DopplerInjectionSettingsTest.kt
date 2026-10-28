@@ -458,6 +458,84 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
+    fun testMappingTableSuppressesGlobalNewWhenNoSecretsRemain() {
+        val settings = DopplerInjectionSettings.getInstance(project)
+        val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
+        settings.nameTransformer = DopplerNameTransformer.CUSTOM
+        settings.customMappings = listOf(SecretNameMapping("ONLY_SECRET", "RENAMED"))
+        val page = DopplerInjectionConfigurable(project)
+        try {
+            val panel = page.createPanel()
+            panel.reset()
+            val table = UIUtil.findComponentOfType(panel, JTable::class.java)!!
+            val model = table.model as DefaultTableModel
+            val toolbar = UIUtil.findComponentOfType(panel, com.intellij.ui.CommonActionsPanel::class.java)!!
+            val add = toolbar.getAnAction(com.intellij.ui.CommonActionsPanel.Buttons.ADD)!!
+            val event =
+                com.intellij.testFramework.TestActionEvent
+                    .createTestEvent(add)
+            val snapshot = mutableMapOf<com.intellij.openapi.actionSystem.DataKey<*>, Any?>()
+            val sink =
+                java.lang.reflect.Proxy.newProxyInstance(
+                    com.intellij.openapi.actionSystem.DataSink::class.java.classLoader,
+                    arrayOf(com.intellij.openapi.actionSystem.DataSink::class.java),
+                ) { proxy, method, arguments ->
+                    when (method.name) {
+                        "set" -> {
+                            snapshot[arguments[0] as com.intellij.openapi.actionSystem.DataKey<*>] = arguments[1]
+                        }
+
+                        "uiDataSnapshot" -> {
+                            (arguments[0] as com.intellij.openapi.actionSystem.UiDataProvider)
+                                .uiDataSnapshot(proxy as com.intellij.openapi.actionSystem.DataSink)
+                        }
+                    }
+                    null
+                } as com.intellij.openapi.actionSystem.DataSink
+            generateSequence(table as Component) { it.parent }
+                .filterIsInstance<com.intellij.openapi.actionSystem.UiDataProvider>()
+                .first()
+                .uiDataSnapshot(sink)
+            val shortcut =
+                com.intellij.openapi.actionSystem.ex.ActionUtil
+                    .getActions(panel)
+                    .single()
+            val shortcutEvent =
+                com.intellij.testFramework.TestActionEvent
+                    .createTestEvent(shortcut)
+
+            page.updateKnownNames(setOf("ONLY_SECRET"))
+            assertEquals(true, snapshot[com.intellij.openapi.actionSystem.LangDataKeys.NO_NEW_ACTION])
+            shortcut.update(shortcutEvent)
+            assertTrue("The local shortcut must consume New even when Add is disabled", shortcutEvent.presentation.isEnabled)
+            shortcut.actionPerformed(shortcutEvent)
+            add.actionPerformed(event)
+            assertEquals("The add shortcut must not add rows when every secret is mapped", 1, model.rowCount)
+
+            model.rowCount = 0
+            page.updateKnownNames(emptySet())
+            shortcut.actionPerformed(shortcutEvent)
+            add.actionPerformed(event)
+            assertEquals("An empty config must not add mapping rows", 0, model.rowCount)
+
+            page.updateKnownNames(setOf("ONLY_SECRET"))
+            shortcut.actionPerformed(shortcutEvent)
+            assertEquals("The local add action must still work when a secret becomes available", 1, model.rowCount)
+            assertEquals(0, table.selectedRow)
+            assertEquals(0, table.editingRow)
+            assertEquals(0, table.editingColumn)
+            table.cellEditor?.stopCellEditing()
+
+            val transformation = UIUtil.findComponentOfType(panel, JComboBox::class.java)!!
+            transformation.selectedItem = DopplerNameTransformer.NONE
+            shortcut.update(shortcutEvent)
+            assertFalse("Other transformation modes must not intercept New", shortcutEvent.presentation.isEnabled)
+        } finally {
+            page.disposeUIResources()
+            settings.loadState(saved)
+        }
+    }
+
     fun testMappedSecretsAreExcludedFromOtherRowsAndRestoredAfterRemoval() {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())

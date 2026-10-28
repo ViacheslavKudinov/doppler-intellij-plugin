@@ -2,10 +2,16 @@ package com.vk.doppler.settings
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionToolbarPosition
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.CommonShortcuts
+import com.intellij.openapi.actionSystem.LangDataKeys
+import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogPanel
@@ -192,6 +198,19 @@ class DopplerInjectionConfigurable(
                 override fun editingCanceled(event: ChangeEvent) = refreshPendingNames()
             },
         )
+
+        fun addMapping() {
+            if (!canAddMapping()) return
+            table.cellEditor?.stopCellEditing()
+            model.addRow(arrayOf("", ""))
+            val row = model.rowCount - 1
+            table.setRowSelectionInterval(row, row)
+            table.scrollRectToVisible(table.getCellRect(row, 0, true))
+            table.requestFocusInWindow()
+            if (table.editCellAt(row, 0)) {
+                table.editorComponent?.requestFocusInWindow()
+            }
+        }
         val decorated =
             ToolbarDecorator
                 .createDecorator(table)
@@ -199,11 +218,7 @@ class DopplerInjectionConfigurable(
                 .disableUpDownActions()
                 .setAddActionUpdater { canAddMapping() }
                 .setAddAction {
-                    if (!canAddMapping()) return@setAddAction
-                    model.addRow(arrayOf("", ""))
-                    val row = model.rowCount - 1
-                    table.setRowSelectionInterval(row, row)
-                    table.editCellAt(row, 0)
+                    addMapping()
                 }.setRemoveAction {
                     table.cellEditor?.stopCellEditing()
                     table.selectedRows.sortedDescending().forEach(model::removeRow)
@@ -234,8 +249,11 @@ class DopplerInjectionConfigurable(
                 }
                 mappingRow =
                     row {
-                        cell(decorated)
-                            .align(AlignX.FILL)
+                        cell(
+                            UiDataProvider.wrapComponent(decorated) { sink ->
+                                sink[LangDataKeys.NO_NEW_ACTION] = true
+                            },
+                        ).align(AlignX.FILL)
                             .comment(
                                 "Secrets with these names are injected under the new name; others keep theirs. " +
                                     "Names in red are not in the default config: they are kept but not injected. " +
@@ -256,6 +274,17 @@ class DopplerInjectionConfigurable(
                     )
                 }
             }
+        object : DumbAwareAction() {
+            override fun getActionUpdateThread() = ActionUpdateThread.EDT
+
+            override fun update(event: AnActionEvent) {
+                event.presentation.isEnabled = transformerBox?.selectedItem == DopplerNameTransformer.CUSTOM
+            }
+
+            override fun actionPerformed(event: AnActionEvent) {
+                if (transformerBox?.selectedItem == DopplerNameTransformer.CUSTOM) addMapping()
+            }
+        }.registerCustomShortcutSet(CommonShortcuts.getNewForDialogs(), dialog)
         loadKnownNames()
         return dialog
     }

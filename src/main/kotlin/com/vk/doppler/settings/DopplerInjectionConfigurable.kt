@@ -203,13 +203,7 @@ class DopplerInjectionConfigurable(
             if (!canAddMapping()) return
             table.cellEditor?.stopCellEditing()
             model.addRow(arrayOf("", ""))
-            val row = model.rowCount - 1
-            table.setRowSelectionInterval(row, row)
-            table.scrollRectToVisible(table.getCellRect(row, 0, true))
-            table.requestFocusInWindow()
-            if (table.editCellAt(row, 0)) {
-                table.editorComponent?.requestFocusInWindow()
-            }
+            editMappingRow(table, model.rowCount - 1)
         }
         val decorated =
             ToolbarDecorator
@@ -287,6 +281,18 @@ class DopplerInjectionConfigurable(
         }.registerCustomShortcutSet(CommonShortcuts.getNewForDialogs(), dialog)
         loadKnownNames()
         return dialog
+    }
+
+    private fun editMappingRow(
+        table: JTable,
+        row: Int,
+    ) {
+        table.setRowSelectionInterval(row, row)
+        table.scrollRectToVisible(table.getCellRect(row, 0, true))
+        table.requestFocusInWindow()
+        if (table.editCellAt(row, 0)) {
+            table.editorComponent?.requestFocusInWindow()
+        }
     }
 
     override fun apply() {

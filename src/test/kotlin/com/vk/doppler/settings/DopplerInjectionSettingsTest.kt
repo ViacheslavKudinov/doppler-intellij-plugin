@@ -404,16 +404,31 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun testAddActionCountsEmptyRowsTowardTheFetchedSecretLimit() {
+    private fun withCustomMappingPanel(
+        mappings: List<SecretNameMapping> = emptyList(),
+        test: (DopplerInjectionConfigurable, com.intellij.openapi.ui.DialogPanel, JTable) -> Unit,
+    ) {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
-        settings.customMappings = emptyList()
+        settings.customMappings = mappings
         val page = DopplerInjectionConfigurable(project)
         try {
             val panel = page.createPanel()
             panel.reset()
             val table = UIUtil.findComponentOfType(panel, JTable::class.java)!!
+            test(page, panel, table)
+        } finally {
+            try {
+                page.disposeUIResources()
+            } finally {
+                settings.loadState(saved)
+            }
+        }
+    }
+
+    fun testAddActionCountsEmptyRowsTowardTheFetchedSecretLimit() {
+        withCustomMappingPanel { page, panel, table ->
             val model = table.model as DefaultTableModel
             val toolbar = UIUtil.findComponentOfType(panel, com.intellij.ui.CommonActionsPanel::class.java)!!
             val add = toolbar.getAnAction(com.intellij.ui.CommonActionsPanel.Buttons.ADD)!!
@@ -452,22 +467,11 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
             page.updateKnownNames(emptySet())
             add.actionPerformed(event)
             assertEquals("An empty config cannot have new mapping rows", 0, model.rowCount)
-        } finally {
-            page.disposeUIResources()
-            settings.loadState(saved)
         }
     }
 
     fun testMappingTableSuppressesGlobalNewWhenNoSecretsRemain() {
-        val settings = DopplerInjectionSettings.getInstance(project)
-        val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
-        settings.nameTransformer = DopplerNameTransformer.CUSTOM
-        settings.customMappings = listOf(SecretNameMapping("ONLY_SECRET", "RENAMED"))
-        val page = DopplerInjectionConfigurable(project)
-        try {
-            val panel = page.createPanel()
-            panel.reset()
-            val table = UIUtil.findComponentOfType(panel, JTable::class.java)!!
+        withCustomMappingPanel(listOf(SecretNameMapping("ONLY_SECRET", "RENAMED"))) { page, panel, table ->
             val model = table.model as DefaultTableModel
             val toolbar = UIUtil.findComponentOfType(panel, com.intellij.ui.CommonActionsPanel::class.java)!!
             val add = toolbar.getAnAction(com.intellij.ui.CommonActionsPanel.Buttons.ADD)!!
@@ -530,22 +534,13 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
             transformation.selectedItem = DopplerNameTransformer.NONE
             shortcut.update(shortcutEvent)
             assertFalse("Other transformation modes must not intercept New", shortcutEvent.presentation.isEnabled)
-        } finally {
-            page.disposeUIResources()
-            settings.loadState(saved)
         }
     }
 
     fun testMappedSecretsAreExcludedFromOtherRowsAndRestoredAfterRemoval() {
-        val settings = DopplerInjectionSettings.getInstance(project)
-        val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
-        settings.nameTransformer = DopplerNameTransformer.CUSTOM
-        settings.customMappings = listOf(SecretNameMapping("USED_SECRET", "RENAMED"), SecretNameMapping("OTHER_SECRET", "OTHER_NAME"))
-        val page = DopplerInjectionConfigurable(project)
-        try {
-            val panel = page.createPanel()
-            panel.reset()
-            val table = UIUtil.findComponentOfType(panel, JTable::class.java)!!
+        withCustomMappingPanel(
+            listOf(SecretNameMapping("USED_SECRET", "RENAMED"), SecretNameMapping("OTHER_SECRET", "OTHER_NAME")),
+        ) { page, panel, table ->
             val model = table.model as DefaultTableModel
             val knownNames = DopplerInjectionConfigurable::class.java.getDeclaredField("knownNames").apply { isAccessible = true }
             knownNames.set(page, setOf("USED_SECRET", "OTHER_SECRET", "AVAILABLE_SECRET"))
@@ -592,9 +587,6 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
 
             page.updateKnownNames(emptySet())
             assertFalse("An empty remote config must not open an empty dropdown", table.editCellAt(0, 0))
-        } finally {
-            page.disposeUIResources()
-            settings.loadState(saved)
         }
     }
 

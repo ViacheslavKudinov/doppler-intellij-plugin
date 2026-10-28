@@ -4,6 +4,7 @@ import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.testFramework.TestLoggerFactory
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.util.ui.UIUtil
 import com.vk.doppler.cli.DopplerFolderSetup
@@ -192,6 +193,50 @@ class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
             assertTrue(fixture.calls().isEmpty())
         }
 
+    fun testCliMutationFailuresKeepPendingChanges() {
+        for (command in listOf("set", "unset")) {
+            withCli { fixture ->
+                fixture.reload()
+                if (command == "unset") {
+                    fixture.setup.clear.doClick()
+                } else {
+                    fixture.setup.configChoice.selectedItem = "stg"
+                }
+                Files.writeString(fixture.mode, "fail-$command")
+                fixture.clearCalls()
+                try {
+                    fixture.panel.apply()
+                    fail("A failed CLI mutation must not be reported as saved")
+                } catch (expected: ConfigurationException) {
+                    assertEquals(
+                        "Could not save Doppler folder setup. Check the CLI path and login, then try again.",
+                        expected.message,
+                    )
+                    assertTrue(fixture.panel.isModified())
+                    assertEquals(listOf("me", "configure $command"), fixture.calls())
+                    assertEquals(DopplerFolderSetup("example", "dev"), DopplerFolderSetupState.getInstance(project).current)
+                }
+            }
+        }
+    }
+
+    fun testUnexpectedValidationFailuresPropagate() =
+        withCli { fixture ->
+            fixture.reload()
+            fixture.setup.configChoice.addItem("invalid=name")
+            fixture.setup.configChoice.selectedItem = "invalid=name"
+            fixture.clearCalls()
+            try {
+                fixture.panel.apply()
+                fail("Unexpected validation failures must propagate")
+            } catch (expected: TestLoggerFactory.TestLoggerAssertionError) {
+                assertTrue(expected.cause is IllegalArgumentException)
+                assertEquals("Invalid Doppler project or config name", expected.cause!!.message)
+                assertTrue(fixture.panel.isModified())
+                assertEquals(listOf("me"), fixture.calls())
+            }
+        }
+
     private inner class Fixture(
         val directory: Path,
         val panel: DialogPanel,
@@ -324,6 +369,10 @@ class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
                 printf '%s' '[{"name":"dev"},{"name":"stg"}]'
                 ;;
               configure)
+                                if [ "${'$'}(cat '$mode')" = "fail-${'$'}2" ]; then
+                                    printf '%s' '{"error":"Synthetic mutation failure"}'
+                                    exit 1
+                                fi
                 case "${'$'}2" in
                   get) cat '$state' ;;
                   set) printf '%s' '{"project":"example","config":"stg"}' > '$state' ;;

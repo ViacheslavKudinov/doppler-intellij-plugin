@@ -73,6 +73,13 @@ class SecretReferenceParserTest {
         assertNull(prefixAt("# ${REF}app|"))
         assertNull(prefixAt("   # ${REF}app|"))
         assertNull(prefixAt("\t#${REF}app|"))
+        assertNull(prefixAt("A: value\n \t# ${REF}app|"))
+    }
+
+    @Test
+    fun `indented references after comment lines are completed`() {
+        assertEquals("app", prefixAt("# comment\n \tA: ${REF}app|"))
+        assertEquals("", prefixAt("# comment\n \t$REF|"))
     }
 
     @Test

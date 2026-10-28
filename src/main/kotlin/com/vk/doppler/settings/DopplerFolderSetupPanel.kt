@@ -201,7 +201,7 @@ internal class DopplerFolderSetupPanel(
         }
         val expectedAccount = loadedAuthContextId ?: throw ConfigurationException("Reload Doppler folder setup before applying changes.")
         val scope = folder ?: return
-        var failure: Exception? = null
+        var failure: DopplerCliException? = null
         var effective = selected
         val completed =
             ProgressManager.getInstance().runProcessWithProgressSynchronously({
@@ -218,16 +218,16 @@ internal class DopplerFolderSetupPanel(
                         )
                     }
                     effective = service.folderSetup(scope)
-                } catch (error: Exception) {
+                } catch (error: DopplerCliException) {
                     failure = error
                 }
             }, "Saving Doppler folder setup…", false, project)
         failure?.let {
-            if (it is DopplerCliException && it.kind == DopplerCliException.Kind.AUTH_CONTEXT_CHANGED) {
+            if (it.kind == DopplerCliException.Kind.AUTH_CONTEXT_CHANGED) {
                 invalidateAccount()
                 throw ConfigurationException(ACCOUNT_CHANGED_MESSAGE)
             }
-            throw ConfigurationException(it.message ?: "Could not save Doppler folder setup.")
+            throw ConfigurationException("Could not save Doppler folder setup. Check the CLI path and login, then try again.")
         }
         if (!completed) throw ConfigurationException("Doppler folder setup was not saved.")
         baseline = effective

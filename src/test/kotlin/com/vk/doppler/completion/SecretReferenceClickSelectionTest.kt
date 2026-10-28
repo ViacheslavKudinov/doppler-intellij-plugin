@@ -1,5 +1,6 @@
 package com.vk.doppler.completion
 
+import com.intellij.codeInsight.completion.CompletionContributor
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.codeInsight.lookup.LookupEvent
 import com.intellij.codeInsight.lookup.LookupListener
@@ -17,6 +18,20 @@ import javax.swing.SwingUtilities
 
 class SecretReferenceClickSelectionTest : BasePlatformTestCase() {
     override fun runInDispatchThread(): Boolean = name != "testSingleClickFromRawEdtPermitsCompletionPsiCommit"
+
+    fun testCompletionContributorIsRegisteredAndSkipsTextOutsideReferences() {
+        val file = DopplerFileSystem.getInstance().obtain("completion", "outside-reference", "test-context")
+        val text = "VALUE: plain"
+        file.setServerContent(text, emptyMap())
+        myFixture.configureFromExistingVirtualFile(file)
+        myFixture.editor.caretModel.moveToOffset(text.length)
+
+        assertTrue(
+            CompletionContributor.forLanguage(myFixture.file.language).any { it is DopplerSecretReferenceCompletionContributor },
+        )
+        myFixture.completeBasic()
+        assertEquals(text, myFixture.editor.document.text)
+    }
 
     fun testSingleClickFromRawEdtPermitsCompletionPsiCommit() {
         lateinit var lookup: LookupImpl

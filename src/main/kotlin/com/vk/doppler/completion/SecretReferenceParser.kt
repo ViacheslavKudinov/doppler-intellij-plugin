@@ -27,9 +27,7 @@ internal object SecretReferenceParser {
         var lineStart = caretOffset
         while (lineStart > 0 && text[lineStart - 1] != '\n') lineStart--
 
-        var first = lineStart
-        while (first < caretOffset && (text[first] == ' ' || text[first] == '\t')) first++
-        if (first < caretOffset && text[first] == '#') return null
+        if (isCommentLine(text, lineStart, caretOffset)) return null
 
         var open = caretOffset - 2
         while (open >= lineStart && !(text[open] == '$' && text[open + 1] == '{')) open--
@@ -41,6 +39,16 @@ internal object SecretReferenceParser {
             if (char.isWhitespace() || char == '{' || char == '}' || char == '$') return null
         }
         return SecretReferenceContext(text.subSequence(prefixStart, caretOffset).toString())
+    }
+
+    private fun isCommentLine(
+        text: CharSequence,
+        lineStart: Int,
+        caretOffset: Int,
+    ): Boolean {
+        var first = lineStart
+        while (first < caretOffset && (text[first] == ' ' || text[first] == '\t')) first++
+        return first < caretOffset && text[first] == '#'
     }
 
     /** Offset of the `}` that closes a reference continuing at [from], if the rest is one token. */

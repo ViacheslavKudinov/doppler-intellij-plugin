@@ -537,6 +537,38 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
+    fun testMappingShortcutIsInactiveOutsideCustomAndAfterDisposal() {
+        withCustomMappingPanel { page, panel, table ->
+            page.updateKnownNames(setOf("AVAILABLE_SECRET"))
+            val shortcut =
+                com.intellij.openapi.actionSystem.ex.ActionUtil
+                    .getActions(panel)
+                    .single()
+            val event =
+                com.intellij.testFramework.TestActionEvent
+                    .createTestEvent(shortcut)
+            val transformation = UIUtil.findComponentOfType(panel, JComboBox::class.java)!!
+            assertEquals(com.intellij.openapi.actionSystem.ActionUpdateThread.EDT, shortcut.actionUpdateThread)
+
+            for (transformer in DopplerNameTransformer.entries.filter { it != DopplerNameTransformer.CUSTOM }) {
+                transformation.selectedItem = transformer
+                shortcut.update(event)
+                assertFalse("$transformer must not intercept New", event.presentation.isEnabled)
+                shortcut.actionPerformed(event)
+                assertEquals("$transformer must not add a mapping even when a secret is available", 0, table.rowCount)
+            }
+
+            transformation.selectedItem = DopplerNameTransformer.CUSTOM
+            shortcut.update(event)
+            assertTrue(event.presentation.isEnabled)
+            page.disposeUIResources()
+            shortcut.update(event)
+            assertFalse("A disposed settings page must not intercept New", event.presentation.isEnabled)
+            shortcut.actionPerformed(event)
+            assertEquals("A disposed settings page must not add mappings", 0, table.rowCount)
+        }
+    }
+
     fun testMappedSecretsAreExcludedFromOtherRowsAndRestoredAfterRemoval() {
         withCustomMappingPanel(
             listOf(SecretNameMapping("USED_SECRET", "RENAMED"), SecretNameMapping("OTHER_SECRET", "OTHER_NAME")),

@@ -404,16 +404,31 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         }
     }
 
-    fun testAddActionCountsEmptyRowsTowardTheFetchedSecretLimit() {
+    private fun withCustomMappingPanel(
+        mappings: List<SecretNameMapping> = emptyList(),
+        test: (DopplerInjectionConfigurable, com.intellij.openapi.ui.DialogPanel, JTable) -> Unit,
+    ) {
         val settings = DopplerInjectionSettings.getInstance(project)
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
-        settings.customMappings = emptyList()
+        settings.customMappings = mappings
         val page = DopplerInjectionConfigurable(project)
         try {
             val panel = page.createPanel()
             panel.reset()
             val table = UIUtil.findComponentOfType(panel, JTable::class.java)!!
+            test(page, panel, table)
+        } finally {
+            try {
+                page.disposeUIResources()
+            } finally {
+                settings.loadState(saved)
+            }
+        }
+    }
+
+    fun testAddActionCountsEmptyRowsTowardTheFetchedSecretLimit() {
+        withCustomMappingPanel { page, panel, table ->
             val model = table.model as DefaultTableModel
             val toolbar = UIUtil.findComponentOfType(panel, com.intellij.ui.CommonActionsPanel::class.java)!!
             val add = toolbar.getAnAction(com.intellij.ui.CommonActionsPanel.Buttons.ADD)!!
@@ -452,22 +467,112 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
             page.updateKnownNames(emptySet())
             add.actionPerformed(event)
             assertEquals("An empty config cannot have new mapping rows", 0, model.rowCount)
-        } finally {
+        }
+    }
+
+    fun testMappingTableSuppressesGlobalNewWhenNoSecretsRemain() {
+        withCustomMappingPanel(listOf(SecretNameMapping("ONLY_SECRET", "RENAMED"))) { page, panel, table ->
+            val model = table.model as DefaultTableModel
+            val toolbar = UIUtil.findComponentOfType(panel, com.intellij.ui.CommonActionsPanel::class.java)!!
+            val add = toolbar.getAnAction(com.intellij.ui.CommonActionsPanel.Buttons.ADD)!!
+            val event =
+                com.intellij.testFramework.TestActionEvent
+                    .createTestEvent(add)
+            val snapshot = mutableMapOf<com.intellij.openapi.actionSystem.DataKey<*>, Any?>()
+            val sink =
+                java.lang.reflect.Proxy.newProxyInstance(
+                    com.intellij.openapi.actionSystem.DataSink::class.java.classLoader,
+                    arrayOf(com.intellij.openapi.actionSystem.DataSink::class.java),
+                ) { proxy, method, arguments ->
+                    when (method.name) {
+                        "set" -> {
+                            snapshot[arguments[0] as com.intellij.openapi.actionSystem.DataKey<*>] = arguments[1]
+                        }
+
+                        "uiDataSnapshot" -> {
+                            (arguments[0] as com.intellij.openapi.actionSystem.UiDataProvider)
+                                .uiDataSnapshot(proxy as com.intellij.openapi.actionSystem.DataSink)
+                        }
+                    }
+                    null
+                } as com.intellij.openapi.actionSystem.DataSink
+            generateSequence(table as Component) { it.parent }
+                .filterIsInstance<com.intellij.openapi.actionSystem.UiDataProvider>()
+                .first()
+                .uiDataSnapshot(sink)
+            val shortcut =
+                com.intellij.openapi.actionSystem.ex.ActionUtil
+                    .getActions(panel)
+                    .single()
+            val shortcutEvent =
+                com.intellij.testFramework.TestActionEvent
+                    .createTestEvent(shortcut)
+
+            page.updateKnownNames(setOf("ONLY_SECRET"))
+            assertEquals(true, snapshot[com.intellij.openapi.actionSystem.LangDataKeys.NO_NEW_ACTION])
+            shortcut.update(shortcutEvent)
+            assertTrue("The local shortcut must consume New even when Add is disabled", shortcutEvent.presentation.isEnabled)
+            shortcut.actionPerformed(shortcutEvent)
+            add.actionPerformed(event)
+            assertEquals("The add shortcut must not add rows when every secret is mapped", 1, model.rowCount)
+
+            model.rowCount = 0
+            page.updateKnownNames(emptySet())
+            shortcut.actionPerformed(shortcutEvent)
+            add.actionPerformed(event)
+            assertEquals("An empty config must not add mapping rows", 0, model.rowCount)
+
+            page.updateKnownNames(setOf("ONLY_SECRET"))
+            shortcut.actionPerformed(shortcutEvent)
+            assertEquals("The local add action must still work when a secret becomes available", 1, model.rowCount)
+            assertEquals(0, table.selectedRow)
+            assertEquals(0, table.editingRow)
+            assertEquals(0, table.editingColumn)
+            table.cellEditor?.stopCellEditing()
+
+            val transformation = UIUtil.findComponentOfType(panel, JComboBox::class.java)!!
+            transformation.selectedItem = DopplerNameTransformer.NONE
+            shortcut.update(shortcutEvent)
+            assertFalse("Other transformation modes must not intercept New", shortcutEvent.presentation.isEnabled)
+        }
+    }
+
+    fun testMappingShortcutIsInactiveOutsideCustomAndAfterDisposal() {
+        withCustomMappingPanel { page, panel, table ->
+            page.updateKnownNames(setOf("AVAILABLE_SECRET"))
+            val shortcut =
+                com.intellij.openapi.actionSystem.ex.ActionUtil
+                    .getActions(panel)
+                    .single()
+            val event =
+                com.intellij.testFramework.TestActionEvent
+                    .createTestEvent(shortcut)
+            val transformation = UIUtil.findComponentOfType(panel, JComboBox::class.java)!!
+            assertEquals(com.intellij.openapi.actionSystem.ActionUpdateThread.EDT, shortcut.actionUpdateThread)
+
+            for (transformer in DopplerNameTransformer.entries.filter { it != DopplerNameTransformer.CUSTOM }) {
+                transformation.selectedItem = transformer
+                shortcut.update(event)
+                assertFalse("$transformer must not intercept New", event.presentation.isEnabled)
+                shortcut.actionPerformed(event)
+                assertEquals("$transformer must not add a mapping even when a secret is available", 0, table.rowCount)
+            }
+
+            transformation.selectedItem = DopplerNameTransformer.CUSTOM
+            shortcut.update(event)
+            assertTrue(event.presentation.isEnabled)
             page.disposeUIResources()
-            settings.loadState(saved)
+            shortcut.update(event)
+            assertFalse("A disposed settings page must not intercept New", event.presentation.isEnabled)
+            shortcut.actionPerformed(event)
+            assertEquals("A disposed settings page must not add mappings", 0, table.rowCount)
         }
     }
 
     fun testMappedSecretsAreExcludedFromOtherRowsAndRestoredAfterRemoval() {
-        val settings = DopplerInjectionSettings.getInstance(project)
-        val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
-        settings.nameTransformer = DopplerNameTransformer.CUSTOM
-        settings.customMappings = listOf(SecretNameMapping("USED_SECRET", "RENAMED"), SecretNameMapping("OTHER_SECRET", "OTHER_NAME"))
-        val page = DopplerInjectionConfigurable(project)
-        try {
-            val panel = page.createPanel()
-            panel.reset()
-            val table = UIUtil.findComponentOfType(panel, JTable::class.java)!!
+        withCustomMappingPanel(
+            listOf(SecretNameMapping("USED_SECRET", "RENAMED"), SecretNameMapping("OTHER_SECRET", "OTHER_NAME")),
+        ) { page, panel, table ->
             val model = table.model as DefaultTableModel
             val knownNames = DopplerInjectionConfigurable::class.java.getDeclaredField("knownNames").apply { isAccessible = true }
             knownNames.set(page, setOf("USED_SECRET", "OTHER_SECRET", "AVAILABLE_SECRET"))
@@ -514,9 +619,6 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
 
             page.updateKnownNames(emptySet())
             assertFalse("An empty remote config must not open an empty dropdown", table.editCellAt(0, 0))
-        } finally {
-            page.disposeUIResources()
-            settings.loadState(saved)
         }
     }
 

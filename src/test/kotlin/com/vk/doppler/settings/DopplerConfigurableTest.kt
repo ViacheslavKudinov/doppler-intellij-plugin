@@ -1,5 +1,10 @@
 package com.vk.doppler.settings
 
+import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.notification.Notification
+import com.intellij.notification.Notifications
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.TestDialog
 import com.intellij.openapi.ui.TestDialogManager
@@ -8,6 +13,8 @@ import com.intellij.openapi.util.SystemInfo
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.ui.components.ActionLink
 import com.intellij.util.ui.UIUtil
+import com.vk.doppler.service.DopplerCliStartupListener
+import com.vk.doppler.service.DopplerCliUpdateService
 import org.junit.Assume.assumeFalse
 import java.nio.file.Files
 import java.util.concurrent.CopyOnWriteArrayList
@@ -17,6 +24,167 @@ import javax.swing.JCheckBox
 import javax.swing.JTextField
 
 class DopplerConfigurableTest : BasePlatformTestCase() {
+    fun `test IDE and plugin startup events perform only one automatic check`() {
+        assumeFalse(SystemInfo.isWindows)
+        val directory = Files.createTempDirectory("doppler-startup-check-")
+        val executable = directory.resolve("doppler")
+        val calls = directory.resolve("calls")
+        val settings = DopplerSettings.getInstance()
+        val originalState = settings.state.copy()
+        val notifications = CopyOnWriteArrayList<Notification>()
+        ApplicationManager.getApplication().messageBus.connect(testRootDisposable).subscribe(
+            Notifications.TOPIC,
+            object : Notifications {
+                override fun notify(notification: Notification) {
+                    if (notification.title == "Doppler CLI update available") notifications += notification
+                }
+            },
+        )
+        try {
+            writeExecutable(
+                executable,
+                """
+                printf '%s\n' "${'$'}1" >> '$calls'
+                case "${'$'}1" in
+                  --version) printf v3.9.0 ;;
+                  changelog) printf '%s' '{"v3.10.0":{}}' ;;
+                  *) exit 1 ;;
+                esac
+            """,
+            )
+            settings.cliPath = executable.toString()
+            settings.checkForCliUpdates = false
+            val listener = DopplerCliStartupListener()
+            val descriptor = requireNotNull(PluginManagerCore.getPlugin(PluginId.getId("com.viacheslavkudinov.doppler")))
+            listener.appFrameCreated(emptyList())
+            listener.pluginLoaded(descriptor)
+            UIUtil.dispatchAllInvocationEvents()
+            assertFalse(Files.exists(calls))
+
+            settings.checkForCliUpdates = true
+            listener.pluginLoaded(requireNotNull(PluginManagerCore.getPlugin(PluginId.getId("com.intellij"))))
+            UIUtil.dispatchAllInvocationEvents()
+            assertFalse(Files.exists(calls))
+            repeat(2) {
+                listener.appFrameCreated(emptyList())
+                listener.pluginLoaded(descriptor)
+            }
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+            while (notifications.isEmpty() && System.nanoTime() < deadline) {
+                UIUtil.dispatchAllInvocationEvents()
+                Thread.sleep(10)
+            }
+            assertSize(1, notifications)
+            assertEquals(listOf("--version", "changelog"), Files.readAllLines(calls))
+            assertTrue(notifications.single().content.contains("Latest: v3.10.0"))
+            assertEquals(listOf("Update CLI"), notifications.single().actions.map { it.templatePresentation.text })
+        } finally {
+            notifications.forEach(Notification::expire)
+            settings.loadState(originalState)
+            Files.walk(directory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) } }
+        }
+    }
+
+    fun `test CLI update button confirms and verifies an update using the edited executable path`() {
+        checkCliUpdate("update", Messages.YES, "Doppler CLI updated successfully.")
+    }
+
+    fun `test CLI update cancellation never starts the updater`() {
+        checkCliUpdate("cancel", Messages.NO, null)
+    }
+
+    fun `test CLI update failure gives package manager guidance without raw subprocess output`() {
+        checkCliUpdate("fail", Messages.YES, "Could not update Doppler CLI.")
+    }
+
+    fun `test CLI update check reports an up to date version`() {
+        checkCliUpdate("current", Messages.YES, "Doppler CLI v3.10.0 is up to date.")
+    }
+
+    fun `test CLI update check failure reports a fixed safe error`() {
+        checkCliUpdate("check-fail", Messages.YES, "Could not check for Doppler CLI updates.")
+    }
+
+    private fun checkCliUpdate(
+        mode: String,
+        answer: Int,
+        expected: String?,
+    ) {
+        assumeFalse(SystemInfo.isWindows)
+        val directory = Files.createTempDirectory("doppler-update-settings-")
+        val executable = directory.resolve("doppler")
+        val updated = directory.resolve("updated")
+        val messages = CopyOnWriteArrayList<String>()
+        TestDialogManager.setTestDialog(
+            TestDialog { message ->
+                messages += message
+                answer
+            },
+            testRootDisposable,
+        )
+        val configurable = DopplerConfigurable()
+        val settings = DopplerSettings.getInstance()
+        val originalState = settings.state.copy()
+        try {
+            writeExecutable(
+                executable,
+                """
+                case "${'$'}1" in
+                  --version)
+                    if [ -f '$updated' ] || [ '$mode' = current ]; then printf v3.10.0; else printf v3.9.0; fi ;;
+                  changelog)
+                    if [ '$mode' = check-fail ]; then printf 'untrusted output' >&2; exit 1; fi
+                    printf '%s' '{"v3.10.0":{}}' ;;
+                  update)
+                    if [ '$mode' = fail ]; then printf 'untrusted output' >&2; exit 1; fi
+                    touch '$updated'; printf '{}' ;;
+                  *) exit 1 ;;
+                esac
+            """,
+            )
+            val panel = configurable.createPanel()
+            panel.reset()
+            requireNotNull(UIUtil.findComponentOfType(panel, TextFieldWithBrowseButton::class.java)).text = executable.toString()
+            UIUtil
+                .uiTraverser(panel)
+                .filter(JButton::class.java)
+                .single { it.text == "Check for CLI Updates" }
+                .doClick()
+            awaitMessage(messages, if (mode in listOf("update", "fail")) 2 else 1)
+            val first = messages.first()
+            if (mode in listOf("current", "check-fail")) {
+                assertTrue(first.startsWith(requireNotNull(expected)))
+            } else {
+                assertTrue(first.contains("from v3.9.0 to v3.10.0"))
+                if (expected != null) assertTrue(messages[1].startsWith(expected))
+            }
+            assertEquals(mode == "update", Files.exists(updated))
+            assertTrue(messages.none { it.contains("untrusted output") })
+            assertEquals(originalState.cliPath, settings.cliPath)
+        } finally {
+            configurable.disposeUIResources()
+            settings.loadState(originalState)
+            Files.walk(directory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) } }
+        }
+    }
+
+    fun `test automatic CLI checks honor the preference and are claimed only once per session`() {
+        val settings = DopplerSettings.getInstance()
+        val originalState = settings.state.copy()
+        try {
+            val service = DopplerCliUpdateService()
+            settings.checkForCliUpdates = false
+            assertFalse(service.claimAutomaticCheck())
+            settings.checkForCliUpdates = true
+            assertTrue(service.claimAutomaticCheck())
+            assertFalse(service.claimAutomaticCheck())
+            settings.checkForCliUpdates = false
+            assertFalse(service.claimAutomaticCheck())
+        } finally {
+            settings.loadState(originalState)
+        }
+    }
+
     fun `test global settings are discoverable without a project and folder setup requires a project`() {
         val globalId = DopplerConfigurable::class.java.name
         val folderId = DopplerFolderSetupConfigurable::class.java.name
@@ -100,6 +268,7 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
             settings.cliPath = "/unique/doppler/path"
             settings.refreshIntervalSeconds = 17
             settings.logCliCalls = false
+            settings.checkForCliUpdates = false
             val panel = configurable.createPanel()
             panel.reset()
             val interval =
@@ -112,19 +281,28 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
                     .uiTraverser(panel)
                     .filter(JCheckBox::class.java)
                     .single { it.text == "Log CLI calls" }
+            val updates =
+                UIUtil
+                    .uiTraverser(panel)
+                    .filter(JCheckBox::class.java)
+                    .single { it.text == "Automatically check for Doppler CLI updates" }
 
             interval.text = "42"
             logging.isSelected = true
+            updates.isSelected = true
             assertTrue(panel.isModified())
             panel.apply()
             assertEquals(42, settings.refreshIntervalSeconds)
             assertTrue(settings.logCliCalls)
+            assertTrue(settings.checkForCliUpdates)
 
             interval.text = "120"
             logging.isSelected = false
+            updates.isSelected = false
             panel.reset()
             assertEquals("42", interval.text)
             assertTrue(logging.isSelected)
+            assertTrue(updates.isSelected)
             assertFalse(panel.isModified())
         } finally {
             configurable.disposeUIResources()

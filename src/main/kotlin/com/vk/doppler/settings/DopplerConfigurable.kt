@@ -17,6 +17,7 @@ import com.intellij.ui.dsl.builder.bindIntText
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
+import com.vk.doppler.service.DopplerCliUpdateService
 import com.vk.doppler.service.DopplerService
 import com.vk.doppler.service.DopplerStatus
 import com.vk.doppler.service.DopplerStatusReport
@@ -86,6 +87,13 @@ class DopplerConfigurable : BoundConfigurable("Doppler") {
             }
             row {
                 button("Test Connection") { testConnection() }
+                button("Check for CLI Updates") {
+                    DopplerCliUpdateService.getInstance().check(path = cliPathField?.text ?: settings.cliPath)
+                }
+            }
+            row {
+                checkBox("Automatically check for Doppler CLI updates")
+                    .bindSelected(settings::checkForCliUpdates)
             }
             row {
                 checkBox("Log CLI calls")

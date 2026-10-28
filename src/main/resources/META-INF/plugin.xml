@@ -124,6 +124,12 @@
 
         <notificationGroup id="Doppler" displayType="BALLOON"/>
     </extensions>
+    <applicationListeners>
+        <listener class="com.vk.doppler.service.DopplerCliStartupListener"
+                  topic="com.intellij.ide.AppLifecycleListener"/>
+        <listener class="com.vk.doppler.service.DopplerCliStartupListener"
+                  topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+    </applicationListeners>
     <projectListeners>
         <listener class="com.vk.doppler.completion.SecretReferenceClickSelection"
                   activeInTestMode="true"

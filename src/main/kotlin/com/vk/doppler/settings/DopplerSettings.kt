@@ -17,6 +17,7 @@ class DopplerSettings : PersistentStateComponent<DopplerSettings.State> {
         var cliPath: String = "",
         var refreshIntervalSeconds: Int = 5,
         var logCliCalls: Boolean = false,
+        var checkForCliUpdates: Boolean = true,
     )
 
     private var state = State()
@@ -31,6 +32,12 @@ class DopplerSettings : PersistentStateComponent<DopplerSettings.State> {
         get() = state.cliPath
         set(value) {
             state.cliPath = value
+        }
+
+    var checkForCliUpdates: Boolean
+        get() = state.checkForCliUpdates
+        set(value) {
+            state.checkForCliUpdates = value
         }
 
     var logCliCalls: Boolean

@@ -2,6 +2,31 @@
 
 # Doppler-plugin Changelog
 
+## [1.10.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.9.1...v1.10.0) (2026-10-28)
+
+
+### Features
+
+* enhance mapping table functionality and add tests for new behavior ([#105](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/105)) ([2b40ac1](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/2b40ac125626b7e49f975e1c496dbf4640250abd))
+* implement automatic Doppler CLI update checks and user notifications ([#106](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/106)) ([f486690](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/f486690e7001f920b42a062bcc296d5298d4dc5c))
+
+
+### Bug Fixes
+
+* **deps:** update dependency com.fasterxml.jackson:jackson-bom to v2.22.4 ([#104](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/104)) ([4475067](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/447506739c3e713f8c8ce5fa97c1e111377c9009))
+
+
+### Documentation
+
+* add interface and settings reference sections to README ([#98](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/98)) ([5f886ba](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/5f886bae1e7799769dc3df544eb47a017343f1f1))
+* add OpenSSF Best Practices badge to README ([#101](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/101)) ([2189a1c](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/2189a1ccbab504560cb38585c1bab14617881988))
+* add testing requirements for new functionality in CONTRIBUTING.md ([#99](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/99)) ([4350243](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/435024368d1b5ca10a30fed1eb3cc4a746ab60b7))
+
+
+### Maintenance
+
+* update dependency management to use version catalog for Jackson and Guava; remove legacy properties ([#103](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/103)) ([1c70723](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/1c70723196944d8581ac04594719266bbac18592))
+
 ## [1.9.1](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.9.0...v1.9.1) (2026-10-27)
 
 

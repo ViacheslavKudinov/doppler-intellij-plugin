@@ -26,6 +26,7 @@ import com.vk.doppler.testutil.joinWithEventDispatch
 import org.junit.Assume.assumeFalse
 import java.awt.event.MouseEvent
 import java.awt.image.BufferedImage
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
@@ -357,9 +358,45 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                 assertEquals(reviewedInstallerCommand(installer, InstallerScope.SYSTEM), sent.last())
                 assertSame(installer, field("reviewedInstaller").get(panel))
                 assertTrue(cli.calls().isEmpty())
+
+                answer = -1
+                terminalAvailable = true
+                field("reviewedInstaller").set(panel, installer)
+                invokePanel(panel, "runReviewedInstaller", installer)
+                assertEquals(2, sent.size)
+                assertSame(installer, field("reviewedInstaller").get(panel))
             } finally {
                 deleteInstallerTempFile(path)
             }
+        }
+
+    fun `test login command uses resolved executable when it is absent from PATH`() =
+        withPanel { panel, cli ->
+            val cliDirectory = cli.executable.parent.toString()
+            assertFalse(
+                System
+                    .getenv("PATH")
+                    .orEmpty()
+                    .split(File.pathSeparator)
+                    .contains(cliDirectory),
+            )
+
+            val sent = mutableListOf<String>()
+            panel.installCommandSender = { command ->
+                sent += command
+                true
+            }
+            cli.clearCalls()
+            invokePanel(panel, "showStatusFor", DopplerStatusReport(DopplerStatus.NOT_AUTHENTICATED, null))
+            clickStatusLink(panel, "Run 'doppler login' in Terminal")
+
+            assertEquals("${shellQuoteShellArgument(cli.executable.toAbsolutePath().toString())} login", sent.single())
+            assertTrue(cli.calls().isEmpty())
+
+            DopplerSettings.getInstance().cliPath = cli.executable.resolveSibling("missing-doppler").toString()
+            invokePanel(panel, "sendDopplerLogin")
+            assertEquals(1, sent.size)
+            assertTrue(statusText(panel).contains("The Doppler CLI could not be found."))
         }
 
     fun `test reviewed installer rejects stale missing and symlink files before confirmation`() =

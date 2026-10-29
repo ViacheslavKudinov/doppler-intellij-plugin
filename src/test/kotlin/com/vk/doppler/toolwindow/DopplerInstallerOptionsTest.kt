@@ -170,6 +170,11 @@ class DopplerInstallerOptionsTest {
     }
 
     @Test
+    fun `shell argument quoting preserves spaces and single quotes`() {
+        assertEquals("'path with spaces'\\''and quote'", shellQuoteShellArgument("path with spaces'and quote"))
+    }
+
+    @Test
     fun `saved installer is owner read-only and records its digest`() {
         assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"))
         val bytes = "#!/bin/sh\necho ok\n".toByteArray()

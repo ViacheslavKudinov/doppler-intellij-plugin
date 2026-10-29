@@ -1,5 +1,6 @@
 package com.vk.doppler.toolwindow
 
+import java.io.IOException
 import java.net.URI
 import java.net.URL
 import java.nio.file.Files
@@ -82,7 +83,13 @@ internal fun saveReviewedInstaller(
         Files.write(path, bytes)
         Files.setPosixFilePermissions(path, setOf(PosixFilePermission.OWNER_READ))
         return ReviewedInstaller(path, sha256)
-    } catch (error: Throwable) {
+    } catch (error: IOException) {
+        deleteInstallerTempFile(path)
+        throw error
+    } catch (error: UnsupportedOperationException) {
+        deleteInstallerTempFile(path)
+        throw error
+    } catch (error: SecurityException) {
         deleteInstallerTempFile(path)
         throw error
     }
@@ -146,13 +153,13 @@ internal fun reviewedInstallerCommand(
         fi
         """.trimIndent() + "\n" + runInstaller
     require(SHA256_HEX.matches(installer.sha256)) { "Installer checksum must be a lowercase SHA-256 hex digest." }
-    val sourcePath = shellQuote(installer.path.toString())
-    val expectedSha256 = shellQuote(installer.sha256)
+    val sourcePath = shellQuoteShellArgument(installer.path.toString())
+    val expectedSha256 = shellQuoteShellArgument(installer.sha256)
     val launcher = if (scope == InstallerScope.SYSTEM) "sudo sh" else "sh"
-    return "$launcher -c ${shellQuote(verifyingScript)} sh $sourcePath $expectedSha256; " +
+    return "$launcher -c ${shellQuoteShellArgument(verifyingScript)} sh $sourcePath $expectedSha256; " +
         "result=\$?; rm -f -- $sourcePath; exit \"\$result\""
 }
 
 private val SHA256_HEX = Regex("[0-9a-f]{64}")
 
-private fun shellQuote(value: String): String = "'${value.replace("'", "'\\''")}'"
+internal fun shellQuoteShellArgument(value: String): String = "'${value.replace("'", "'\\''")}'"

@@ -31,6 +31,7 @@ import com.vk.doppler.DopplerIcons
 import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.cli.DopplerConfig
+import com.vk.doppler.cli.DopplerExecutableLocator
 import com.vk.doppler.cli.DopplerFolderSetup
 import com.vk.doppler.cli.DopplerProject
 import com.vk.doppler.completion.SecretReferenceService
@@ -41,6 +42,7 @@ import com.vk.doppler.service.DopplerStatusReport
 import com.vk.doppler.settings.DopplerConfigurable
 import com.vk.doppler.settings.DopplerFolderSetupListener
 import com.vk.doppler.settings.DopplerFolderSetupState
+import com.vk.doppler.settings.DopplerSettings
 import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.Component
@@ -366,7 +368,7 @@ class DopplerToolWindowPanel(
                 statusPanel.emptyText.clear()
                 statusPanel.emptyText.text = "Not logged in to Doppler."
                 statusPanel.emptyText.appendLine("Run 'doppler login' in Terminal", SimpleTextAttributes.LINK_ATTRIBUTES) {
-                    sendInstallCommand("doppler login")
+                    sendDopplerLogin()
                 }
                 statusPanel.emptyText.appendLine("Then retry.")
                 statusPanel.emptyText.appendLine("Retry", SimpleTextAttributes.LINK_ATTRIBUTES) { refresh(CliOperation.TREE_RETRY) }
@@ -551,6 +553,16 @@ class DopplerToolWindowPanel(
         }.onFailure { error ->
             showStatus("Could not open terminal: ${error.message}", "Retry")
         }.getOrDefault(false)
+
+    private fun sendDopplerLogin() {
+        val executable =
+            DopplerExecutableLocator.find(DopplerSettings.getInstance().cliPath)
+                ?: run {
+                    showStatus("The Doppler CLI could not be found.", "Retry")
+                    return
+                }
+        installCommandSender("${shellQuoteShellArgument(executable)} login")
+    }
 
     private fun showStatus(
         message: String,

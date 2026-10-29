@@ -2,6 +2,18 @@
 
 # Doppler-plugin Changelog
 
+## [1.11.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.10.0...v1.11.0) (2026-10-29)
+
+
+### Features
+
+* enhance installer command with user/system scope and checksum verification ([#109](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/109)) ([61a273e](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/61a273eaadfbfd56d44f1111225ac1a654f3418d))
+
+
+### Maintenance
+
+* **workflows:** update egress policy to allow additional endpoints for Gradle and GitHub ([#107](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/107)) ([b42721f](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/b42721f57cc19f6d8215900f0b4ad83252165d46))
+
 ## [1.10.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.9.1...v1.10.0) (2026-10-28)
 
 

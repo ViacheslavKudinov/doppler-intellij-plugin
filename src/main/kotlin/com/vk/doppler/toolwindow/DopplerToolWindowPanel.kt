@@ -31,6 +31,7 @@ import com.vk.doppler.DopplerIcons
 import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.cli.DopplerConfig
+import com.vk.doppler.cli.DopplerExecutableLocator
 import com.vk.doppler.cli.DopplerFolderSetup
 import com.vk.doppler.cli.DopplerProject
 import com.vk.doppler.completion.SecretReferenceService
@@ -41,6 +42,7 @@ import com.vk.doppler.service.DopplerStatusReport
 import com.vk.doppler.settings.DopplerConfigurable
 import com.vk.doppler.settings.DopplerFolderSetupListener
 import com.vk.doppler.settings.DopplerFolderSetupState
+import com.vk.doppler.settings.DopplerSettings
 import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.Component
@@ -52,7 +54,6 @@ import java.net.URI
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
-import java.nio.file.attribute.PosixFilePermission
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.HttpsURLConnection
 import javax.swing.JComponent
@@ -68,7 +69,6 @@ private const val CARD_STATUS = "status"
 private const val CARD_TREE = "tree"
 private const val DOPPLER_TERMINAL_TAB_NAME = "Doppler CLI"
 private const val INSTALL_DOCS_URL = "https://docs.doppler.com/docs/install-cli"
-private const val MAX_INSTALLER_BYTES = 2 * 1024 * 1024
 private const val MAX_INSTALLER_REDIRECTS = 5
 private val AUTOMATIC_REFRESH_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(30)
 
@@ -91,6 +91,9 @@ class DopplerToolWindowPanel(
     private var disposed = false
     private var downloadingInstaller = false
     private var reviewedInstaller: ReviewedInstaller? = null
+
+    /** Sends a reviewed-installer command to the terminal; tests replace it so no real shell runs the installer. */
+    internal var installCommandSender: (String) -> Boolean = { sendInstallCommand(it) }
     private val refreshGate = DopplerTreeRefreshGate()
     private val focusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager()
     private val focusListener = DopplerFocusRefreshListener(this, ::refresh)
@@ -365,7 +368,7 @@ class DopplerToolWindowPanel(
                 statusPanel.emptyText.clear()
                 statusPanel.emptyText.text = "Not logged in to Doppler."
                 statusPanel.emptyText.appendLine("Run 'doppler login' in Terminal", SimpleTextAttributes.LINK_ATTRIBUTES) {
-                    sendInstallCommand("doppler login")
+                    sendDopplerLogin()
                 }
                 statusPanel.emptyText.appendLine("Then retry.")
                 statusPanel.emptyText.appendLine("Retry", SimpleTextAttributes.LINK_ATTRIBUTES) { refresh(CliOperation.TREE_RETRY) }
@@ -470,18 +473,7 @@ class DopplerToolWindowPanel(
 
                     HttpURLConnection.HTTP_OK -> {
                         val bytes = connection.inputStream.use { it.readNBytes(MAX_INSTALLER_BYTES + 1) }
-                        require(bytes.isNotEmpty()) { "Downloaded installer is empty." }
-                        require(bytes.size <= MAX_INSTALLER_BYTES) { "Downloaded installer is too large." }
-                        val sha256 = installerSha256(bytes)
-                        val path = createInstallerTempFile()
-                        try {
-                            Files.write(path, bytes)
-                            Files.setPosixFilePermissions(path, setOf(PosixFilePermission.OWNER_READ))
-                            return ReviewedInstaller(path, sha256)
-                        } catch (error: Throwable) {
-                            deleteInstallerTempFile(path)
-                            throw error
-                        }
+                        return saveReviewedInstaller(bytes)
                     }
 
                     else -> {
@@ -516,15 +508,18 @@ class DopplerToolWindowPanel(
         val choice =
             Messages.showDialog(
                 project,
-                "This will run the downloaded file you reviewed (${installer.path.fileName}) with administrator privileges (sudo). " +
+                "This will run the downloaded file you reviewed (${installer.path.fileName}, " +
+                    "SHA-256 ${installer.sha256}). Its checksum is verified again right before it runs.\n\n" +
+                    "\"Install for Current User\" runs without sudo and installs into ~/.local/bin (recommended).\n" +
+                    "\"Install System-Wide\" runs the script with administrator privileges (sudo).\n\n" +
                     "Continue only if you trust its contents.",
                 "Run Reviewed Doppler Installer",
-                arrayOf("Open Terminal", "Cancel"),
-                1,
+                arrayOf("Install for Current User", "Install System-Wide (sudo)", "Cancel"),
+                2,
                 Messages.getWarningIcon(),
             )
-        if (choice != 0) return
-        if (!sendInstallCommand(reviewedInstallerCommand(installer))) {
+        val scope = installerScopeForChoice(choice) ?: return
+        if (!installCommandSender(reviewedInstallerCommand(installer, scope))) {
             return
         }
         reviewedInstaller = null
@@ -558,6 +553,16 @@ class DopplerToolWindowPanel(
         }.onFailure { error ->
             showStatus("Could not open terminal: ${error.message}", "Retry")
         }.getOrDefault(false)
+
+    private fun sendDopplerLogin() {
+        val executable =
+            DopplerExecutableLocator.find(DopplerSettings.getInstance().cliPath)
+                ?: run {
+                    showStatus("The Doppler CLI could not be found.", "Retry")
+                    return
+                }
+        installCommandSender(dopplerLoginCommand(executable, SystemInfo.isWindows))
+    }
 
     private fun showStatus(
         message: String,

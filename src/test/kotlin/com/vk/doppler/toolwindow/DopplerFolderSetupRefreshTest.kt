@@ -26,6 +26,7 @@ import com.vk.doppler.testutil.joinWithEventDispatch
 import org.junit.Assume.assumeFalse
 import java.awt.event.MouseEvent
 import java.awt.image.BufferedImage
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
@@ -306,8 +307,11 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                 TestDialog { message ->
                     confirmations++
                     assertTrue(message.contains(path.fileName.toString()))
+                    assertTrue(message.contains(installer.sha256))
+                    assertTrue(message.contains("Install for Current User"))
                     assertTrue(message.contains("administrator privileges"))
-                    1
+                    // Buttons: 0 = current user, 1 = system-wide (sudo), 2 = Cancel.
+                    2
                 },
                 testRootDisposable,
             )
@@ -326,6 +330,73 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             } finally {
                 deleteInstallerTempFile(path)
             }
+        }
+
+    fun `test reviewed installer sends the chosen scope command and keeps it when the terminal fails`() =
+        withPanel { panel, cli ->
+            val path = createInstallerTempFile()
+            val installer = ReviewedInstaller(path, installerSha256(ByteArray(0)))
+            var answer = 0
+            TestDialogManager.setTestDialog(TestDialog { answer }, testRootDisposable)
+            val sent = mutableListOf<String>()
+            var terminalAvailable = true
+            panel.installCommandSender = { command ->
+                sent += command
+                terminalAvailable
+            }
+            try {
+                cli.clearCalls()
+                field("reviewedInstaller").set(panel, installer)
+                invokePanel(panel, "runReviewedInstaller", installer)
+                assertEquals(reviewedInstallerCommand(installer, InstallerScope.USER), sent.single())
+                assertNull(field("reviewedInstaller").get(panel))
+
+                answer = 1
+                terminalAvailable = false
+                field("reviewedInstaller").set(panel, installer)
+                invokePanel(panel, "runReviewedInstaller", installer)
+                assertEquals(reviewedInstallerCommand(installer, InstallerScope.SYSTEM), sent.last())
+                assertSame(installer, field("reviewedInstaller").get(panel))
+                assertTrue(cli.calls().isEmpty())
+
+                answer = -1
+                terminalAvailable = true
+                field("reviewedInstaller").set(panel, installer)
+                invokePanel(panel, "runReviewedInstaller", installer)
+                assertEquals(2, sent.size)
+                assertSame(installer, field("reviewedInstaller").get(panel))
+            } finally {
+                deleteInstallerTempFile(path)
+            }
+        }
+
+    fun `test login command uses resolved executable when it is absent from PATH`() =
+        withPanel { panel, cli ->
+            val cliDirectory = cli.executable.parent.toString()
+            assertFalse(
+                System
+                    .getenv("PATH")
+                    .orEmpty()
+                    .split(File.pathSeparator)
+                    .contains(cliDirectory),
+            )
+
+            val sent = mutableListOf<String>()
+            panel.installCommandSender = { command ->
+                sent += command
+                true
+            }
+            cli.clearCalls()
+            invokePanel(panel, "showStatusFor", DopplerStatusReport(DopplerStatus.NOT_AUTHENTICATED, null))
+            clickStatusLink(panel, "Run 'doppler login' in Terminal")
+
+            assertEquals(dopplerLoginCommand(cli.executable.toAbsolutePath().toString(), SystemInfo.isWindows), sent.single())
+            assertTrue(cli.calls().isEmpty())
+
+            DopplerSettings.getInstance().cliPath = cli.executable.resolveSibling("missing-doppler").toString()
+            invokePanel(panel, "sendDopplerLogin")
+            assertEquals(1, sent.size)
+            assertTrue(statusText(panel).contains("The Doppler CLI could not be found."))
         }
 
     fun `test reviewed installer rejects stale missing and symlink files before confirmation`() =

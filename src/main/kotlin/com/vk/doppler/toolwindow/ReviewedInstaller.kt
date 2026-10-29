@@ -4,6 +4,7 @@ import java.net.URI
 import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermission
 import java.security.MessageDigest
 
 internal data class ReviewedInstaller(
@@ -13,6 +14,7 @@ internal data class ReviewedInstaller(
 
 private const val INSTALLER_TEMP_PREFIX = "doppler-installer-"
 private const val INSTALLER_TEMP_SUFFIX = ".sh"
+internal const val MAX_INSTALLER_BYTES = 2 * 1024 * 1024
 internal const val INSTALL_SCRIPT_URL = "https://cli.doppler.com/install.sh"
 internal const val INSTALL_SCRIPT_SOURCE_URL =
     "https://raw.githubusercontent.com/DopplerHQ/cli/master/scripts/install.sh"
@@ -56,6 +58,34 @@ internal enum class InstallerScope {
 
     /** Runs with sudo and lets the official script choose a system bin directory. */
     SYSTEM,
+}
+
+/** Maps the reviewed-installer dialog button index to a scope; any other index means the user cancelled. */
+internal fun installerScopeForChoice(choice: Int): InstallerScope? =
+    when (choice) {
+        0 -> InstallerScope.USER
+        1 -> InstallerScope.SYSTEM
+        else -> null
+    }
+
+/** Validates a downloaded installer and stores it as an owner-read-only temporary file for review. */
+internal fun saveReviewedInstaller(
+    bytes: ByteArray,
+    maxBytes: Int = MAX_INSTALLER_BYTES,
+): ReviewedInstaller {
+    require(bytes.isNotEmpty()) { "Downloaded installer is empty." }
+    require(bytes.size <= maxBytes) { "Downloaded installer is too large." }
+    requireShellScript(bytes)
+    val sha256 = installerSha256(bytes)
+    val path = createInstallerTempFile()
+    try {
+        Files.write(path, bytes)
+        Files.setPosixFilePermissions(path, setOf(PosixFilePermission.OWNER_READ))
+        return ReviewedInstaller(path, sha256)
+    } catch (error: Throwable) {
+        deleteInstallerTempFile(path)
+        throw error
+    }
 }
 
 /** Rejects downloads that are not a shell script, such as an HTML error page. */

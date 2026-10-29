@@ -52,7 +52,6 @@ import java.net.URI
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
-import java.nio.file.attribute.PosixFilePermission
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.HttpsURLConnection
 import javax.swing.JComponent
@@ -68,7 +67,6 @@ private const val CARD_STATUS = "status"
 private const val CARD_TREE = "tree"
 private const val DOPPLER_TERMINAL_TAB_NAME = "Doppler CLI"
 private const val INSTALL_DOCS_URL = "https://docs.doppler.com/docs/install-cli"
-private const val MAX_INSTALLER_BYTES = 2 * 1024 * 1024
 private const val MAX_INSTALLER_REDIRECTS = 5
 private val AUTOMATIC_REFRESH_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(30)
 
@@ -91,6 +89,9 @@ class DopplerToolWindowPanel(
     private var disposed = false
     private var downloadingInstaller = false
     private var reviewedInstaller: ReviewedInstaller? = null
+
+    /** Sends a reviewed-installer command to the terminal; tests replace it so no real shell runs the installer. */
+    internal var installCommandSender: (String) -> Boolean = { sendInstallCommand(it) }
     private val refreshGate = DopplerTreeRefreshGate()
     private val focusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager()
     private val focusListener = DopplerFocusRefreshListener(this, ::refresh)
@@ -470,19 +471,7 @@ class DopplerToolWindowPanel(
 
                     HttpURLConnection.HTTP_OK -> {
                         val bytes = connection.inputStream.use { it.readNBytes(MAX_INSTALLER_BYTES + 1) }
-                        require(bytes.isNotEmpty()) { "Downloaded installer is empty." }
-                        require(bytes.size <= MAX_INSTALLER_BYTES) { "Downloaded installer is too large." }
-                        requireShellScript(bytes)
-                        val sha256 = installerSha256(bytes)
-                        val path = createInstallerTempFile()
-                        try {
-                            Files.write(path, bytes)
-                            Files.setPosixFilePermissions(path, setOf(PosixFilePermission.OWNER_READ))
-                            return ReviewedInstaller(path, sha256)
-                        } catch (error: Throwable) {
-                            deleteInstallerTempFile(path)
-                            throw error
-                        }
+                        return saveReviewedInstaller(bytes)
                     }
 
                     else -> {
@@ -527,13 +516,8 @@ class DopplerToolWindowPanel(
                 2,
                 Messages.getWarningIcon(),
             )
-        val scope =
-            when (choice) {
-                0 -> InstallerScope.USER
-                1 -> InstallerScope.SYSTEM
-                else -> return
-            }
-        if (!sendInstallCommand(reviewedInstallerCommand(installer, scope))) {
+        val scope = installerScopeForChoice(choice) ?: return
+        if (!installCommandSender(reviewedInstallerCommand(installer, scope))) {
             return
         }
         reviewedInstaller = null

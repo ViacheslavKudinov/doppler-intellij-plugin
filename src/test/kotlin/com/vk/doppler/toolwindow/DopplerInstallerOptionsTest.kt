@@ -8,8 +8,10 @@ import org.junit.Assert.fail
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.net.URI
+import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermission
 
 class DopplerInstallerOptionsTest {
     @Test
@@ -149,7 +151,7 @@ class DopplerInstallerOptionsTest {
     @Test
     fun `installer download must be a shell script`() {
         requireShellScript("#!/bin/sh\necho ok\n".toByteArray())
-        listOf("<!DOCTYPE html>", "#", "", "echo hi").forEach { body ->
+        listOf("<!DOCTYPE html>", "#", "", "echo hi", "#x").forEach { body ->
             try {
                 requireShellScript(body.toByteArray())
                 fail("Expected non-script download to be rejected: $body")
@@ -157,6 +159,52 @@ class DopplerInstallerOptionsTest {
                 // Expected.
             }
         }
+    }
+
+    @Test
+    fun `installer dialog choice maps to a scope or cancel`() {
+        assertEquals(InstallerScope.USER, installerScopeForChoice(0))
+        assertEquals(InstallerScope.SYSTEM, installerScopeForChoice(1))
+        assertNull(installerScopeForChoice(2))
+        assertNull(installerScopeForChoice(-1))
+    }
+
+    @Test
+    fun `saved installer is owner read-only and records its digest`() {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"))
+        val bytes = "#!/bin/sh\necho ok\n".toByteArray()
+        val installer = saveReviewedInstaller(bytes)
+        try {
+            assertEquals(installerSha256(bytes), installer.sha256)
+            assertTrue(bytes.contentEquals(Files.readAllBytes(installer.path)))
+            assertEquals(setOf(PosixFilePermission.OWNER_READ), Files.getPosixFilePermissions(installer.path))
+        } finally {
+            deleteInstallerTempFile(installer.path)
+        }
+    }
+
+    @Test
+    fun `invalid installer downloads are rejected before a file is written`() {
+        val tempDirectory = Path.of(System.getProperty("java.io.tmpdir"))
+
+        fun installerFiles() =
+            Files.list(tempDirectory).use { files ->
+                files.filter { it.fileName.toString().startsWith("doppler-installer-") }.toList().toSet()
+            }
+        val before = installerFiles()
+        mapOf(
+            ByteArray(0) to "empty",
+            "#!/bin/sh\n".toByteArray() to "too large",
+            "<html>".toByteArray() to "not a shell script",
+        ).forEach { (bytes, reason) ->
+            try {
+                saveReviewedInstaller(bytes, maxBytes = if (reason == "too large") 4 else MAX_INSTALLER_BYTES)
+                fail("Expected installer to be rejected: $reason")
+            } catch (error: IllegalArgumentException) {
+                assertTrue(error.message.orEmpty().contains(reason))
+            }
+        }
+        assertEquals(before, installerFiles())
     }
 
     private fun runInShell(

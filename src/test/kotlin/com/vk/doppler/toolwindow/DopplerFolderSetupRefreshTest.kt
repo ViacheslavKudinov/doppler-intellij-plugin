@@ -331,6 +331,37 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             }
         }
 
+    fun `test reviewed installer sends the chosen scope command and keeps it when the terminal fails`() =
+        withPanel { panel, cli ->
+            val path = createInstallerTempFile()
+            val installer = ReviewedInstaller(path, installerSha256(ByteArray(0)))
+            var answer = 0
+            TestDialogManager.setTestDialog(TestDialog { answer }, testRootDisposable)
+            val sent = mutableListOf<String>()
+            var terminalAvailable = true
+            panel.installCommandSender = { command ->
+                sent += command
+                terminalAvailable
+            }
+            try {
+                cli.clearCalls()
+                field("reviewedInstaller").set(panel, installer)
+                invokePanel(panel, "runReviewedInstaller", installer)
+                assertEquals(reviewedInstallerCommand(installer, InstallerScope.USER), sent.single())
+                assertNull(field("reviewedInstaller").get(panel))
+
+                answer = 1
+                terminalAvailable = false
+                field("reviewedInstaller").set(panel, installer)
+                invokePanel(panel, "runReviewedInstaller", installer)
+                assertEquals(reviewedInstallerCommand(installer, InstallerScope.SYSTEM), sent.last())
+                assertSame(installer, field("reviewedInstaller").get(panel))
+                assertTrue(cli.calls().isEmpty())
+            } finally {
+                deleteInstallerTempFile(path)
+            }
+        }
+
     fun `test reviewed installer rejects stale missing and symlink files before confirmation`() =
         withPanel { panel, _ ->
             val path = createInstallerTempFile()

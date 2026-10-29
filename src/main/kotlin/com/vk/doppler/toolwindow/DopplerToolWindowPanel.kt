@@ -561,7 +561,7 @@ class DopplerToolWindowPanel(
                     showStatus("The Doppler CLI could not be found.", "Retry")
                     return
                 }
-        installCommandSender("${shellQuoteShellArgument(executable)} login")
+        installCommandSender(dopplerLoginCommand(executable, SystemInfo.isWindows))
     }
 
     private fun showStatus(

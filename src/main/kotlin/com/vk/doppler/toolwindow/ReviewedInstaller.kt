@@ -163,3 +163,13 @@ internal fun reviewedInstallerCommand(
 private val SHA256_HEX = Regex("[0-9a-f]{64}")
 
 internal fun shellQuoteShellArgument(value: String): String = "'${value.replace("'", "'\\''")}'"
+
+/**
+ * Builds the terminal command for `doppler login`. POSIX shells get the quoted absolute path so
+ * user-local installs work without PATH changes. Windows terminals may be PowerShell, cmd.exe or
+ * a POSIX shell, which have incompatible quoting rules, so they get the bare command name.
+ */
+internal fun dopplerLoginCommand(
+    executable: String,
+    windows: Boolean,
+): String = if (windows) "doppler login" else "${shellQuoteShellArgument(executable)} login"

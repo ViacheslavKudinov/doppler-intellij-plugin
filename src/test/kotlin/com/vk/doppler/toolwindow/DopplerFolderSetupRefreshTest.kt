@@ -390,7 +390,7 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             invokePanel(panel, "showStatusFor", DopplerStatusReport(DopplerStatus.NOT_AUTHENTICATED, null))
             clickStatusLink(panel, "Run 'doppler login' in Terminal")
 
-            assertEquals("${shellQuoteShellArgument(cli.executable.toAbsolutePath().toString())} login", sent.single())
+            assertEquals(dopplerLoginCommand(cli.executable.toAbsolutePath().toString(), SystemInfo.isWindows), sent.single())
             assertTrue(cli.calls().isEmpty())
 
             DopplerSettings.getInstance().cliPath = cli.executable.resolveSibling("missing-doppler").toString()

@@ -275,4 +275,20 @@ class DopplerInstallerOptionsTest {
             // Expected.
         }
     }
+
+    @Test
+    fun `login command quotes the absolute executable path for POSIX shells`() {
+        assertEquals(
+            "'/home/o'\\''neil/.local/bin/doppler' login",
+            dopplerLoginCommand("/home/o'neil/.local/bin/doppler", windows = false),
+        )
+    }
+
+    @Test
+    fun `login command avoids POSIX quoting on Windows terminals`() {
+        assertEquals(
+            "doppler login",
+            dopplerLoginCommand("C:\\Program Files\\doppler\\doppler.exe", windows = true),
+        )
+    }
 }

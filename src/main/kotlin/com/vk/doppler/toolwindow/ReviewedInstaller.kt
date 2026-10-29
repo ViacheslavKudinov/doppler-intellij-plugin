@@ -49,9 +49,42 @@ internal fun installerSha256(bytes: ByteArray): String =
         .digest(bytes)
         .joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
 
-internal fun reviewedInstallerCommand(installer: ReviewedInstaller): String {
+/** Where the reviewed installer places the Doppler binary. */
+internal enum class InstallerScope {
+    /** Runs without sudo and installs into `$HOME/.local/bin` via the official `--install-path` option. */
+    USER,
+
+    /** Runs with sudo and lets the official script choose a system bin directory. */
+    SYSTEM,
+}
+
+/** Rejects downloads that are not a shell script, such as an HTML error page. */
+internal fun requireShellScript(bytes: ByteArray) {
+    require(bytes.size >= 2 && bytes[0] == '#'.code.toByte() && bytes[1] == '!'.code.toByte()) {
+        "Downloaded installer is not a shell script."
+    }
+}
+
+internal fun reviewedInstallerCommand(
+    installer: ReviewedInstaller,
+    scope: InstallerScope = InstallerScope.USER,
+): String {
     val dollar = '$'
-    val privilegedScript =
+    val runInstaller =
+        when (scope) {
+            InstallerScope.USER -> {
+                """
+                install_dir="${dollar}HOME/.local/bin"
+                mkdir -p -- "${dollar}install_dir"
+                sh "${dollar}root_copy" --install-path "${dollar}install_dir"
+                """.trimIndent()
+            }
+
+            InstallerScope.SYSTEM -> {
+                "sh \"${dollar}root_copy\""
+            }
+        }
+    val verifyingScript =
         """
         set -eu
         source_path=${dollar}1
@@ -60,24 +93,36 @@ internal fun reviewedInstallerCommand(installer: ReviewedInstaller): String {
         root_copy=$dollar(mktemp /tmp/doppler-installer.XXXXXX)
         trap 'rm -f -- "${dollar}root_copy"' 0
         cat -- "${dollar}source_path" > "${dollar}root_copy"
+        case "${dollar}expected_sha256" in
+            *[!0-9a-f]*) printf '%s\n' 'Invalid installer checksum; refusing to run installer.' >&2; exit 1 ;;
+        esac
+        if [ "$dollar{#expected_sha256}" -ne 64 ]; then
+            printf '%s\n' 'Invalid installer checksum; refusing to run installer.' >&2
+            exit 1
+        fi
         if command -v sha256sum >/dev/null 2>&1; then
-            printf '%s  %s\n' "${dollar}expected_sha256" "${dollar}root_copy" | sha256sum -c - >/dev/null
+            actual_sha256=$dollar(sha256sum "${dollar}root_copy" | awk '{print ${dollar}1}')
         elif command -v shasum >/dev/null 2>&1; then
             actual_sha256=$dollar(shasum -a 256 "${dollar}root_copy" | awk '{print ${dollar}1}')
-            test "${dollar}actual_sha256" = "${dollar}expected_sha256"
         elif command -v openssl >/dev/null 2>&1; then
             actual_sha256=$dollar(openssl dgst -sha256 "${dollar}root_copy" | awk '{print ${dollar}NF}')
-            test "${dollar}actual_sha256" = "${dollar}expected_sha256"
         else
             printf '%s\n' 'No SHA-256 utility found; refusing to run installer.' >&2
             exit 1
         fi
-        sh "${dollar}root_copy"
-        """.trimIndent()
+        if [ "${dollar}actual_sha256" != "${dollar}expected_sha256" ]; then
+            printf '%s\n' 'Installer changed after review (SHA-256 mismatch); refusing to run installer.' >&2
+            exit 1
+        fi
+        """.trimIndent() + "\n" + runInstaller
+    require(SHA256_HEX.matches(installer.sha256)) { "Installer checksum must be a lowercase SHA-256 hex digest." }
     val sourcePath = shellQuote(installer.path.toString())
     val expectedSha256 = shellQuote(installer.sha256)
-    return "sudo sh -c ${shellQuote(privilegedScript)} sh $sourcePath $expectedSha256; " +
+    val launcher = if (scope == InstallerScope.SYSTEM) "sudo sh" else "sh"
+    return "$launcher -c ${shellQuote(verifyingScript)} sh $sourcePath $expectedSha256; " +
         "result=\$?; rm -f -- $sourcePath; exit \"\$result\""
 }
+
+private val SHA256_HEX = Regex("[0-9a-f]{64}")
 
 private fun shellQuote(value: String): String = "'${value.replace("'", "'\\''")}'"

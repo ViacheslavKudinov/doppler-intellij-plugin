@@ -472,6 +472,7 @@ class DopplerToolWindowPanel(
                         val bytes = connection.inputStream.use { it.readNBytes(MAX_INSTALLER_BYTES + 1) }
                         require(bytes.isNotEmpty()) { "Downloaded installer is empty." }
                         require(bytes.size <= MAX_INSTALLER_BYTES) { "Downloaded installer is too large." }
+                        requireShellScript(bytes)
                         val sha256 = installerSha256(bytes)
                         val path = createInstallerTempFile()
                         try {
@@ -516,15 +517,23 @@ class DopplerToolWindowPanel(
         val choice =
             Messages.showDialog(
                 project,
-                "This will run the downloaded file you reviewed (${installer.path.fileName}) with administrator privileges (sudo). " +
+                "This will run the downloaded file you reviewed (${installer.path.fileName}, " +
+                    "SHA-256 ${installer.sha256}). Its checksum is verified again right before it runs.\n\n" +
+                    "\"Install for Current User\" runs without sudo and installs into ~/.local/bin (recommended).\n" +
+                    "\"Install System-Wide\" runs the script with administrator privileges (sudo).\n\n" +
                     "Continue only if you trust its contents.",
                 "Run Reviewed Doppler Installer",
-                arrayOf("Open Terminal", "Cancel"),
-                1,
+                arrayOf("Install for Current User", "Install System-Wide (sudo)", "Cancel"),
+                2,
                 Messages.getWarningIcon(),
             )
-        if (choice != 0) return
-        if (!sendInstallCommand(reviewedInstallerCommand(installer))) {
+        val scope =
+            when (choice) {
+                0 -> InstallerScope.USER
+                1 -> InstallerScope.SYSTEM
+                else -> return
+            }
+        if (!sendInstallCommand(reviewedInstallerCommand(installer, scope))) {
             return
         }
         reviewedInstaller = null

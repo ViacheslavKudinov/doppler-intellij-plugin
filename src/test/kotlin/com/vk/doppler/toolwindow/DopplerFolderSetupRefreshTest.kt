@@ -306,8 +306,11 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                 TestDialog { message ->
                     confirmations++
                     assertTrue(message.contains(path.fileName.toString()))
+                    assertTrue(message.contains(installer.sha256))
+                    assertTrue(message.contains("Install for Current User"))
                     assertTrue(message.contains("administrator privileges"))
-                    1
+                    // Buttons: 0 = current user, 1 = system-wide (sudo), 2 = Cancel.
+                    2
                 },
                 testRootDisposable,
             )

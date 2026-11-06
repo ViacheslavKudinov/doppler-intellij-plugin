@@ -109,65 +109,10 @@ class DopplerInjectionConfigurable(
         val model = DefaultTableModel(arrayOf("Current secret name", "New secret name"), 0)
         val nameEditorModel = DefaultComboBoxModel<String>()
 
-        fun hasUnmappedSecrets(): Boolean {
-            val names = knownNames ?: return true
-            val mappedNames =
-                (0 until model.rowCount)
-                    .map { (model.getValueAt(it, 0) as? String).orEmpty().trim() }
-                    .toSet()
-            return names.any { it !in mappedNames }
-        }
-
-        fun canAddMapping(): Boolean {
-            if (!setupAvailable) return false
-            val names = knownNames ?: return false
-            return model.rowCount < names.size && hasUnmappedSecrets()
-        }
-        val table =
-            object : JBTable(model) {
-                override fun isCellEditable(
-                    row: Int,
-                    column: Int,
-                ): Boolean {
-                    if (!setupAvailable) return false
-                    if (convertColumnIndexToModel(column) == 0 && !hasUnmappedSecrets()) return false
-                    return super.isCellEditable(row, column)
-                }
-
-                override fun editCellAt(
-                    row: Int,
-                    column: Int,
-                    event: EventObject?,
-                ): Boolean {
-                    val editing = super.editCellAt(row, column, event)
-                    if (editing) {
-                        (editorComponent as? JBTextField)?.let { input ->
-                            input.requestFocusInWindow()
-                            input.caret.isVisible = true
-                        }
-                    }
-                    return editing
-                }
-            }
+        val table = createMappingTable(model)
         this.mappingModel = model
         this.mappingTable = table
         this.nameEditorModel = nameEditorModel
-        val headerRenderer = table.tableHeader.defaultRenderer
-        table.tableHeader.defaultRenderer =
-            javax.swing.table.TableCellRenderer { headerTable, value, selected, focused, row, column ->
-                headerRenderer.getTableCellRendererComponent(headerTable, value, selected, focused, row, column).apply {
-                    font = table.tableHeader.font.deriveFont(Font.BOLD)
-                    background = UIUtil.getPanelBackground()
-                    if (this is JComponent) {
-                        isOpaque = true
-                        border =
-                            BorderFactory.createCompoundBorder(
-                                JBUI.Borders.customLine(JBColor.border(), 0, 0, 1, 0),
-                                JBUI.Borders.empty(4, 8),
-                            )
-                    }
-                }
-            }
         val mappingRenderer = MappingCellRenderer()
         val nameCombo = ComboBox(nameEditorModel).apply { isEditable = false }
         nameCombo.addActionListener { clearValidationMessage() }
@@ -219,20 +164,14 @@ class DopplerInjectionConfigurable(
             },
         )
 
-        fun addMapping() {
-            if (!canAddMapping()) return
-            table.cellEditor?.stopCellEditing()
-            model.addRow(arrayOf("", ""))
-            editMappingRow(table, model.rowCount - 1)
-        }
         val decorated =
             ToolbarDecorator
                 .createDecorator(table)
                 .setToolbarPosition(ActionToolbarPosition.TOP)
                 .disableUpDownActions()
-                .setAddActionUpdater { canAddMapping() }
+                .setAddActionUpdater { canAddMapping(model) }
                 .setAddAction {
-                    addMapping()
+                    addMapping(table, model)
                 }.setRemoveActionUpdater { setupAvailable && table.selectedRowCount > 0 }
                 .setRemoveAction {
                     if (!setupAvailable) return@setRemoveAction
@@ -322,11 +261,82 @@ class DopplerInjectionConfigurable(
             }
 
             override fun actionPerformed(event: AnActionEvent) {
-                if (setupAvailable && transformerBox?.selectedItem == DopplerNameTransformer.CUSTOM) addMapping()
+                if (setupAvailable && transformerBox?.selectedItem == DopplerNameTransformer.CUSTOM) addMapping(table, model)
             }
         }.registerCustomShortcutSet(CommonShortcuts.getNewForDialogs(), dialog)
         loadKnownNames()
         return dialog
+    }
+
+    private fun hasUnmappedSecrets(model: DefaultTableModel): Boolean {
+        val names = knownNames ?: return true
+        val mappedNames =
+            (0 until model.rowCount)
+                .map { (model.getValueAt(it, 0) as? String).orEmpty().trim() }
+                .toSet()
+        return names.any { it !in mappedNames }
+    }
+
+    private fun canAddMapping(model: DefaultTableModel): Boolean {
+        if (!setupAvailable) return false
+        val names = knownNames ?: return false
+        return model.rowCount < names.size && hasUnmappedSecrets(model)
+    }
+
+    private fun addMapping(
+        table: JBTable,
+        model: DefaultTableModel,
+    ) {
+        if (!canAddMapping(model)) return
+        table.cellEditor?.stopCellEditing()
+        model.addRow(arrayOf("", ""))
+        editMappingRow(table, model.rowCount - 1)
+    }
+
+    private fun createMappingTable(model: DefaultTableModel): JBTable {
+        val table =
+            object : JBTable(model) {
+                override fun isCellEditable(
+                    row: Int,
+                    column: Int,
+                ): Boolean {
+                    if (!setupAvailable) return false
+                    if (convertColumnIndexToModel(column) == 0 && !hasUnmappedSecrets(model)) return false
+                    return super.isCellEditable(row, column)
+                }
+
+                override fun editCellAt(
+                    row: Int,
+                    column: Int,
+                    event: EventObject?,
+                ): Boolean {
+                    val editing = super.editCellAt(row, column, event)
+                    if (editing) {
+                        (editorComponent as? JBTextField)?.let { input ->
+                            input.requestFocusInWindow()
+                            input.caret.isVisible = true
+                        }
+                    }
+                    return editing
+                }
+            }
+        val headerRenderer = table.tableHeader.defaultRenderer
+        table.tableHeader.defaultRenderer =
+            javax.swing.table.TableCellRenderer { headerTable, value, selected, focused, row, column ->
+                headerRenderer.getTableCellRendererComponent(headerTable, value, selected, focused, row, column).apply {
+                    font = table.tableHeader.font.deriveFont(Font.BOLD)
+                    background = UIUtil.getPanelBackground()
+                    if (this is JComponent) {
+                        isOpaque = true
+                        border =
+                            BorderFactory.createCompoundBorder(
+                                JBUI.Borders.customLine(JBColor.border(), 0, 0, 1, 0),
+                                JBUI.Borders.empty(4, 8),
+                            )
+                    }
+                }
+            }
+        return table
     }
 
     private fun editMappingRow(

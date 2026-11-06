@@ -342,27 +342,13 @@ class DopplerToolWindowPanel(
                 }
 
                 override fun onSuccess() {
-                    if (project.isDisposed || generation != configGeneration || node.parent !== rootNode) return
-                    val state = DopplerTreeState(tree)
-                    val changed = treeUpdater.configs(node, configs)
-                    node.loaded = true
-                    node.configLoadFailed = false
-                    if (changed) state.restore(tree)
-                    scheduleMessageCollapse(node)
+                    if (!isCurrentConfigLoad(node, generation)) return
+                    applyLoadedConfigs(node, configs)
                 }
 
                 override fun onThrowable(error: Throwable) {
-                    if (project.isDisposed || generation != configGeneration || node.parent !== rootNode) return
-                    val accessFailure = error is DopplerCliException && error.kind == DopplerCliException.Kind.NOT_AUTHENTICATED
-                    if (node.loaded && !accessFailure) return
-                    val state = DopplerTreeState(tree)
-                    node.loaded = false
-                    node.configLoadFailed = true
-                    node.removeAllChildren()
-                    node.add(DefaultMutableTreeNode("Failed to load: ${error.message}"))
-                    treeModel.nodeStructureChanged(node)
-                    state.restore(tree)
-                    scheduleMessageCollapse(node)
+                    if (!isCurrentConfigLoad(node, generation)) return
+                    showConfigLoadFailure(node, error)
                 }
 
                 override fun onFinished() {
@@ -370,6 +356,39 @@ class DopplerToolWindowPanel(
                 }
             },
         )
+    }
+
+    private fun isCurrentConfigLoad(
+        node: ProjectNode,
+        generation: Int,
+    ): Boolean = !project.isDisposed && generation == configGeneration && node.parent === rootNode
+
+    private fun applyLoadedConfigs(
+        node: ProjectNode,
+        configs: List<DopplerConfig>,
+    ) {
+        val state = DopplerTreeState(tree)
+        val changed = treeUpdater.configs(node, configs)
+        node.loaded = true
+        node.configLoadFailed = false
+        if (changed) state.restore(tree)
+        scheduleMessageCollapse(node)
+    }
+
+    private fun showConfigLoadFailure(
+        node: ProjectNode,
+        error: Throwable,
+    ) {
+        val accessFailure = error is DopplerCliException && error.kind == DopplerCliException.Kind.NOT_AUTHENTICATED
+        if (node.loaded && !accessFailure) return
+        val state = DopplerTreeState(tree)
+        node.loaded = false
+        node.configLoadFailed = true
+        node.removeAllChildren()
+        node.add(DefaultMutableTreeNode("Failed to load: ${error.message}"))
+        treeModel.nodeStructureChanged(node)
+        state.restore(tree)
+        scheduleMessageCollapse(node)
     }
 
     private fun scheduleMessageCollapse(node: ProjectNode) {

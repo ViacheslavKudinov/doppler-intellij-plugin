@@ -170,6 +170,17 @@ doppler login
 The CLI is auto-detected on `PATH` and in common install locations. If your IDE was launched from the GUI
 with a minimal `PATH`, set the binary location explicitly in **Settings | Tools | Doppler**.
 
+Authentication uses the current IDE project folder as the CLI scope, matching commands run from
+that folder in Terminal. Project-scoped logins work without replacing the global login. In Settings
+opened without a project, Test Connection checks the global login.
+
+Click **Test Connection** in **Settings | Tools | Doppler** to check that the CLI can be found and
+started, authenticate with `doppler me`, validate the returned account and workplace identity,
+and read the CLI version. A successful result means authentication works for the selected scope.
+It does not list projects or configs, read secrets, check access to a particular project or config,
+or validate the folder's selected project and config. These operations can still fail because of
+missing permissions or invalid folder defaults even after Test Connection succeeds.
+
 Global CLI settings are available even without an open project.
 
 ### Default project and config
@@ -226,6 +237,9 @@ failure recovery, and [How secrets are handled](#how-secrets-are-handled) for da
 ## ▶️ Run and Debug environment injection
 
 Choose your default project and config in **Settings | Tools | Doppler | Folder Setup**.
+The Run and Debug controls stay disabled until both defaults are set. Saving or clearing Folder Setup
+updates those controls while Settings is open. Saved injection preferences and custom mappings are
+preserved while the controls are inactive.
 Then click **Run and Debug…** on the main Doppler settings page and enable **Automatically inject Doppler
 secrets into Run and Debug**. Injection is automatic on every launch; there is no Inject button.
 The setting is local to the current IDE project and starts disabled.

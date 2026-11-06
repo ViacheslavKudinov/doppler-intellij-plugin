@@ -2,6 +2,8 @@ package com.vk.doppler.service
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectManager
 import com.vk.doppler.cli.CliLogContext
 import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.DopplerAccountInfo
@@ -41,13 +43,15 @@ data class DopplerFolderSetupSnapshot(
  * Entry point for all Doppler access. Every method performs blocking I/O and must be
  * called off the EDT.
  */
-@Service(Service.Level.APP)
-class DopplerService {
+@Service(Service.Level.PROJECT)
+class DopplerService(
+    private val project: Project,
+) {
     private fun cli(
         operation: CliOperation = CliOperation.AUTOCOMPLETE,
         context: CliLogContext = CliLogContext(),
         relatedConfigs: List<CliLogContext> = emptyList(),
-        scope: String? = null,
+        scope: String? = project.basePath,
     ): DopplerCli {
         val path =
             DopplerExecutableLocator.find(DopplerSettings.getInstance().cliPath)
@@ -294,7 +298,7 @@ class DopplerService {
         )
 
     companion object {
-        fun getInstance(): DopplerService = service()
+        fun getInstance(project: Project? = null): DopplerService = (project ?: ProjectManager.getInstance().defaultProject).service()
     }
 }
 

@@ -14,22 +14,27 @@ Secrets must never be persisted or leaked. Before suggesting any code, check tha
 - read, write, or transmit a Doppler token in plugin code
 - make any outbound network call other than the `doppler` subprocess
 
-If you can't be certain the answer is "no", don't generate the code. Say what the risk is.
+If you can't be certain the answer is "no", don't generate the code. Reply with a short section titled "Secret handling risk" that names the risky rule, the code path involved, and a safer alternative.
 
 ## Kotlin Formatting
 
 - All Kotlin source files, tests, and Gradle Kotlin scripts must follow the project's ktlint formatting rules and `$/.editorconfig` configuration.
-- After Kotlin or Gradle Kotlin script changes, run `./gradlew ktlintFormat --console=plain -x patchChangelog`, then run `./gradlew ktlintCheck --console=plain -x patchChangelog` in a separate invocation. Keep formatting changes within the task's scope unless a broader cleanup is authorized.
+- After Kotlin or Gradle Kotlin script changes, run `./gradlew ktlintFormat --console=plain -x patchChangelog`, then run `./gradlew ktlintCheck --console=plain -x patchChangelog` in a separate invocation. Limit formatting changes to the files and lines touched by the task. Only reformat other files if the user explicitly asks for a broader cleanup in the current request.
 - Fix formatting violations before reporting completion. Do not disable rules, add baselines, or ignore failures merely to make checks pass without explicit approval.
+- If `./gradlew ktlintFormat` or `./gradlew ktlintCheck` fails for a non-formatting reason, report the exact command, an error output summary, and the blocker instead of changing unrelated files.
 - CI must check formatting and fail on violations, not automatically rewrite source files.
 
 ## Build and Unit Tests
 
-- Add or update unit tests for new code and changed behavior, including relevant edge cases. Include a regression test for bug fixes. Follow the existing test conventions under `src/test/kotlin`.
+- Add or update unit tests for new code and changed behavior, including applicable boundary values (such as empty, null-equivalent, and maximum-length inputs) and each documented error path. Include a regression test for bug fixes. Follow the existing test conventions under `src/test/kotlin`.
 - After code or build-configuration changes, run `./gradlew buildPlugin test --console=plain` locally from the repository root. Run it after the final edits, not only before making changes; do not rely solely on editor diagnostics or CI.
-- Use a compatible JDK. On macOS, if no suitable JDK is configured, use the bundled IntelliJ JDK: `JAVA_HOME="/Applications/IntelliJ IDEA.app/Contents/jbr/Contents/Home" ./gradlew buildPlugin test --console=plain`. On Linux or Windows, if no suitable JDK is configured, set JAVA_HOME to a JDK 17 or newer installation and run the same command. If no JDK is available, report that as the blocker.
+- Select a JDK for local validation:
+  1. Check whether a JDK 17 or newer compatible with the project's Gradle toolchain requirement is configured. If so, run the build/test command above.
+  2. If not, on macOS, check the bundled IntelliJ JDK for compatibility and, if compatible, run `JAVA_HOME="/Applications/IntelliJ IDEA.app/Contents/jbr/Contents/Home" ./gradlew buildPlugin test --console=plain`.
+  3. If no compatible JDK is configured or available at that macOS path, set `JAVA_HOME` to another compatible JDK 17 or newer and run the build/test command above.
+  4. If no compatible JDK is available, report it as the blocker.
 - Fix failures introduced by the changes and rerun validation before reporting completion. If validation is blocked or fails for an unrelated reason, report the exact command and blocker; never claim an unrun or failed check passed.
-- Do not modify `CHANGELOG.md` during implementation or validation. Avoid publishing tasks for local validation, and exclude `patchChangelog` with `-x patchChangelog` if a required task would invoke it.
+- Do not modify `CHANGELOG.md` during implementation or validation. Do not run tasks that upload or publish artifacts, such as `publishPlugin` or any task whose name starts with `publish`, during local validation. Exclude `patchChangelog` with `-x patchChangelog` if a required task would invoke it.
 - In the final response, summarize the tests added or updated and the local build/test results. Documentation-only changes do not require a plugin build.
 
 ## Commit Messages and Pull Request Titles
@@ -52,12 +57,12 @@ Examples:
 
 ## Path References
 
-- Use `$/...` instead of `./...` for repository-relative path references.
+- Use `$/...` instead of `./...` for repository-relative path references, except in executable commands, where the actual shell path must be preserved.
 
 ## Code
 
 - Every new public function or class must have at least one unit test that exercises its main path and each documented edge case in src/test/kotlin. Do not add coverage tooling unless it is already configured in the project.
-- Do not use IntelliJ Platform APIs annotated with @Deprecated or @ApiStatus.ScheduledForRemoval, or APIs whose Javadoc marks them as deprecated. If the only available option is deprecated, state this in the final response and do not add it silently.
+- Do not use IntelliJ Platform APIs annotated with @Deprecated or @ApiStatus.ScheduledForRemoval, or APIs whose Javadoc marks them as deprecated. If the only available option is such an API, do not add it; report the blocker in the final response.
 
 ## References
 

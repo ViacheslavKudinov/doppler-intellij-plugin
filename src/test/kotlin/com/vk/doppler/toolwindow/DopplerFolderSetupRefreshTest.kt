@@ -24,6 +24,7 @@ import com.vk.doppler.settings.DopplerFolderSetupState
 import com.vk.doppler.settings.DopplerSettings
 import com.vk.doppler.testutil.joinWithEventDispatch
 import org.junit.Assume.assumeFalse
+import java.awt.event.ActionEvent
 import java.awt.event.MouseEvent
 import java.awt.image.BufferedImage
 import java.io.File
@@ -32,6 +33,7 @@ import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JTree
+import javax.swing.Timer
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.TreePath
 
@@ -229,6 +231,7 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             assertTrue(node.configLoadFailed)
             assertFalse(node.loaded)
             assertTrue(node.getChildAt(0).toString().contains("Temporary config read failure"))
+            assertTrue("The error must remain visible after expanding", tree.isExpanded(path))
 
             tree.collapsePath(path)
             cli.setMode("ready")
@@ -240,6 +243,86 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             cli.clearCalls()
             loadConfigs(panel, node)
             assertTrue(cli.calls().isEmpty())
+        }
+
+    fun `test empty configs keep the project expanded with an explanation and recover on refresh`() =
+        withPanel("empty-setup") { panel, cli ->
+            val node = projectNodes(panel).single()
+            val tree = field("tree").get(panel) as JTree
+            val path = TreePath(node.path)
+            val account = field("authContextId").get(panel)
+            cli.setMode("empty-configs")
+            tree.expandPath(path)
+            awaitConfigLoads(panel)
+            assertSame(node, projectNodes(panel).single())
+            assertTrue(node.loaded)
+            assertFalse(node.isLeaf)
+            assertTrue(tree.isExpanded(path))
+            val message = node.getChildAt(0)
+            assertTrue(message is EmptyConfigsNode)
+            assertTrue(message.toString().contains("may not have access"))
+            assertTrue(tree.isVisible(TreePath((message as EmptyConfigsNode).path)))
+            assertEquals(account, field("authContextId").get(panel))
+            val firstTimer = requireNotNull(messageCollapseTimer(panel, node))
+            assertEquals(5_000, firstTimer.initialDelay)
+            assertFalse(firstTimer.isRepeats)
+            fireTimer(firstTimer)
+            assertFalse(tree.isExpanded(path))
+            assertSame(node, projectNodes(panel).single())
+
+            tree.expandPath(path)
+            assertTrue(tree.isExpanded(path))
+            val reopenedTimer = requireNotNull(messageCollapseTimer(panel, node))
+            assertNotSame(firstTimer, reopenedTimer)
+            fireTimer(firstTimer)
+            assertTrue("An expired timer must not collapse a reopened project", tree.isExpanded(path))
+
+            cli.setMode("ready")
+            panel.refresh(CliOperation.TREE_REFRESH_BUTTON)
+            awaitRefresh(panel)
+            awaitConfigLoads(panel)
+            assertSame(node, projectNodes(panel).single())
+            assertTrue(tree.isExpanded(path))
+            assertTrue(node.getChildAt(0) is EnvironmentNode)
+            assertNull(messageCollapseTimer(panel, node))
+            assertFalse(reopenedTimer.isRunning)
+            fireTimer(reopenedTimer)
+            assertTrue("A stale message timer must not collapse successfully loaded configs", tree.isExpanded(path))
+        }
+
+    fun `test denied configs stay visible as a project error without losing authentication`() =
+        withPanel("empty-setup") { panel, cli ->
+            val node = projectNodes(panel).single()
+            val tree = field("tree").get(panel) as JTree
+            val path = TreePath(node.path)
+            val account = field("authContextId").get(panel)
+            cli.setMode("config-denied")
+            tree.expandPath(path)
+            awaitConfigLoads(panel)
+            assertSame(node, projectNodes(panel).single())
+            assertTrue(node.configLoadFailed)
+            assertTrue(tree.isExpanded(path))
+            assertTrue(node.getChildAt(0).toString().contains("Access denied"))
+            assertEquals(account, field("authContextId").get(panel))
+            assertFalse((field("statusPanel").get(panel) as javax.swing.JComponent).isVisible)
+            fireTimer(requireNotNull(messageCollapseTimer(panel, node)))
+            assertFalse(tree.isExpanded(path))
+
+            cli.setMode("ready")
+            tree.collapsePath(path)
+            tree.expandPath(path)
+            awaitConfigLoads(panel)
+            assertTrue(node.loaded)
+            assertTrue(node.getChildAt(0) is EnvironmentNode)
+
+            cli.setMode("config-denied")
+            loadConfigs(panel, node, force = true)
+            awaitConfigLoads(panel)
+            assertFalse(node.loaded)
+            assertTrue(node.configLoadFailed)
+            assertTrue(tree.isExpanded(path))
+            assertTrue(node.getChildAt(0).toString().contains("Access denied"))
+            assertEquals(account, field("authContextId").get(panel))
         }
 
     fun `test failed forced config reload preserves previously loaded children`() =
@@ -1035,6 +1118,19 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             .joinToString("\n") { it.getCharSequence(false).toString() }
     }
 
+    private fun messageCollapseTimer(
+        panel: DopplerToolWindowPanel,
+        node: ProjectNode,
+    ): Timer? {
+        val timers = field("messageCollapseTimers").get(panel) as Map<*, *>
+        return timers[node] as? Timer
+    }
+
+    private fun fireTimer(timer: Timer) {
+        timer.stop()
+        timer.actionListeners.forEach { it.actionPerformed(ActionEvent(timer, ActionEvent.ACTION_PERFORMED, "timeout")) }
+    }
+
     private fun field(name: String) =
         DopplerToolWindowPanel::class.java.getDeclaredField(name).apply {
             isAccessible = true
@@ -1113,7 +1209,13 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                       printf '%s' '{"error":"Temporary config read failure"}'
                       exit 1
                     fi
-                    if [ "${'$'}mode" = blocked-stale-configs ]; then
+                    if [ "${'$'}mode" = config-denied ]; then
+                      printf '%s' '{"error":"Access denied: you do not have access to configs in this project"}'
+                      exit 1
+                    fi
+                    if [ "${'$'}mode" = empty-configs ]; then
+                      printf '[]'
+                    elif [ "${'$'}mode" = blocked-stale-configs ]; then
                       printf '%s' '[{"name":"stale","environment":"stale"}]'
                     elif [ "${'$'}mode" = other-account ]; then
                       printf '%s' '[{"name":"prod","environment":"production"}]'

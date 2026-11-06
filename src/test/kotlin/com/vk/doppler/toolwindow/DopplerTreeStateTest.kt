@@ -313,6 +313,28 @@ class DopplerTreeStateTest {
     }
 
     @Test
+    fun `empty config placeholder is stable and replaced when accessible configs arrive`() {
+        SwingUtilities.invokeAndWait {
+            val root = DefaultMutableTreeNode()
+            val model = DefaultTreeModel(root)
+            val updater = DopplerTreeUpdater(model)
+            updater.projects(listOf(DopplerProject("backend", "Backend", null)))
+            val project = root.getChildAt(0) as ProjectNode
+            assertTrue(updater.configs(project, emptyList()))
+            val placeholder = project.getChildAt(0)
+            assertTrue(placeholder is EmptyConfigsNode)
+            assertFalse(project.isLeaf)
+            assertFalse(updater.configs(project, emptyList()))
+            assertSame(placeholder, project.getChildAt(0))
+            assertTrue(updater.configs(project, listOf(DopplerConfig("dev", "development"))))
+            assertTrue(project.getChildAt(0) is EnvironmentNode)
+            assertSame(project, root.getChildAt(0))
+            assertTrue(updater.configs(project, emptyList()))
+            assertTrue(project.getChildAt(0) is EmptyConfigsNode)
+        }
+    }
+
+    @Test
     fun `identical refresh emits no model events and retains selected nodes`() {
         SwingUtilities.invokeAndWait {
             val root = DefaultMutableTreeNode()

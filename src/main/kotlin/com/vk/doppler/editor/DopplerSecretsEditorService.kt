@@ -182,7 +182,7 @@ class DopplerSecretsEditorService(
                     indicator.isIndeterminate = true
                     indicator.text = "Loading Doppler secrets for /$projectSlug/$configName…"
                     indicator.text2 = "Waiting for the Doppler CLI to return secret values"
-                    val service = DopplerService.getInstance()
+                    val service = DopplerService.getInstance(project)
                     snapshot =
                         if (treeAuthContextId != null) {
                             service.loadSecretsAfterTreeValidation(
@@ -199,7 +199,7 @@ class DopplerSecretsEditorService(
                 }
 
                 override fun onSuccess() {
-                    invalidateCachedFiles(snapshot.authContextId)
+                    invalidateCachedFiles(snapshot.authContextId, project)
                     val file = DopplerFileSystem.getInstance().obtain(projectSlug, configName, snapshot.authContextId)
                     if (file.pushInProgress.get()) {
                         DopplerNotifier.error(project, "Wait for the current sync before reloading /$projectSlug/$configName.")
@@ -223,9 +223,9 @@ class DopplerSecretsEditorService(
                             DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
                         )
                     ) {
-                        invalidateCachedFiles(null)
+                        invalidateCachedFiles(null, project)
                     } else {
-                        invalidateConfig(projectSlug, configName)
+                        invalidateConfig(projectSlug, configName, project)
                     }
                     DopplerNotifier.error(project, "Could not load /$projectSlug/$configName. ${failureRecoveryMessage(error)}")
                 }
@@ -248,7 +248,7 @@ class DopplerSecretsEditorService(
     /** Keeps `${...}` completion in step with what the config actually contains on the server. */
     private fun publishSecretNames(file: DopplerSecretsFile) {
         SecretReferenceService
-            .getInstance()
+            .getInstance(project)
             .update(file.authContextId, file.projectSlug, file.configName, file.remoteSnapshot.keys)
     }
 
@@ -288,7 +288,7 @@ class DopplerSecretsEditorService(
         refreshableFiles: () -> List<DopplerSecretsFile> = ::focusedRefreshFiles,
         refresh: (DopplerSecretsFile) -> Boolean = ::refreshFromServer,
         validateAccount: () -> String = {
-            DopplerService.getInstance().currentAuthContextId(
+            DopplerService.getInstance(project).currentAuthContextId(
                 operation = CliOperation.ACCOUNT_VALIDATION,
                 relatedConfigs =
                     DopplerFileSystem
@@ -322,11 +322,11 @@ class DopplerSecretsEditorService(
         }
         lastAccountValidationAt = now
         try {
-            invalidateCachedFiles(validateAccount())
+            invalidateCachedFiles(validateAccount(), project)
         } catch (error: DopplerCliException) {
             // As with value refresh, unreadable authentication must not leave secrets visible.
             thisLogger().debug("Doppler account validation failed", error)
-            invalidateCachedFiles(null)
+            invalidateCachedFiles(null, project)
         }
     }
 
@@ -361,7 +361,7 @@ class DopplerSecretsEditorService(
         val snapshotBeforeFetch = file.remoteSnapshot
         val loaded =
             try {
-                DopplerService.getInstance().loadSecrets(
+                DopplerService.getInstance(project).loadSecrets(
                     file.projectSlug,
                     file.configName,
                     expectedAuthContextId = file.authContextId,
@@ -377,7 +377,7 @@ class DopplerSecretsEditorService(
                         DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
                     )
                 ) {
-                    invalidateCachedFiles(null)
+                    invalidateCachedFiles(null, project)
                 } else {
                     invalidateCachedFile(file)
                 }
@@ -385,7 +385,7 @@ class DopplerSecretsEditorService(
             }
 
         // loadSecrets validates the account before and after reading; no separate preflight is needed.
-        invalidateCachedFiles(loaded.authContextId)
+        invalidateCachedFiles(loaded.authContextId, project)
         val snapshot = loaded.secrets.associate { it.name to it.raw }
         if (snapshot == file.remoteSnapshot) return true
         val text = SecretsDocumentFormat.serialize(loaded.secrets)
@@ -480,7 +480,7 @@ class DopplerSecretsEditorService(
         originalSnapshot: Map<String, String?>,
         changes: SecretChanges,
         applyChanges: () -> Unit = {
-            DopplerService.getInstance().applyChanges(
+            DopplerService.getInstance(project).applyChanges(
                 file.authContextId,
                 file.projectSlug,
                 file.configName,
@@ -539,7 +539,7 @@ class DopplerSecretsEditorService(
                         DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
                     )
                 ) {
-                    invalidateCachedFiles(null)
+                    invalidateCachedFiles(null, project)
                 }
                 DopplerNotifier.error(project, "Failed to sync $label. ${failureRecoveryMessage(error)}")
             }
@@ -590,8 +590,17 @@ class DopplerSecretsEditorService(
     }
 
     companion object {
-        fun invalidateCachedFiles(currentAuthContextId: String?) {
-            invalidateFiles { currentAuthContextId == null || it.authContextId != currentAuthContextId }
+        fun invalidateCachedFiles(
+            currentAuthContextId: String?,
+            project: Project? = null,
+        ) {
+            invalidateFiles {
+                (
+                    project == null || project.getServiceIfCreated(DopplerSecretsEditorService::class.java)?.owns(it) == true ||
+                        findOwner(it) == null
+                ) &&
+                    (currentAuthContextId == null || it.authContextId != currentAuthContextId)
+            }
         }
 
         private fun invalidateCachedFile(file: DopplerSecretsFile) {
@@ -601,8 +610,12 @@ class DopplerSecretsEditorService(
         private fun invalidateConfig(
             projectSlug: String,
             configName: String,
+            project: Project,
         ) {
-            invalidateFiles { it.projectSlug == projectSlug && it.configName == configName }
+            invalidateFiles {
+                it.projectSlug == projectSlug && it.configName == configName &&
+                    (project.getServiceIfCreated(DopplerSecretsEditorService::class.java)?.owns(it) == true || findOwner(it) == null)
+            }
         }
 
         private fun invalidateFiles(shouldInvalidate: (DopplerSecretsFile) -> Boolean) {

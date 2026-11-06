@@ -6,25 +6,28 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
+import com.intellij.openapi.project.Project
 import com.intellij.util.concurrency.AppExecutorUtil
 import java.util.concurrent.Executor
 
 private const val PARALLELISM = 4
 
-/** Application-wide holder of the secret name index, shared by every open IDE project. */
-@Service(Service.Level.APP)
-class SecretReferenceService : Disposable {
+/** Secret name index bound to the login scope of one IDE project. */
+@Service(Service.Level.PROJECT)
+class SecretReferenceService(
+    private val project: Project,
+) : Disposable {
     private val index =
         SecretNameIndex(
             loader =
                 DopplerSecretNamesLoader(
-                    DopplerServiceNamesApi,
+                    DopplerServiceNamesApi(project),
                     AppExecutorUtil.createBoundedApplicationPoolExecutor("Doppler secret names", PARALLELISM),
                 ),
             executor =
                 Executor { command ->
                     ProgressManager.getInstance().run(
-                        object : Task.Backgroundable(null, "Loading Doppler secret names…", true) {
+                        object : Task.Backgroundable(project, "Loading Doppler secret names…", true) {
                             override fun run(indicator: ProgressIndicator) {
                                 command.run()
                             }
@@ -56,6 +59,6 @@ class SecretReferenceService : Disposable {
     override fun dispose() = index.dispose()
 
     companion object {
-        fun getInstance(): SecretReferenceService = service()
+        fun getInstance(project: Project): SecretReferenceService = project.service()
     }
 }

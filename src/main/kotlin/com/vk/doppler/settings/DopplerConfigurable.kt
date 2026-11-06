@@ -1,12 +1,14 @@
 package com.vk.doppler.settings
 
 import com.intellij.ide.DataManager
+import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.options.ex.Settings
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
@@ -86,7 +88,13 @@ class DopplerConfigurable : BoundConfigurable("Doppler") {
                 label("seconds (0 disables auto-refresh)")
             }
             row {
-                button("Test Connection") { testConnection() }
+                button("Test Connection") { event ->
+                    val component = event.source as java.awt.Component
+                    val context = DataManager.getInstance().getDataContext(component)
+                    val dialog = Settings.KEY.getData(context)
+                    val folderSettings = dialog?.find(DopplerFolderSetupConfigurable::class.java)
+                    testConnection(folderSettings?.project ?: CommonDataKeys.PROJECT.getData(context))
+                }
                 button("Check for CLI Updates") {
                     DopplerCliUpdateService.getInstance().check(path = cliPathField?.text ?: settings.cliPath)
                 }
@@ -106,14 +114,14 @@ class DopplerConfigurable : BoundConfigurable("Doppler") {
             }
         }
 
-    private fun testConnection() {
+    private fun testConnection(project: Project?) {
         cliPathField?.let { settings.cliPath = it.text }
         ProgressManager.getInstance().run(
-            object : Task.Backgroundable(null, "Checking Doppler CLI…", false) {
+            object : Task.Backgroundable(project, "Checking Doppler CLI…", false) {
                 private lateinit var report: DopplerStatusReport
 
                 override fun run(indicator: ProgressIndicator) {
-                    report = DopplerService.getInstance().checkStatus()
+                    report = DopplerService.getInstance(project).checkStatus()
                 }
 
                 override fun onSuccess() {

@@ -2,6 +2,22 @@
 
 # Doppler-plugin Changelog
 
+## [1.11.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.10.0...v1.11.0) (2026-11-06)
+
+
+### Features
+
+* enhance installer command with user/system scope and checksum verification ([#109](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/109)) ([61a273e](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/61a273eaadfbfd56d44f1111225ac1a654f3418d))
+
+
+### Maintenance
+
+* **deps:** update github/codeql-action action to v4.39.2 ([#113](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/113)) ([b8cecce](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/b8cecce78a82b7a9f68697f1241b7dcf7f8d7db4))
+* **deps:** update gradle/actions action to v6.4.1 ([#110](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/110)) ([9534ad6](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/9534ad6db835375286e5129b31240e8407f68a4d))
+* **deps:** update step-security/harden-runner action to v2.22.3 ([#111](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/111)) ([e226275](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/e22627531292ce43ce69f07605372660ce8dbe39))
+* **deps:** update zizmorcore/zizmor-action action to v0.8.1 ([#112](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/112)) ([0135839](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/01358390c6b7e7e813237f907448c9cfe1fcda25))
+* **workflows:** update egress policy to allow additional endpoints for Gradle and GitHub ([#107](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/107)) ([b42721f](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/b42721f57cc19f6d8215900f0b4ad83252165d46))
+
 ## [1.10.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.9.1...v1.10.0) (2026-10-28)
 
 

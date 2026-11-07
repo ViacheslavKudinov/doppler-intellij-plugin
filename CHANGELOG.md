@@ -2,6 +2,14 @@
 
 # Doppler-plugin Changelog
 
+## [1.12.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.11.0...v1.12.0) (2026-11-07)
+
+
+### Features
+
+* Enhance Doppler integration tests and UI components ([#115](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/115)) ([0ee5154](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/0ee51542c42cf7707926777dc28670b579b654cb))
+* Improve Folder Setup, UI Updates, and Connection Handling ([#114](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/114)) ([fc473c8](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/fc473c8bf6e1e643098d51a296707bcdbe362333))
+
 ## [1.11.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.10.0...v1.11.0) (2026-11-06)
 
 

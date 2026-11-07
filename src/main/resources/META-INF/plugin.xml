@@ -23,7 +23,7 @@
                 Reload or use automatic refresh to retrieve remote changes.</li>
             <li><b>Secret-reference completion</b> &mdash; get completion suggestions for Doppler secret references while editing.</li>
             <li><b>Folder Setup</b> &mdash; choose the default Doppler project and config for your IDE project,
-                including inherited folder defaults. A bookmark marks the selected config in the tree and editor tabs;
+                including inherited folder defaults. A bookmark marks the selected config in the tree, editor tabs, and IDE navigation bar;
                 background checks reflect changes made through the CLI. When no configs are visible,
                 Settings explains that the project may be empty or access may be restricted and disables config selection.</li>
             <li><b>Folder-scoped authentication</b> &mdash; use the current IDE project folder's Doppler login
@@ -83,7 +83,10 @@
         are checked during loading to prevent injection after a detected account or config change.</p>
         <p>Authentication is managed by the Doppler CLI through <code>doppler login</code>.
         The plugin does not store your authentication token. When account validation detects an account change
-        or loss of authentication, affected cached secret documents are cleared.</p>
+        or loss of authentication, affected cached secret documents are cleared. A missing or revoked login
+        returns the project to its signed-out state: secret tabs close, completion data and Folder Setup choices
+        are cleared, the project tree is emptied, and Run and Debug controls become inactive.
+        Saved CLI defaults and injection preferences are preserved for the next login.</p>
 
         <h3>Requirements</h3>
         <ul>
@@ -139,6 +142,7 @@
 
         <editorTabTitleProvider implementation="com.vk.doppler.editor.DopplerEditorTabTitleProvider"/>
         <fileIconProvider implementation="com.vk.doppler.editor.DopplerFileIconProvider"/>
+        <navbar implementation="com.vk.doppler.editor.DopplerNavBarExtension" order="first"/>
         <virtualFilePreCloseCheck implementation="com.vk.doppler.editor.DopplerFileCloseCheck"/>
         <completion.contributor language="any"
                                 implementationClass="com.vk.doppler.completion.DopplerSecretReferenceCompletionContributor"/>

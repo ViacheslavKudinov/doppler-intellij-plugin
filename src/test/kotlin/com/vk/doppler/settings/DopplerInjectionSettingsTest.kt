@@ -1,6 +1,7 @@
 package com.vk.doppler.settings
 
 import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.util.SystemInfo
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.UIUtil
@@ -9,7 +10,9 @@ import com.vk.doppler.cli.DopplerFolderSetup
 import com.vk.doppler.cli.DopplerNameTransformer
 import com.vk.doppler.injection.SecretNameMapping
 import org.jdom.Element
+import org.junit.Assume.assumeFalse
 import java.awt.Component
+import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JCheckBox
@@ -146,6 +149,110 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         } finally {
             page.disposeUIResources()
             settings.loadState(saved)
+        }
+    }
+
+    fun testSignOutDisablesInjectionAndIgnoresStaleLocalDefaults() {
+        val state = DopplerFolderSetupState.getInstance(project)
+        val page = injectionPage()
+        page.defaultConfigLoader = { DopplerFolderSetup("example", "dev") to setOf("PREVIOUS_NAME") }
+        try {
+            val panel = page.createPanel()
+            panel.reset()
+            page.updateKnownNames(setOf("PREVIOUS_NAME"))
+            val checkbox = requireNotNull(UIUtil.findComponentOfType(panel, JCheckBox::class.java))
+            assertTrue(checkbox.isEnabled)
+            state.markSignedOut()
+            UIUtil.dispatchAllInvocationEvents()
+            assertFalse(checkbox.isEnabled)
+            assertTrue(page.defaultsMessage.text.contains("Not logged in"))
+            assertTrue(state.isSignedOut)
+            assertEquals(DopplerFolderSetup(), state.current)
+            state.update(DopplerFolderSetup("example", "dev"))
+            assertTrue(checkbox.isEnabled)
+        } finally {
+            page.disposeUIResources()
+        }
+    }
+
+    fun testOpeningInjectionSettingsWhileSignedOutDoesNotLoadStaleDefaults() {
+        val state = DopplerFolderSetupState.getInstance(project)
+        state.markSignedOut()
+        val page = injectionPage()
+        var loads = 0
+        page.defaultConfigLoader = {
+            loads++
+            DopplerFolderSetup("stale-project", "dev") to setOf("STALE_NAME")
+        }
+        try {
+            val panel = page.createPanel()
+            panel.reset()
+            UIUtil.dispatchAllInvocationEvents()
+            assertEquals(0, loads)
+            assertTrue(state.isSignedOut)
+            assertEquals(DopplerFolderSetup(), state.current)
+            assertTrue(page.defaultsMessage.text.contains("Not logged in"))
+            assertFalse(requireNotNull(UIUtil.findComponentOfType(panel, JCheckBox::class.java)).isEnabled)
+        } finally {
+            page.disposeUIResources()
+        }
+    }
+
+    fun testDefaultConfigLoadingValidatesAuthenticationInTheIdeProjectFolder() = checkDefaultAuthentication(true)
+
+    fun testDefaultConfigLoadingCannotUseSavedFolderDefaultsAfterLoginIsRevoked() = checkDefaultAuthentication(false)
+
+    private fun checkDefaultAuthentication(authenticated: Boolean) {
+        assumeFalse(SystemInfo.isWindows)
+        val directory = Files.createTempDirectory("doppler-injection-settings-auth-")
+        val executable = directory.resolve("doppler")
+        val calls = directory.resolve("calls")
+        Files.writeString(
+            executable,
+            """
+            #!/bin/sh
+            printf '%s\n' "${'$'}*" >> '$calls'
+            case "${'$'}1" in
+              configure) printf '%s' '{"project":"example","config":"dev"}' ;;
+              me)
+                if [ '$authenticated' = false ]; then
+                  printf '%s' '{"error":"You must provide a token. Run doppler login."}'
+                  exit 1
+                fi
+                printf '%s' '{"slug":"test","type":"cli","token_preview":"synthetic","workplace":{"slug":"test"}}'
+                ;;
+              secrets) printf '%s' '["SOURCE"]' ;;
+              *) exit 1 ;;
+            esac
+            """.trimIndent(),
+        )
+        assertTrue(executable.toFile().setExecutable(true))
+        DopplerSettings.getInstance().cliPath = executable.toString()
+        val state = DopplerFolderSetupState.getInstance(project)
+        state.update(DopplerFolderSetup())
+        val page = DopplerInjectionConfigurable(project)
+        try {
+            val panel = page.createPanel()
+            panel.reset()
+            val checkbox = requireNotNull(UIUtil.findComponentOfType(panel, JCheckBox::class.java))
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+            while (!checkbox.isEnabled && !state.isSignedOut && System.nanoTime() < deadline) {
+                UIUtil.dispatchAllInvocationEvents()
+                Thread.sleep(10)
+            }
+            UIUtil.dispatchAllInvocationEvents()
+            assertEquals(authenticated, checkbox.isEnabled)
+            assertEquals(!authenticated, state.isSignedOut)
+            val commands = Files.readAllLines(calls)
+            val expected = if (authenticated) listOf("configure", "me", "secrets") else listOf("configure", "me")
+            assertEquals(expected, commands.map { it.substringBefore(' ') })
+            assertTrue(
+                "Every read must resolve the IDE project's folder credentials",
+                commands.all { it.contains("--scope ${project.basePath}") },
+            )
+        } finally {
+            page.disposeUIResources()
+            Files.walk(directory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
         }
     }
 

@@ -17,6 +17,26 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JButton
 
 class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
+    fun `test reloading while still signed out keeps choices empty and reload available`() =
+        withCli { fixture ->
+            DopplerFolderSetupState.getInstance(project).markSignedOut()
+            fixture.account("logged-out")
+            fixture.clearCalls()
+            fixture.reload()
+            UIUtil.dispatchAllInvocationEvents()
+            assertEquals(listOf("me"), fixture.calls())
+            assertEquals(0, fixture.setup.projectChoice.itemCount)
+            assertEquals(0, fixture.setup.configChoice.itemCount)
+            assertFalse(fixture.setup.projectChoice.isEnabled)
+            assertFalse(fixture.setup.configChoice.isEnabled)
+            assertFalse(fixture.setup.loadingIndicator.isVisible)
+            assertTrue(
+                fixture.setup.status.text
+                    .contains("Not logged in"),
+            )
+            assertFalse(fixture.panel.isModified())
+        }
+
     fun `test folder setup loading shows a spinner while choices are disabled`() =
         withCli { fixture ->
             assertFalse(fixture.setup.loadingIndicator.isVisible)
@@ -88,6 +108,28 @@ class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
             fixture.clearCalls()
             fixture.panel.apply()
             assertTrue(fixture.calls().isEmpty())
+        }
+
+    fun `test sign out clears folder choices and reload restores them after login`() =
+        withCli { fixture ->
+            fixture.reload()
+            fixture.setup.configChoice.selectedItem = "stg"
+            DopplerFolderSetupState.getInstance(project).markSignedOut()
+            assertEquals(0, fixture.setup.projectChoice.itemCount)
+            assertEquals(0, fixture.setup.configChoice.itemCount)
+            assertFalse(fixture.setup.projectChoice.isEnabled)
+            assertFalse(fixture.setup.configChoice.isEnabled)
+            assertFalse(fixture.panel.isModified())
+            assertTrue(
+                fixture.setup.status.text
+                    .contains("Not logged in"),
+            )
+            fixture.reload()
+            assertFalse(DopplerFolderSetupState.getInstance(project).isSignedOut)
+            assertTrue(fixture.setup.projectChoice.isEnabled)
+            assertTrue(fixture.setup.configChoice.isEnabled)
+            assertEquals("example", fixture.setup.projectChoice.selectedItem)
+            assertEquals("dev", fixture.setup.configChoice.selectedItem)
         }
 
     fun `test loading failure hides the spinner and leaves an actionable error`() =
@@ -171,7 +213,7 @@ class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
             assertFalse(fixture.panel.isModified())
         }
 
-    fun `test logout blocks mutation without discarding selections`() =
+    fun `test logout blocks mutation and clears signed in selections`() =
         withCli { fixture ->
             fixture.reload()
             fixture.setup.configChoice.selectedItem = "stg"
@@ -181,8 +223,14 @@ class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
                 fixture.panel.apply()
                 fail("Logged-out CLI must not change folder setup")
             } catch (_: ConfigurationException) {
-                assertEquals("stg", fixture.setup.configChoice.selectedItem)
-                assertTrue(fixture.panel.isModified())
+                UIUtil.dispatchAllInvocationEvents()
+                assertEquals(0, fixture.setup.projectChoice.itemCount)
+                assertEquals(0, fixture.setup.configChoice.itemCount)
+                assertFalse(fixture.panel.isModified())
+                assertTrue(
+                    fixture.setup.status.text
+                        .contains("Not logged in"),
+                )
                 assertEquals(listOf("me"), fixture.calls())
             }
         }

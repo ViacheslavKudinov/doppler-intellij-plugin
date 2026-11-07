@@ -108,11 +108,13 @@ class DopplerToolWindowPanel(
         project.messageBus.connect(this).subscribe(
             DopplerFolderSetupState.TOPIC,
             DopplerFolderSetupListener {
-                tree.repaint()
+                if (DopplerFolderSetupState.getInstance(project).isSignedOut) showSignedOutState() else tree.repaint()
             },
         )
         cards.add(statusPanel, CARD_STATUS)
-        cards.add(JBScrollPane(tree), CARD_TREE)
+        val treeScrollPane = JBScrollPane(tree)
+        dismissTreeTooltipOnScroll(tree, treeScrollPane.viewport)
+        cards.add(treeScrollPane, CARD_TREE)
         setContent(cards)
         toolbar = buildToolbar()
         focusManager.addPropertyChangeListener("focusOwner", focusListener)
@@ -247,24 +249,41 @@ class DopplerToolWindowPanel(
             report.authContextId.takeIf { report.status == DopplerStatus.READY },
             project,
         )
-        SecretReferenceService.getInstance(project).invalidate()
+        val references = SecretReferenceService.getInstance(project)
+        if (report.status == DopplerStatus.NOT_AUTHENTICATED) references.clear() else references.invalidate()
         val setupState = DopplerFolderSetupState.getInstance(project)
+        if (report.status == DopplerStatus.NOT_AUTHENTICATED) {
+            setupState.markSignedOut()
+            showSignedOutState()
+            return
+        }
         if (report.status != DopplerStatus.READY) {
             authContextId = null
             refreshGate.invalidate()
             invalidateConfigLoads()
-            setupState.update(DopplerFolderSetup())
+            if (!setupState.isSignedOut) setupState.update(DopplerFolderSetup())
             showStatusFor(report)
         } else {
             val currentAuthContextId = requireNotNull(report.authContextId)
             authContextId = currentAuthContextId
             if (!result.reuseExistingTree) {
                 invalidateConfigLoads()
-                result.folderSetup?.let(setupState::update)
+                setupState.update(result.folderSetup ?: setupState.current)
                 populate(result.projects, operation)
                 refreshGate.recordTreeReload(currentAuthContextId)
             }
         }
+    }
+
+    private fun showSignedOutState() {
+        authContextId = null
+        refreshing = false
+        refreshGeneration++
+        refreshGate.invalidate()
+        invalidateConfigLoads()
+        tree.clearSelection()
+        treeUpdater.projects(emptyList())
+        showStatusFor(DopplerStatusReport(DopplerStatus.NOT_AUTHENTICATED, null))
     }
 
     private fun handleRefreshFailure(

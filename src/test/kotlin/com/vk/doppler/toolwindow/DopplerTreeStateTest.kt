@@ -8,11 +8,14 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.awt.Dimension
+import java.awt.Point
 import java.awt.event.MouseEvent
 import java.beans.PropertyChangeEvent
 import javax.swing.JButton
 import javax.swing.JPanel
 import javax.swing.JTree
+import javax.swing.JViewport
 import javax.swing.SwingUtilities
 import javax.swing.event.TreeModelEvent
 import javax.swing.event.TreeModelListener
@@ -137,7 +140,7 @@ class DopplerTreeStateTest {
     }
 
     @Test
-    fun `config clicks still open once and clicks outside labels do not toggle branches`() {
+    fun `config clicks open once across the row and clicks outside branch labels do not toggle branches`() {
         SwingUtilities.invokeAndWait {
             val root = DefaultMutableTreeNode()
             val project = projectNode()
@@ -170,7 +173,7 @@ class DopplerTreeStateTest {
                     MouseEvent.BUTTON1,
                 ),
             )
-            assertEquals("Indentation clicks must not open a config", 1, opens)
+            assertEquals("Indentation is part of the clickable config row", 2, opens)
             val projectPath = TreePath(project.path)
             val bounds = requireNotNull(tree.getPathBounds(projectPath))
             listener.mouseClicked(
@@ -187,6 +190,59 @@ class DopplerTreeStateTest {
                 ),
             )
             assertTrue(tree.isExpanded(projectPath))
+        }
+    }
+
+    @Test
+    fun `full width config clicks select the correct row and ignore other buttons and blank space`() {
+        SwingUtilities.invokeAndWait {
+            val root = DefaultMutableTreeNode()
+            val project = projectNode()
+            root.add(project)
+            val environment = project.getChildAt(0) as EnvironmentNode
+            environment.add(ConfigNode("backend", DopplerConfig("prod", "dev")))
+            environment.add(EmptyConfigsNode())
+            val tree =
+                JTree(root).apply {
+                    isRootVisible = false
+                    setSize(800, 300)
+                    expandPath(TreePath(environment.path))
+                }
+            val opened = mutableListOf<ConfigNode>()
+            val listener = DopplerTreeClickListener(tree) { opened.add(it) }
+
+            fun click(
+                x: Int,
+                y: Int,
+                button: Int = MouseEvent.BUTTON1,
+                count: Int = 1,
+            ) = listener.mouseClicked(MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0, x, y, count, false, button))
+
+            for (node in environment.children().toList().filterIsInstance<ConfigNode>()) {
+                val path = TreePath(node.path)
+                val bounds = requireNotNull(tree.getPathBounds(path))
+                val y = bounds.y + bounds.height / 2
+                for (x in listOf(0, bounds.x - 1, bounds.x, bounds.x + bounds.width + 20, tree.width - 1)) {
+                    val before = opened.size
+                    click(x, y)
+                    assertEquals(before + 1, opened.size)
+                    assertSame(node, opened.last())
+                    assertEquals(path, tree.selectionPath)
+                    click(x, y, count = 2)
+                    click(x, y, MouseEvent.BUTTON3)
+                    click(x, y, MouseEvent.BUTTON2)
+                    assertEquals("Only the first left click opens a config", before + 1, opened.size)
+                }
+            }
+            val before = opened.size
+            val configBounds = requireNotNull(tree.getPathBounds(TreePath((environment.firstChild as ConfigNode).path)))
+            click(-1, configBounds.y)
+            click(tree.width, configBounds.y)
+            click(100, -1)
+            click(100, tree.height - 1)
+            val messageBounds = requireNotNull(tree.getPathBounds(TreePath((environment.lastChild as EmptyConfigsNode).path)))
+            click(tree.width - 1, messageBounds.y)
+            assertEquals("Blank space and message rows must not open configs", before, opened.size)
         }
     }
 
@@ -495,6 +551,61 @@ class DopplerTreeStateTest {
         now = 1_000L
         gate.invalidate()
         assertFalse(gate.canReuseTree(com.vk.doppler.cli.CliOperation.TREE_PANEL_FOCUS, "account-a"))
+    }
+
+    @Test
+    fun `loading empty denied or populated branches preserves the scrolled view and previous selection`() {
+        SwingUtilities.invokeAndWait {
+            for (result in listOf("empty", "denied", "populated")) {
+                val root = DefaultMutableTreeNode()
+                repeat(60) { index ->
+                    root.add(
+                        ProjectNode(DopplerProject("project-$index", "Project $index with a long description", null)).apply {
+                            add(LoadingNode())
+                        },
+                    )
+                }
+                val model = DefaultTreeModel(root)
+                val tree =
+                    JTree(model).apply {
+                        isRootVisible = false
+                        rowHeight = 20
+                    }
+                val viewport =
+                    JViewport().apply {
+                        extentSize = Dimension(200, 200)
+                        view = tree
+                    }
+                tree.setSize(800, 2_000)
+                val selected = TreePath((root.getChildAt(0) as ProjectNode).path)
+                tree.selectionPath = selected
+                val branch = root.getChildAt(30) as ProjectNode
+                val branchPath = TreePath(branch.path)
+                tree.expandPath(branchPath)
+                viewport.viewPosition = Point(80, 500)
+                val before = viewport.viewPosition
+                val state = DopplerTreeState(tree)
+                when (result) {
+                    "empty" -> {
+                        DopplerTreeUpdater(model).configs(branch, emptyList())
+                    }
+
+                    "populated" -> {
+                        DopplerTreeUpdater(model).configs(branch, listOf(DopplerConfig("dev", "dev")))
+                    }
+
+                    else -> {
+                        branch.removeAllChildren()
+                        branch.add(DefaultMutableTreeNode("Failed to load: Access denied"))
+                        model.nodeStructureChanged(branch)
+                    }
+                }
+                state.restore(tree)
+                assertEquals("$result must not move the viewport", before, viewport.viewPosition)
+                assertEquals(selected, tree.selectionPath)
+                assertTrue(tree.isExpanded(branchPath))
+            }
+        }
     }
 
     @Test

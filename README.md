@@ -195,7 +195,9 @@ removes this folder's override when applied; a parent folder's defaults may stil
 Use **Reload** to read changes made with `doppler setup` outside the IDE.
 While folder setup or config choices are loading, the fields are disabled and a spinner appears
 beside the loading message.
-The configured project and config are marked with a bookmark icon in the Doppler tree.
+The configured project and config are marked with a bookmark icon in the Doppler tree, editor tabs,
+and IDE navigation bar. Navigation popup entries include the project/config path so same-named
+configs remain distinct when switching tabs.
 Folder setup is checked in the background every 30 seconds so CLI changes update the bookmark
 and any unchanged Settings selections. Setup operations use the existing CLI call logging;
 background checks appear as `FOLDER_SETUP_POLL` when **Log CLI calls** is enabled.
@@ -370,6 +372,10 @@ refresh is paused while you edit and resumes on the next interval after you undo
 or successfully save to Doppler. Pending or rejected/failed syncs also pause refresh. When all open
 configs are paused, account-only validation still runs every 30 seconds while configs are open,
 including when value refresh is disabled. This clears cached documents on logout or account change.
+When an account check confirms that the login is missing or revoked, the plugin returns to its
+signed-out state: secret tabs close, cached values and completion names are cleared, the project
+tree and Folder Setup choices are emptied, and Run and Debug controls become inactive.
+Saved CLI folder defaults and injection preferences are preserved; log in and retry to load them again.
 Normal value refresh already validates the account and postpones the standalone check, avoiding
 an extra request. Standalone checks are logged as `ACCOUNT_VALIDATION`.
 A rejected/failed save stays in the editor; correct the document and save it again,

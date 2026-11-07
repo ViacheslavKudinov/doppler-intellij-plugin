@@ -56,6 +56,9 @@ class SecretReferenceService(
     /** Makes the next completion refresh the account-wide names. */
     fun invalidate() = index.invalidate()
 
+    /** Drops account metadata and prevents pending loads from restoring it after sign-out. */
+    fun clear() = index.clear()
+
     override fun dispose() = index.dispose()
 
     companion object {

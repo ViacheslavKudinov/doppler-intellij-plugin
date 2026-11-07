@@ -246,12 +246,7 @@ class DopplerInjectionConfigurable(
         updateDefaultAvailability(folderSetup.current)
         project.messageBus.connect(lifetime).subscribe(
             DopplerFolderSetupState.TOPIC,
-            DopplerFolderSetupListener {
-                if (displayedSetup != folderSetup.current) {
-                    updateDefaultAvailability(folderSetup.current)
-                    loadKnownNames()
-                }
-            },
+            DopplerFolderSetupListener { folderSetupChanged(folderSetup) },
         )
         object : DumbAwareAction() {
             override fun getActionUpdateThread() = ActionUpdateThread.EDT
@@ -425,6 +420,21 @@ class DopplerInjectionConfigurable(
         mappingTable?.repaint()
     }
 
+    private fun folderSetupChanged(state: DopplerFolderSetupState) {
+        if (state.isSignedOut) {
+            showSignedOutDefaults()
+        } else if (displayedSetup != state.current || defaultsMessage.text == SIGNED_OUT_MESSAGE) {
+            updateDefaultAvailability(state.current)
+            loadKnownNames()
+        }
+    }
+
+    private fun showSignedOutDefaults() {
+        namesRequest++
+        updateDefaultAvailability(DopplerFolderSetup())
+        defaultsMessage.text = SIGNED_OUT_MESSAGE
+    }
+
     private fun readDefaultConfig(): Pair<DopplerFolderSetup, Set<String>?> {
         val folder = project.basePath ?: return DopplerFolderSetup() to null
         val service = DopplerService.getInstance(project)
@@ -435,6 +445,7 @@ class DopplerInjectionConfigurable(
             if (slug.isNullOrBlank() || config.isNullOrBlank()) {
                 null
             } else {
+                service.currentAuthContextId(operation = CliOperation.FOLDER_SETUP)
                 try {
                     service.listSecretNames(slug, config)
                 } catch (_: DopplerCliException) {
@@ -445,6 +456,10 @@ class DopplerInjectionConfigurable(
     }
 
     private fun loadKnownNames() {
+        if (DopplerFolderSetupState.getInstance(project).isSignedOut) {
+            showSignedOutDefaults()
+            return
+        }
         val request = ++namesRequest
         val table = mappingTable
         ApplicationManager.getApplication().executeOnPooledThread {
@@ -456,6 +471,7 @@ class DopplerInjectionConfigurable(
                 }
             ApplicationManager.getApplication().invokeLater({
                 if (closed || project.isDisposed || mappingTable !== table || request != namesRequest) return@invokeLater
+                if (DopplerFolderSetupState.getInstance(project).isSignedOut) return@invokeLater
                 updateDefaultAvailability(result?.first ?: DopplerFolderSetup())
                 if (result == null) {
                     defaultsMessage.text = "Could not read Folder Setup. Check the CLI login and reload this Settings page."
@@ -486,6 +502,10 @@ class DopplerInjectionConfigurable(
         ApplicationManager.getApplication().invokeLater({
             if (!closed) refreshNameSuggestions(names)
         }, ModalityState.any())
+    }
+
+    private companion object {
+        const val SIGNED_OUT_MESSAGE = "Not logged in to Doppler. Run 'doppler login' and retry Folder Setup."
     }
 
     private inner class MappingCellRenderer : DefaultTableCellRenderer() {

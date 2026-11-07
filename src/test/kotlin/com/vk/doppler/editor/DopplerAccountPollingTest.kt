@@ -15,6 +15,7 @@ import com.intellij.util.ui.UIUtil
 import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.testutil.joinWithEventDispatch
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.FutureTask
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -70,26 +71,21 @@ class DopplerAccountPollingTest : BasePlatformTestCase() {
         val document = myFixture.editor.document
         WriteAction.run<RuntimeException> { document.setText("A: locally-edited") }
         val saved = observeWriteSafeSave(document)
-        val failure = AtomicReference<Throwable>()
-        var callbackRan = false
-        ApplicationManager.getApplication().invokeLater({
-            try {
+        val callback =
+            FutureTask {
                 assertFalse("Reproduce the unsafe callback from the crash", TransactionGuard.getInstance().isWritingAllowed)
                 DopplerSecretsEditorService.invalidateCachedFiles(null, project)
                 assertFalse("Unsafe callbacks must defer cleanup rather than write inline", file.isInvalidated)
-            } catch (error: Throwable) {
-                failure.set(error)
-            } finally {
-                callbackRan = true
             }
-        }, ModalityState.any())
+        ApplicationManager.getApplication().invokeLater(callback, ModalityState.any())
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
-        while ((!callbackRan || !file.isInvalidated) && failure.get() == null && System.nanoTime() < deadline) {
+        while ((!callback.isDone || !file.isInvalidated) && System.nanoTime() < deadline) {
             UIUtil.dispatchAllInvocationEvents()
+            if (callback.isDone) callback.get()
             Thread.sleep(10)
         }
-        failure.get()?.let { throw AssertionError("Unsafe callback cleanup failed", it) }
-        assertTrue(callbackRan)
+        assertTrue("The unsafe callback must run", callback.isDone)
+        callback.get()
         assertTrue(saved())
         assertRevokedConfigCleared(file, document)
     }

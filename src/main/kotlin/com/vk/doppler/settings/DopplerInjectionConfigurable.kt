@@ -1,6 +1,7 @@
 package com.vk.doppler.settings
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionToolbarPosition
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -15,6 +16,7 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.JBColor
 import com.intellij.ui.ToolbarDecorator
@@ -29,6 +31,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.DopplerCliException
+import com.vk.doppler.cli.DopplerFolderSetup
 import com.vk.doppler.cli.DopplerNameTransformer
 import com.vk.doppler.injection.SecretNameMapping
 import com.vk.doppler.injection.validateSecretNameMappings
@@ -64,6 +67,16 @@ internal fun refreshSecretNameSuggestions(
 class DopplerInjectionConfigurable(
     private val project: Project,
 ) : BoundConfigurable("Run and Debug") {
+    private var uiDisposable: Disposable? = null
+    private var setupAvailable = false
+    private var displayedSetup: DopplerFolderSetup? = null
+    private var namesRequest = 0
+    private var updateAvailability: ((Boolean) -> Unit)? = null
+    internal val defaultsMessage = JLabel()
+
+    /** Reads defaults and optional names in the same project scope; tests supply synthetic data. */
+    internal var defaultConfigLoader: () -> Pair<DopplerFolderSetup, Set<String>?> = ::readDefaultConfig
+
     private var transformerBox: ComboBox<DopplerNameTransformer>? = null
     private var mappingTable: JBTable? = null
     private var mappingModel: DefaultTableModel? = null
@@ -84,70 +97,22 @@ class DopplerInjectionConfigurable(
     @Volatile private var pendingNames: Set<String>? = null
 
     override fun createPanel(): DialogPanel {
+        uiDisposable?.let(Disposer::dispose)
+        val lifetime = Disposer.newDisposable("Doppler Run and Debug settings")
+        uiDisposable = lifetime
         closed = false
+        displayedSetup = null
+        setupAvailable = false
         knownNames = null
         pendingNames = null
         val settings = DopplerInjectionSettings.getInstance(project)
         val model = DefaultTableModel(arrayOf("Current secret name", "New secret name"), 0)
         val nameEditorModel = DefaultComboBoxModel<String>()
 
-        fun hasUnmappedSecrets(): Boolean {
-            val names = knownNames ?: return true
-            val mappedNames =
-                (0 until model.rowCount)
-                    .map { (model.getValueAt(it, 0) as? String).orEmpty().trim() }
-                    .toSet()
-            return names.any { it !in mappedNames }
-        }
-
-        fun canAddMapping(): Boolean {
-            val names = knownNames ?: return false
-            return model.rowCount < names.size && hasUnmappedSecrets()
-        }
-        val table =
-            object : JBTable(model) {
-                override fun isCellEditable(
-                    row: Int,
-                    column: Int,
-                ): Boolean {
-                    if (convertColumnIndexToModel(column) == 0 && !hasUnmappedSecrets()) return false
-                    return super.isCellEditable(row, column)
-                }
-
-                override fun editCellAt(
-                    row: Int,
-                    column: Int,
-                    event: EventObject?,
-                ): Boolean {
-                    val editing = super.editCellAt(row, column, event)
-                    if (editing) {
-                        (editorComponent as? JBTextField)?.let { input ->
-                            input.requestFocusInWindow()
-                            input.caret.isVisible = true
-                        }
-                    }
-                    return editing
-                }
-            }
+        val table = createMappingTable(model)
         this.mappingModel = model
         this.mappingTable = table
         this.nameEditorModel = nameEditorModel
-        val headerRenderer = table.tableHeader.defaultRenderer
-        table.tableHeader.defaultRenderer =
-            javax.swing.table.TableCellRenderer { headerTable, value, selected, focused, row, column ->
-                headerRenderer.getTableCellRendererComponent(headerTable, value, selected, focused, row, column).apply {
-                    font = table.tableHeader.font.deriveFont(Font.BOLD)
-                    background = UIUtil.getPanelBackground()
-                    if (this is JComponent) {
-                        isOpaque = true
-                        border =
-                            BorderFactory.createCompoundBorder(
-                                JBUI.Borders.customLine(JBColor.border(), 0, 0, 1, 0),
-                                JBUI.Borders.empty(4, 8),
-                            )
-                    }
-                }
-            }
         val mappingRenderer = MappingCellRenderer()
         val nameCombo = ComboBox(nameEditorModel).apply { isEditable = false }
         nameCombo.addActionListener { clearValidationMessage() }
@@ -199,48 +164,49 @@ class DopplerInjectionConfigurable(
             },
         )
 
-        fun addMapping() {
-            if (!canAddMapping()) return
-            table.cellEditor?.stopCellEditing()
-            model.addRow(arrayOf("", ""))
-            editMappingRow(table, model.rowCount - 1)
-        }
         val decorated =
             ToolbarDecorator
                 .createDecorator(table)
                 .setToolbarPosition(ActionToolbarPosition.TOP)
                 .disableUpDownActions()
-                .setAddActionUpdater { canAddMapping() }
+                .setAddActionUpdater { canAddMapping(model) }
                 .setAddAction {
-                    addMapping()
-                }.setRemoveAction {
+                    addMapping(table, model)
+                }.setRemoveActionUpdater { setupAvailable && table.selectedRowCount > 0 }
+                .setRemoveAction {
+                    if (!setupAvailable) return@setRemoveAction
                     table.cellEditor?.stopCellEditing()
                     table.selectedRows.sortedDescending().forEach(model::removeRow)
                 }.createPanel()
                 .apply { preferredSize = Dimension(420, 320) }
 
         lateinit var mappingRow: Row
+        lateinit var injectionRow: Row
+        lateinit var transformerRow: Row
         val dialog =
             panel {
-                row {
-                    checkBox("Automatically inject Doppler secrets into Run and Debug")
-                        .bindSelected(settings::enabled)
-                        .comment(
-                            "Uses this project's default Doppler config from Folder Setup. Supports Java, Python, Node.js, Maven, Gradle, and Docker.",
-                        )
-                }
-                row("Name transformation:") {
-                    comboBox(DopplerNameTransformer.entries)
-                        .bindItem({ settings.nameTransformer }, { settings.nameTransformer = it ?: DopplerNameTransformer.NONE })
-                        .comment("None keeps the original names. Applies only to injected Doppler secrets; values are unchanged.")
-                        .applyToComponent {
-                            transformerBox = this
-                            addActionListener {
-                                clearValidationMessage()
-                                mappingRow.visible(selectedItem == DopplerNameTransformer.CUSTOM)
+                row { cell(defaultsMessage) }
+                injectionRow =
+                    row {
+                        checkBox("Automatically inject Doppler secrets into Run and Debug")
+                            .bindSelected(settings::enabled)
+                            .comment(
+                                "Uses this project's default Doppler config from Folder Setup. Supports Java, Python, Node.js, Maven, Gradle, and Docker.",
+                            )
+                    }
+                transformerRow =
+                    row("Name transformation:") {
+                        comboBox(DopplerNameTransformer.entries)
+                            .bindItem({ settings.nameTransformer }, { settings.nameTransformer = it ?: DopplerNameTransformer.NONE })
+                            .comment("None keeps the original names. Applies only to injected Doppler secrets; values are unchanged.")
+                            .applyToComponent {
+                                transformerBox = this
+                                addActionListener {
+                                    clearValidationMessage()
+                                    mappingRow.visible(selectedItem == DopplerNameTransformer.CUSTOM)
+                                }
                             }
-                        }
-                }
+                    }
                 mappingRow =
                     row {
                         cell(
@@ -268,19 +234,109 @@ class DopplerInjectionConfigurable(
                     )
                 }
             }
+        updateAvailability = { available ->
+            if (!available) table.cellEditor?.stopCellEditing()
+            injectionRow.enabled(available)
+            transformerRow.enabled(available)
+            mappingRow.enabled(available)
+            UIUtil.setEnabled(decorated, available, true)
+            table.isEnabled = available
+        }
+        val folderSetup = DopplerFolderSetupState.getInstance(project)
+        updateDefaultAvailability(folderSetup.current)
+        project.messageBus.connect(lifetime).subscribe(
+            DopplerFolderSetupState.TOPIC,
+            DopplerFolderSetupListener {
+                if (displayedSetup != folderSetup.current) {
+                    updateDefaultAvailability(folderSetup.current)
+                    loadKnownNames()
+                }
+            },
+        )
         object : DumbAwareAction() {
             override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
             override fun update(event: AnActionEvent) {
-                event.presentation.isEnabled = transformerBox?.selectedItem == DopplerNameTransformer.CUSTOM
+                event.presentation.isEnabled = setupAvailable && transformerBox?.selectedItem == DopplerNameTransformer.CUSTOM
             }
 
             override fun actionPerformed(event: AnActionEvent) {
-                if (transformerBox?.selectedItem == DopplerNameTransformer.CUSTOM) addMapping()
+                if (setupAvailable && transformerBox?.selectedItem == DopplerNameTransformer.CUSTOM) addMapping(table, model)
             }
         }.registerCustomShortcutSet(CommonShortcuts.getNewForDialogs(), dialog)
         loadKnownNames()
         return dialog
+    }
+
+    private fun hasUnmappedSecrets(model: DefaultTableModel): Boolean {
+        val names = knownNames ?: return true
+        val mappedNames =
+            (0 until model.rowCount)
+                .map { (model.getValueAt(it, 0) as? String).orEmpty().trim() }
+                .toSet()
+        return names.any { it !in mappedNames }
+    }
+
+    private fun canAddMapping(model: DefaultTableModel): Boolean {
+        if (!setupAvailable) return false
+        val names = knownNames ?: return false
+        return model.rowCount < names.size && hasUnmappedSecrets(model)
+    }
+
+    private fun addMapping(
+        table: JBTable,
+        model: DefaultTableModel,
+    ) {
+        if (!canAddMapping(model)) return
+        table.cellEditor?.stopCellEditing()
+        model.addRow(arrayOf("", ""))
+        editMappingRow(table, model.rowCount - 1)
+    }
+
+    private fun createMappingTable(model: DefaultTableModel): JBTable {
+        val table =
+            object : JBTable(model) {
+                override fun isCellEditable(
+                    row: Int,
+                    column: Int,
+                ): Boolean {
+                    if (!setupAvailable) return false
+                    if (convertColumnIndexToModel(column) == 0 && !hasUnmappedSecrets(model)) return false
+                    return super.isCellEditable(row, column)
+                }
+
+                override fun editCellAt(
+                    row: Int,
+                    column: Int,
+                    event: EventObject?,
+                ): Boolean {
+                    val editing = super.editCellAt(row, column, event)
+                    if (editing) {
+                        (editorComponent as? JBTextField)?.let { input ->
+                            input.requestFocusInWindow()
+                            input.caret.isVisible = true
+                        }
+                    }
+                    return editing
+                }
+            }
+        val headerRenderer = table.tableHeader.defaultRenderer
+        table.tableHeader.defaultRenderer =
+            javax.swing.table.TableCellRenderer { headerTable, value, selected, focused, row, column ->
+                headerRenderer.getTableCellRendererComponent(headerTable, value, selected, focused, row, column).apply {
+                    font = table.tableHeader.font.deriveFont(Font.BOLD)
+                    background = UIUtil.getPanelBackground()
+                    if (this is JComponent) {
+                        isOpaque = true
+                        border =
+                            BorderFactory.createCompoundBorder(
+                                JBUI.Borders.customLine(JBColor.border(), 0, 0, 1, 0),
+                                JBUI.Borders.empty(4, 8),
+                            )
+                    }
+                }
+            }
+        return table
     }
 
     private fun editMappingRow(
@@ -295,7 +351,10 @@ class DopplerInjectionConfigurable(
         }
     }
 
+    override fun isModified(): Boolean = setupAvailable && super.isModified()
+
     override fun apply() {
+        if (!setupAvailable) return
         mappingTable?.cellEditor?.stopCellEditing()
         clearValidationMessage()
         if (transformerBox?.selectedItem == DopplerNameTransformer.CUSTOM) {
@@ -317,6 +376,10 @@ class DopplerInjectionConfigurable(
 
     override fun disposeUIResources() {
         closed = true
+        namesRequest++
+        uiDisposable?.let(Disposer::dispose)
+        uiDisposable = null
+        updateAvailability = null
         clearValidationMessage()
         transformerBox = null
         mappingTable = null
@@ -347,26 +410,60 @@ class DopplerInjectionConfigurable(
         return mappings.filter { it.name.isNotBlank() || it.newName.isNotBlank() }
     }
 
-    private fun loadKnownNames() {
-        val folder = project.basePath ?: return
-        val table = mappingTable
-        ApplicationManager.getApplication().executeOnPooledThread {
-            val names =
+    private fun updateDefaultAvailability(setup: DopplerFolderSetup) {
+        if (displayedSetup != setup) {
+            knownNames = null
+            pendingNames = null
+            nameEditorModel?.removeAllElements()
+            clearValidationMessage()
+        }
+        displayedSetup = setup
+        setupAvailable = !setup.projectSlug.isNullOrBlank() && !setup.configName.isNullOrBlank()
+        defaultsMessage.text = "Choose a default Doppler project and config in Folder Setup to configure Run and Debug injection."
+        defaultsMessage.isVisible = !setupAvailable
+        updateAvailability?.invoke(setupAvailable)
+        mappingTable?.repaint()
+    }
+
+    private fun readDefaultConfig(): Pair<DopplerFolderSetup, Set<String>?> {
+        val folder = project.basePath ?: return DopplerFolderSetup() to null
+        val service = DopplerService.getInstance(project)
+        val setup = service.folderSetup(folder, CliOperation.FOLDER_SETUP)
+        val slug = setup.projectSlug
+        val config = setup.configName
+        val names =
+            if (slug.isNullOrBlank() || config.isNullOrBlank()) {
+                null
+            } else {
                 try {
-                    val service = DopplerService.getInstance()
-                    val setup = service.folderSetup(folder, CliOperation.FOLDER_SETUP)
-                    val slug = setup.projectSlug
-                    val config = setup.configName
-                    if (slug.isNullOrBlank() || config.isNullOrBlank()) null else service.listSecretNames(slug, config)
+                    service.listSecretNames(slug, config)
                 } catch (_: DopplerCliException) {
                     null
                 }
-            if (names != null) {
-                ApplicationManager.getApplication().invokeLater({
-                    if (closed || mappingTable !== table) return@invokeLater
-                    updateKnownNames(names)
-                }, ModalityState.any())
             }
+        return setup to names
+    }
+
+    private fun loadKnownNames() {
+        val request = ++namesRequest
+        val table = mappingTable
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val result =
+                try {
+                    defaultConfigLoader()
+                } catch (_: DopplerCliException) {
+                    null
+                }
+            ApplicationManager.getApplication().invokeLater({
+                if (closed || project.isDisposed || mappingTable !== table || request != namesRequest) return@invokeLater
+                updateDefaultAvailability(result?.first ?: DopplerFolderSetup())
+                if (result == null) {
+                    defaultsMessage.text = "Could not read Folder Setup. Check the CLI login and reload this Settings page."
+                } else {
+                    DopplerFolderSetupState.getInstance(project).update(result.first)
+                    result.second?.let(::updateKnownNames)
+                }
+            }, ModalityState.any())
         }
     }
 

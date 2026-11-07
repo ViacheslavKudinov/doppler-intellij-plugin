@@ -1,6 +1,7 @@
 package com.vk.doppler.completion
 
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.project.Project
 import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.cli.DopplerConfig
 import com.vk.doppler.cli.DopplerProject
@@ -28,22 +29,24 @@ internal interface DopplerNamesApi {
     fun currentAuthContextId(): String
 }
 
-internal object DopplerServiceNamesApi : DopplerNamesApi {
-    override fun listProjects(authContextId: String): List<DopplerProject> = DopplerService.getInstance().listProjects(authContextId)
+internal class DopplerServiceNamesApi(
+    private val project: Project,
+) : DopplerNamesApi {
+    override fun listProjects(authContextId: String): List<DopplerProject> = DopplerService.getInstance(project).listProjects(authContextId)
 
     override fun listConfigs(
         authContextId: String,
         projectSlug: String,
-    ): List<DopplerConfig> = DopplerService.getInstance().listConfigs(authContextId, projectSlug)
+    ): List<DopplerConfig> = DopplerService.getInstance(project).listConfigs(authContextId, projectSlug)
 
     override fun listSecretNames(
         authContextId: String,
         projectSlug: String,
         configName: String,
         environment: String,
-    ): Set<String> = DopplerService.getInstance().listSecretNames(authContextId, projectSlug, configName, environment)
+    ): Set<String> = DopplerService.getInstance(project).listSecretNames(authContextId, projectSlug, configName, environment)
 
-    override fun currentAuthContextId(): String = DopplerService.getInstance().currentAuthContextId()
+    override fun currentAuthContextId(): String = DopplerService.getInstance(project).currentAuthContextId()
 }
 
 /**

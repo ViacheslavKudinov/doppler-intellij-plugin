@@ -9,7 +9,7 @@ import com.intellij.ui.dsl.builder.panel
 
 /** Folder defaults belong to the current project; CLI options remain application settings. */
 class DopplerFolderSetupConfigurable(
-    private val project: Project,
+    internal val project: Project,
 ) : BoundConfigurable("Folder Setup") {
     private var setupPanel: DopplerFolderSetupPanel? = null
 

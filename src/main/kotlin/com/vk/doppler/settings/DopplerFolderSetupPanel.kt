@@ -51,6 +51,7 @@ internal class DopplerFolderSetupPanel(
     private var loadedAuthContextId: String? = null
     private var accountInvalidated = false
     private var loaded = false
+    private var hasAvailableConfigs = false
     private var started = false
     private var busy = false
     private var updating = false
@@ -102,7 +103,9 @@ internal class DopplerFolderSetupPanel(
             updating = true
             projectChoice.selectedItem = null
             configChoice.model = DefaultComboBoxModel()
+            hasAvailableConfigs = false
             updating = false
+            enableControls(!busy)
             clearPending = baseline != DopplerFolderSetup()
             status.text =
                 if (clearPending) {
@@ -172,7 +175,14 @@ internal class DopplerFolderSetupPanel(
         configChoice.putClientProperty(OUTLINE_PROPERTY, null)
         status.icon = null
         status.foreground = normalStatusForeground
-        if (status.text == INCOMPLETE_SETUP_MESSAGE) status.text = "Choose a config, then apply settings."
+        if (status.text == INCOMPLETE_SETUP_MESSAGE) {
+            status.text =
+                if (projectChoice.selectedItem != null && !hasAvailableConfigs) {
+                    NO_CONFIGS_MESSAGE
+                } else {
+                    "Choose a config, then apply settings."
+                }
+        }
     }
 
     fun isModified(): Boolean = loaded && selection() != baseline
@@ -206,7 +216,7 @@ internal class DopplerFolderSetupPanel(
         val completed =
             ProgressManager.getInstance().runProcessWithProgressSynchronously({
                 try {
-                    val service = DopplerService.getInstance()
+                    val service = DopplerService.getInstance(project)
                     if (clearPending) {
                         service.clearFolderSetup(scope, expectedAccount)
                     } else {
@@ -246,12 +256,14 @@ internal class DopplerFolderSetupPanel(
 
     private fun load() {
         val scope = folder ?: return
+        hasAvailableConfigs = false
         background("Loading Doppler folder setup…", {
-            DopplerService.getInstance().loadFolderSetup(scope)
+            DopplerService.getInstance(project).loadFolderSetup(scope)
         }) { snapshot ->
             val setup = snapshot.setup
             val projects = snapshot.projects.map { it.slug }
             val configs = snapshot.configs.map { it.name }
+            hasAvailableConfigs = configs.isNotEmpty()
             loadedAuthContextId = snapshot.authContextId
             accountInvalidated = false
             baseline = setup
@@ -265,12 +277,10 @@ internal class DopplerFolderSetupPanel(
             updating = false
             DopplerFolderSetupState.getInstance(project).update(setup)
             status.text =
-                if (setup.projectSlug ==
-                    null
-                ) {
-                    "No folder setup. Choose a project and config."
-                } else {
-                    "Current CLI setup (may be inherited from a parent folder)."
+                when {
+                    setup.projectSlug == null -> "No folder setup. Choose a project and config."
+                    !hasAvailableConfigs -> NO_CONFIGS_MESSAGE
+                    else -> "Current CLI setup (may be inherited from a parent folder)."
                 }
         }
     }
@@ -282,23 +292,26 @@ internal class DopplerFolderSetupPanel(
         updating = true
         configChoice.model = DefaultComboBoxModel(listOfNotNull(selected).toTypedArray())
         configChoice.selectedItem = selected
+        hasAvailableConfigs = false
         updating = false
+        enableControls(!busy)
         if (slug == null || accountInvalidated) return
         val expectedAccount = loadedAuthContextId ?: return
         background("Loading Doppler configs…", {
-            DopplerService.getInstance().folderSetupConfigs(expectedAccount, slug).map { it.name }
+            DopplerService.getInstance(project).folderSetupConfigs(expectedAccount, slug).map { it.name }
         }) { names ->
+            hasAvailableConfigs = names.isNotEmpty()
             updating = true
             configChoice.model = DefaultComboBoxModel((names + listOfNotNull(selected)).distinct().toTypedArray())
             configChoice.selectedItem = selected
             updating = false
-            status.text = "Choose a config, then apply settings."
+            status.text = if (hasAvailableConfigs) "Choose a config, then apply settings." else NO_CONFIGS_MESSAGE
         }
     }
 
     private fun enableControls(enabled: Boolean) {
         projectChoice.isEnabled = enabled && loaded && !accountInvalidated
-        configChoice.isEnabled = enabled && loaded && !accountInvalidated
+        configChoice.isEnabled = enabled && loaded && !accountInvalidated && hasAvailableConfigs
         clear.isEnabled = enabled && loaded && !accountInvalidated
         reload.isEnabled = enabled && folder != null
     }
@@ -311,6 +324,7 @@ internal class DopplerFolderSetupPanel(
 
     private companion object {
         const val OUTLINE_PROPERTY = "JComponent.outline"
+        const val NO_CONFIGS_MESSAGE = "No configs available. This project may be empty, or you may not have access."
         const val ACCOUNT_CHANGED_MESSAGE = "The Doppler account changed. Reload folder setup before applying changes."
         const val INCOMPLETE_SETUP_MESSAGE = "Choose both a Doppler project and config, or clear the folder setup."
     }

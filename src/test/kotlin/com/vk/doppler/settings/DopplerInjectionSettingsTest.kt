@@ -5,10 +5,12 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.xmlb.XmlSerializer
+import com.vk.doppler.cli.DopplerFolderSetup
 import com.vk.doppler.cli.DopplerNameTransformer
 import com.vk.doppler.injection.SecretNameMapping
 import org.jdom.Element
 import java.awt.Component
+import java.util.concurrent.TimeUnit
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JCheckBox
 import javax.swing.JComboBox
@@ -18,18 +20,132 @@ import javax.swing.table.DefaultTableModel
 
 class DopplerInjectionSettingsTest : BasePlatformTestCase() {
     private lateinit var savedConsent: DopplerInjectionConsent.State
+    private lateinit var savedFolderSetup: DopplerFolderSetup
+    private lateinit var savedCliPath: String
 
     override fun setUp() {
         super.setUp()
         savedConsent = DopplerInjectionConsent.getInstance().state
+        savedFolderSetup = DopplerFolderSetupState.getInstance(project).current
+        savedCliPath = DopplerSettings.getInstance().cliPath
+        DopplerSettings.getInstance().cliPath = myFixture.tempDirFixture.tempDirPath + "/missing-doppler"
+        DopplerFolderSetupState.getInstance(project).update(DopplerFolderSetup("example", "dev"))
         DopplerInjectionConsent.getInstance().loadState(DopplerInjectionConsent.State())
     }
 
     override fun tearDown() {
         try {
             DopplerInjectionConsent.getInstance().loadState(savedConsent)
+            DopplerFolderSetupState.getInstance(project).update(savedFolderSetup)
+            DopplerSettings.getInstance().cliPath = savedCliPath
         } finally {
             super.tearDown()
+        }
+    }
+
+    private fun injectionPage(): DopplerInjectionConfigurable =
+        DopplerInjectionConfigurable(project).apply {
+            defaultConfigLoader = { DopplerFolderSetupState.getInstance(project).current to null }
+        }
+
+    fun testMissingOrPartialFolderDefaultsDisableInjectionControls() {
+        val settings = DopplerInjectionSettings.getInstance(project)
+        val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
+        try {
+            settings.nameTransformer = DopplerNameTransformer.CUSTOM
+            settings.customMappings = listOf(SecretNameMapping("SOURCE", "TARGET"))
+            for (setup in listOf(
+                DopplerFolderSetup(),
+                DopplerFolderSetup("example", null),
+                DopplerFolderSetup(null, "dev"),
+                DopplerFolderSetup(" ", "dev"),
+            )) {
+                DopplerFolderSetupState.getInstance(project).update(setup)
+                val page = injectionPage()
+                try {
+                    val panel = page.createPanel()
+                    panel.reset()
+                    val checkbox = requireNotNull(UIUtil.findComponentOfType(panel, JCheckBox::class.java))
+                    val transformer = requireNotNull(UIUtil.findComponentOfType(panel, JComboBox::class.java))
+                    val table = requireNotNull(UIUtil.findComponentOfType(panel, JTable::class.java))
+                    assertFalse(checkbox.isEnabled)
+                    assertFalse(transformer.isEnabled)
+                    assertFalse(table.isEnabled)
+                    assertFalse(table.editCellAt(0, 1))
+                    assertTrue(page.defaultsMessage.isVisible)
+                    assertTrue(page.defaultsMessage.text.contains("Folder Setup"))
+                } finally {
+                    page.disposeUIResources()
+                }
+            }
+        } finally {
+            settings.loadState(saved)
+        }
+    }
+
+    fun testLoadingDefaultsEnablesControlsBeforeTheToolWindowHasLoaded() {
+        val state = DopplerFolderSetupState.getInstance(project)
+        state.update(DopplerFolderSetup())
+        val page = injectionPage()
+        val setup = DopplerFolderSetup("loaded-project", "dev")
+        page.defaultConfigLoader = { setup to emptySet() }
+        try {
+            val panel = page.createPanel()
+            panel.reset()
+            val checkbox = requireNotNull(UIUtil.findComponentOfType(panel, JCheckBox::class.java))
+            assertFalse(checkbox.isEnabled)
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+            while (!checkbox.isEnabled && System.nanoTime() < deadline) {
+                UIUtil.dispatchAllInvocationEvents()
+                Thread.sleep(10)
+            }
+            assertTrue("Loading complete defaults must activate injection settings", checkbox.isEnabled)
+            assertFalse(page.defaultsMessage.isVisible)
+            assertEquals(setup, state.current)
+            state.update(DopplerFolderSetup())
+            assertFalse("Clearing defaults must deactivate settings even when the tree never opened", checkbox.isEnabled)
+        } finally {
+            page.disposeUIResources()
+        }
+    }
+
+    fun testFolderSetupChangesEnableAndDisableControlsWithoutErasingPreferences() {
+        val settings = DopplerInjectionSettings.getInstance(project)
+        val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
+        DopplerFolderSetupState.getInstance(project).update(DopplerFolderSetup())
+        settings.enabled = true
+        settings.nameTransformer = DopplerNameTransformer.CUSTOM
+        settings.customMappings = listOf(SecretNameMapping("SOURCE", "TARGET"))
+        val expected = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
+        val page = injectionPage()
+        try {
+            val panel = page.createPanel()
+            panel.reset()
+            val checkbox = requireNotNull(UIUtil.findComponentOfType(panel, JCheckBox::class.java))
+            val transformer = requireNotNull(UIUtil.findComponentOfType(panel, JComboBox::class.java))
+            val table = requireNotNull(UIUtil.findComponentOfType(panel, JTable::class.java))
+            assertTrue(checkbox.isSelected)
+            assertFalse(checkbox.isEnabled)
+            DopplerFolderSetupState.getInstance(project).update(DopplerFolderSetup("example", "dev"))
+            assertTrue(checkbox.isEnabled)
+            assertTrue(transformer.isEnabled)
+            assertTrue(table.isEnabled)
+            assertFalse(page.defaultsMessage.isVisible)
+
+            DopplerFolderSetupState.getInstance(project).update(DopplerFolderSetup())
+            assertFalse(checkbox.isEnabled)
+            assertFalse(transformer.isEnabled)
+            assertFalse(table.isEnabled)
+            assertTrue(page.defaultsMessage.isVisible)
+            assertEquals(1, table.rowCount)
+            assertEquals("TARGET", table.getValueAt(0, 1))
+            checkbox.isSelected = false
+            assertFalse("Inactive injection settings must not keep Settings marked modified", page.isModified())
+            page.apply()
+            assertEquals(expected, settings.state)
+        } finally {
+            page.disposeUIResources()
+            settings.loadState(saved)
         }
     }
 
@@ -142,7 +258,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         val saved = settings.state.copy()
         settings.enabled = false
         settings.nameTransformer = DopplerNameTransformer.NONE
-        val page = DopplerInjectionConfigurable(project)
+        val page = injectionPage()
         try {
             val panel = page.createPanel()
             panel.reset()
@@ -186,7 +302,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         val saved = settings.state.copy(customMappings = settings.customMappings.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.NONE
         settings.customMappings = emptyList()
-        val page = DopplerInjectionConfigurable(project)
+        val page = injectionPage()
         try {
             val panel = page.createPanel()
             panel.reset()
@@ -271,7 +387,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         val saved = settings.state.copy(customMappings = settings.customMappings.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.NONE
         settings.customMappings = emptyList()
-        val page = DopplerInjectionConfigurable(project)
+        val page = injectionPage()
         try {
             val panel = page.createPanel()
             panel.reset()
@@ -344,7 +460,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
         settings.customMappings = listOf(SecretNameMapping("OLD_SECRET", "NEW_SECRET"))
-        val page = DopplerInjectionConfigurable(project)
+        val page = injectionPage()
         try {
             val panel = page.createPanel()
             panel.reset()
@@ -385,7 +501,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
         settings.customMappings = listOf(SecretNameMapping("OLD_SECRET", "NEW_SECRET"))
-        val page = DopplerInjectionConfigurable(project)
+        val page = injectionPage()
         try {
             val panel = page.createPanel()
             panel.reset()
@@ -412,7 +528,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
         settings.customMappings = mappings
-        val page = DopplerInjectionConfigurable(project)
+        val page = injectionPage()
         try {
             val panel = page.createPanel()
             panel.reset()
@@ -627,7 +743,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
         settings.customMappings = listOf(SecretNameMapping("CURRENT_SECRET", "OLD_NAME"))
-        val page = DopplerInjectionConfigurable(project)
+        val page = injectionPage()
         try {
             val panel = page.createPanel()
             panel.reset()
@@ -666,7 +782,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
         settings.customMappings = listOf(SecretNameMapping("CURRENT_SECRET", "NEW_NAME"))
-        val page = DopplerInjectionConfigurable(project)
+        val page = injectionPage()
         try {
             val panel = page.createPanel()
             panel.reset()
@@ -701,7 +817,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
         settings.customMappings = listOf(SecretNameMapping("OLD_SECRET", "NEW_NAME"))
-        val page = DopplerInjectionConfigurable(project)
+        val page = injectionPage()
         try {
             val panel = page.createPanel()
             panel.reset()
@@ -738,7 +854,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         val previousFocusBackground = javax.swing.UIManager.get("Table.focusCellBackground")
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
         settings.customMappings = listOf(SecretNameMapping("FIRST", "RENAMED_FIRST"), SecretNameMapping("SECOND", "RENAMED_SECOND"))
-        val page = DopplerInjectionConfigurable(project)
+        val page = injectionPage()
         try {
             val panel = page.createPanel()
             panel.reset()
@@ -777,7 +893,7 @@ class DopplerInjectionSettingsTest : BasePlatformTestCase() {
         val saved = settings.state.copy(customMappings = settings.customMappings.map { it.copy() }.toMutableList())
         settings.nameTransformer = DopplerNameTransformer.CUSTOM
         settings.customMappings = listOf(SecretNameMapping("ORIGINAL_SECRET", "INJECTED_NAME"))
-        val page = DopplerInjectionConfigurable(project)
+        val page = injectionPage()
         try {
             val initialPanel = page.createPanel()
             initialPanel.reset()

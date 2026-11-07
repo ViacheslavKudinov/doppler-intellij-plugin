@@ -2,6 +2,7 @@ package com.vk.doppler.editor
 
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.vk.doppler.cli.DopplerCliException
@@ -27,6 +28,19 @@ class DopplerAccountPollingTest : BasePlatformTestCase() {
         @Suppress("UNCHECKED_CAST")
         (paths.get(service) as MutableSet<String>).add(file.path)
         return service to file
+    }
+
+    fun testAnotherProjectsAccountRefreshKeepsThisProjectsSecretsOpen() {
+        val (_, file) = openConfig()
+        val document = myFixture.editor.document
+        val text = document.text
+        DopplerSecretsEditorService.invalidateCachedFiles(
+            "another-project-account",
+            ProjectManager.getInstance().defaultProject,
+        )
+        assertFalse(file.isInvalidated)
+        assertEquals(mapOf("A" to "old"), file.remoteSnapshot)
+        assertEquals(text, document.text)
     }
 
     fun testAccountSwitchClearsDirtySelectedConfigWithoutFetchingValues() {

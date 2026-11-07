@@ -35,6 +35,10 @@ class LoadingNode : DefaultMutableTreeNode("Loading…") {
     override fun isLeaf(): Boolean = true
 }
 
+internal class EmptyConfigsNode : DefaultMutableTreeNode("No configs available. This project may be empty, or you may not have access.") {
+    override fun isLeaf(): Boolean = true
+}
+
 internal class DopplerTreeClickListener(
     private val tree: JTree,
     private val openConfig: (ConfigNode) -> Unit,
@@ -143,6 +147,15 @@ internal class DopplerTreeUpdater(
         project: ProjectNode,
         configs: List<DopplerConfig>,
     ): Boolean {
+        if (configs.isEmpty()) {
+            val placeholder =
+                project
+                    .children()
+                    .toList()
+                    .filterIsInstance<EmptyConfigsNode>()
+                    .firstOrNull() ?: EmptyConfigsNode()
+            return reconcile(project, listOf(placeholder))
+        }
         val existing =
             project
                 .children()

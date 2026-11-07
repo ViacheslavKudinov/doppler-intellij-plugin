@@ -49,6 +49,47 @@ class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
             assertEquals("Choose a config, then apply settings.", fixture.setup.status.text)
         }
 
+    fun `test empty configs show an explanation and disable selection until another project loads`() =
+        withCli { fixture ->
+            fixture.reload()
+            Files.writeString(fixture.mode, "empty-configs")
+            fixture.setup.projectChoice.selectedItem = "parent"
+            fixture.awaitIdle()
+            assertEquals(
+                "No configs available. This project may be empty, or you may not have access.",
+                fixture.setup.status.text,
+            )
+            assertEquals(0, fixture.setup.configChoice.itemCount)
+            assertNull(fixture.setup.configChoice.selectedItem)
+            assertFalse(fixture.setup.configChoice.isEnabled)
+            assertTrue(fixture.setup.projectChoice.isEnabled)
+
+            Files.writeString(fixture.mode, "stable")
+            fixture.setup.projectChoice.selectedItem = "example"
+            fixture.awaitIdle()
+            assertTrue(fixture.setup.configChoice.isEnabled)
+            assertEquals(2, fixture.setup.configChoice.itemCount)
+            assertEquals("Choose a config, then apply settings.", fixture.setup.status.text)
+        }
+
+    fun `test configured project with no visible configs preserves setup but disables config selection`() =
+        withCli { fixture ->
+            Files.writeString(fixture.mode, "empty-configs")
+            fixture.reload()
+            assertEquals(
+                "No configs available. This project may be empty, or you may not have access.",
+                fixture.setup.status.text,
+            )
+            assertEquals("example", fixture.setup.projectChoice.selectedItem)
+            assertEquals("dev", fixture.setup.configChoice.selectedItem)
+            assertFalse(fixture.setup.configChoice.isEnabled)
+            assertTrue(fixture.setup.projectChoice.isEnabled)
+            assertFalse(fixture.panel.isModified())
+            fixture.clearCalls()
+            fixture.panel.apply()
+            assertTrue(fixture.calls().isEmpty())
+        }
+
     fun `test loading failure hides the spinner and leaves an actionable error`() =
         withCli { fixture ->
             fixture.reload()
@@ -361,6 +402,10 @@ class DopplerFolderSetupAccountTest : BasePlatformTestCase() {
                 printf '%s' '[{"slug":"example"},{"slug":"parent"}]'
                 ;;
               configs)
+                if [ "${'$'}(cat '$mode')" = empty-configs ]; then
+                  printf '[]'
+                  exit 0
+                fi
                 if [ "${'$'}(cat '$mode')" = fail-configs ]; then
                   printf '%s' '{"error":"Temporary config read failure"}'
                   exit 1

@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.viacheslavkudinov.doppler</id>
     <name>Doppler Secrets Manager (Unofficial)</name>
-    <vendor url="https://github.com/ViacheslavKudinov/doppler-plugin/issues">Viacheslav Kudinov</vendor>
+    <vendor url="https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues">Viacheslav Kudinov</vendor>
 
     <description><![CDATA[
         <p>Browse, edit, and synchronize your <a href="https://doppler.com">Doppler</a> secrets,
@@ -13,7 +13,9 @@
 
         <h3>Features</h3>
         <ul>
-            <li><b>Browse secrets</b> &mdash; explore projects, environments, and configs in the Doppler tool window.</li>
+            <li><b>Browse secrets</b> &mdash; explore projects, environments, and configs in the Doppler tool window.
+                Empty config lists show an explanation that the project may be empty or access may be restricted.
+                Empty and error branches collapse after five seconds and can be expanded again.</li>
             <li><b>Edit as YAML</b> &mdash; open a config in an editor tab, including multiline values and restricted-secret placeholders.</li>
             <li><b>Save to synchronize</b> &mdash; saving pushes a minimal set of changes to Doppler.
                 Saves check for conflicting remote edits and apply replacements before deletions;
@@ -21,9 +23,25 @@
                 Reload or use automatic refresh to retrieve remote changes.</li>
             <li><b>Secret-reference completion</b> &mdash; get completion suggestions for Doppler secret references while editing.</li>
             <li><b>Folder Setup</b> &mdash; choose the default Doppler project and config for your IDE project,
-                including inherited folder defaults. A bookmark marks the selected config in the tree;
-                background checks reflect changes made through the CLI.</li>
-            <li><b>Setup guidance</b> &mdash; detect a missing CLI or login and access installation and authentication instructions.</li>
+                including inherited folder defaults. A bookmark marks the selected config in the tree and editor tabs;
+                background checks reflect changes made through the CLI. When no configs are visible,
+                Settings explains that the project may be empty or access may be restricted and disables config selection.</li>
+            <li><b>Folder-scoped authentication</b> &mdash; use the current IDE project folder's Doppler login
+                for browsing, editing, completion, and folder setup, without replacing the global login.
+                Account validation and caches respect the IDE project context.</li>
+            <li><b>Test Connection</b> &mdash; check CLI availability, account and workplace identity, and CLI version
+                using the current IDE project folder's scope. Settings opened without a project checks the global login.
+                A successful check confirms authentication; it does not verify access to projects, configs, or secrets,
+                or validate the folder's selected project and config.</li>
+            <li><b>Setup guidance</b> &mdash; detect a missing CLI or login and offer installation and authentication
+                commands in Terminal. Supported systems use package-manager commands; the fallback installer can be
+                reviewed before choosing per-user or system installation, with a checksum check that the reviewed
+                script has not changed before execution.</li>
+            <li><b>CLI updates</b> &mdash; manually check for the latest stable Doppler CLI release or enable
+                automatic checks once per IDE/plugin startup, including at the welcome screen.
+                Automatic checks are enabled by default and can be disabled in Settings.
+                Updates require confirmation and run <code>doppler update</code> without elevation;
+                package-manager installations may require their original package manager instead.</li>
             <li><b>Run and Debug injection</b> &mdash; automatically load the default config into Java, Python,
                 Node.js and npm, Maven, Gradle, and Docker launch environments, including Docker images,
                 Dockerfiles, and Compose. Each launch fetches fresh secrets; explicit run configuration
@@ -48,6 +66,9 @@
         <p>Open <b>Settings &rarr; Tools &rarr; Doppler</b>, use <b>Folder Setup</b> to select your defaults,
         then enable injection on the <b>Run and Debug</b> page. Injection starts disabled and requires
         approval for each project in this IDE; workspace files alone cannot enable it.</p>
+        <p>Run and Debug controls stay inactive until Folder Setup has both a default project and config.
+        Saving or clearing those defaults updates the controls while Settings is open;
+        saved injection preferences and custom mappings are preserved.</p>
         <p>For Docker Compose, reference the injected variables in your Compose file to pass them to services.
         Custom mappings do not rewrite Compose keys or references; declare the mapped names explicitly
         and recreate containers after changing their environment.
@@ -61,7 +82,8 @@
         Downloads fail rather than reuse stored secrets when Doppler is unavailable. Account and folder defaults
         are checked during loading to prevent injection after a detected account or config change.</p>
         <p>Authentication is managed by the Doppler CLI through <code>doppler login</code>.
-        The plugin does not store your authentication token.</p>
+        The plugin does not store your authentication token. When account validation detects an account change
+        or loss of authentication, affected cached secret documents are cleared.</p>
 
         <h3>Requirements</h3>
         <ul>
@@ -93,7 +115,7 @@
                     icon="/icons/doppler.svg"/>
 
         <applicationService serviceImplementation="com.vk.doppler.settings.DopplerSettings"/>
-        <applicationService serviceImplementation="com.vk.doppler.service.DopplerService"/>
+        <projectService serviceImplementation="com.vk.doppler.service.DopplerService"/>
         <projectService serviceImplementation="com.vk.doppler.editor.DopplerSecretsEditorService"/>
 
         <applicationConfigurable parentId="tools"

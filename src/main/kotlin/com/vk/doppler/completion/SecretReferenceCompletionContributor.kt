@@ -39,7 +39,7 @@ private object SecretReferenceProvider : CompletionProvider<CompletionParameters
         val text = editor.document.charsSequence
         val reference = SecretReferenceParser.contextAt(text, parameters.offset) ?: return
 
-        val secretReferenceService = SecretReferenceService.getInstance()
+        val secretReferenceService = SecretReferenceService.getInstance(project)
         val index =
             secretReferenceService.namesFor(file.authContextId) {
                 SecretReferencePopup.scheduleLater(project, editor)

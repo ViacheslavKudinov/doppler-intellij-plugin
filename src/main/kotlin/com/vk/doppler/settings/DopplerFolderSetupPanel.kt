@@ -117,8 +117,11 @@ internal class DopplerFolderSetupPanel(
         project.messageBus.connect(this).subscribe(
             DopplerFolderSetupState.TOPIC,
             DopplerFolderSetupListener {
-                if (loaded && !busy && !accountInvalidated && !isModified()) {
-                    baseline = DopplerFolderSetupState.getInstance(project).current
+                val state = DopplerFolderSetupState.getInstance(project)
+                if (state.isSignedOut) {
+                    showSignedOutState()
+                } else if (loaded && !busy && !accountInvalidated && !isModified()) {
+                    baseline = state.current
                     resetSetup()
                     status.text = "Folder setup changed in the CLI."
                 }
@@ -316,6 +319,26 @@ internal class DopplerFolderSetupPanel(
         reload.isEnabled = enabled && folder != null
     }
 
+    private fun showSignedOutState() {
+        generation++
+        clearValidationMessage()
+        loaded = false
+        busy = false
+        accountInvalidated = false
+        loadedAuthContextId = null
+        baseline = DopplerFolderSetup()
+        hasAvailableConfigs = false
+        clearPending = false
+        updating = true
+        projectChoice.model = DefaultComboBoxModel()
+        configChoice.model = DefaultComboBoxModel()
+        updating = false
+        loadingIndicator.suspend()
+        loadingIndicator.isVisible = false
+        status.text = "Not logged in to Doppler. Run 'doppler login', then Reload."
+        enableControls(true)
+    }
+
     private fun invalidateAccount() {
         accountInvalidated = true
         status.text = ACCOUNT_CHANGED_MESSAGE
@@ -359,6 +382,8 @@ internal class DopplerFolderSetupPanel(
                     if (!disposed && !project.isDisposed && request == generation) {
                         if (error is DopplerCliException && error.kind == DopplerCliException.Kind.AUTH_CONTEXT_CHANGED) {
                             invalidateAccount()
+                        } else if (DopplerFolderSetupState.getInstance(project).isSignedOut) {
+                            showSignedOutState()
                         } else {
                             status.text = "Could not load Doppler setup. Check the CLI path and login, then Reload."
                         }

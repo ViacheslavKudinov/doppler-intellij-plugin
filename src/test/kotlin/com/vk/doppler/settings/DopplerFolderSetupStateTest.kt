@@ -12,6 +12,33 @@ import java.util.concurrent.TimeUnit
 import javax.swing.SwingUtilities
 
 class DopplerFolderSetupStateTest : BasePlatformTestCase() {
+    fun `test repeated sign out is idempotent and login without defaults still notifies subscribers`() {
+        val state = DopplerFolderSetupState.getInstance(project)
+        val saved = state.current
+        state.update(DopplerFolderSetup())
+        var notifications = 0
+        project.messageBus.connect(testRootDisposable).subscribe(
+            DopplerFolderSetupState.TOPIC,
+            DopplerFolderSetupListener { notifications++ },
+        )
+        try {
+            state.markSignedOut()
+            val generation = state.authenticationGeneration
+            assertEquals(1, notifications)
+            state.markSignedOut()
+            assertEquals(1, notifications)
+            assertEquals(generation, state.authenticationGeneration)
+            state.update(DopplerFolderSetup())
+            assertFalse(state.isSignedOut)
+            assertTrue(state.isCurrentSession(generation))
+            assertEquals("Login must notify even when the saved defaults are still empty", 2, notifications)
+            state.update(DopplerFolderSetup())
+            assertEquals("Identical defaults must not publish redundant changes", 2, notifications)
+        } finally {
+            state.update(saved)
+        }
+    }
+
     fun `test newest queued poll wins when the UI thread was busy`() =
         withCli { state, response ->
             var notifications = 0
@@ -40,6 +67,27 @@ class DopplerFolderSetupStateTest : BasePlatformTestCase() {
             poll(state, response, "external", "dev")
             UIUtil.dispatchAllInvocationEvents()
             assertEquals(DopplerFolderSetup("external", "dev"), state.current)
+        }
+
+    fun `test sign out discards pending folder reads and pauses polling until login`() =
+        withCli { state, response ->
+            poll(state, response, "previous", "dev")
+            val previousSession = state.authenticationGeneration
+            state.markSignedOut()
+            assertFalse(state.isCurrentSession(previousSession))
+            UIUtil.dispatchAllInvocationEvents()
+            assertTrue(state.isSignedOut)
+            assertEquals(DopplerFolderSetup(), state.current)
+            poll(state, response, "stale-local-default", "dev")
+            UIUtil.dispatchAllInvocationEvents()
+            assertEquals(DopplerFolderSetup(), state.current)
+            state.update(DopplerFolderSetup("authenticated", "dev"))
+            assertFalse(state.isSignedOut)
+            assertFalse("Signing back in must not revive requests from the previous session", state.isCurrentSession(previousSession))
+            assertTrue(state.isCurrentSession(state.authenticationGeneration))
+            poll(state, response, "latest", "prod")
+            UIUtil.dispatchAllInvocationEvents()
+            assertEquals(DopplerFolderSetup("latest", "prod"), state.current)
         }
 
     private fun poll(

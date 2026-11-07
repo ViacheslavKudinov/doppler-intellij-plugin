@@ -111,13 +111,15 @@ internal class SecretNameIndex(
         }
     }
 
-    fun dispose() {
+    fun clear() {
         synchronized(lock) {
             generation++
             state = State()
             onChanged = null
         }
     }
+
+    fun dispose() = clear()
 
     private fun start(
         authContextId: String,

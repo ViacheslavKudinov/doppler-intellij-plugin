@@ -1,12 +1,23 @@
 package com.vk.doppler.editor
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.TransactionGuard
 import com.intellij.openapi.application.WriteAction
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.FileDocumentManagerListener
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.util.ui.UIUtil
 import com.vk.doppler.cli.DopplerCliException
+import com.vk.doppler.testutil.joinWithEventDispatch
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class DopplerAccountPollingTest : BasePlatformTestCase() {
     private fun openConfig(configName: String = "dev"): Pair<DopplerSecretsEditorService, DopplerSecretsFile> {
@@ -28,6 +39,93 @@ class DopplerAccountPollingTest : BasePlatformTestCase() {
         @Suppress("UNCHECKED_CAST")
         (paths.get(service) as MutableSet<String>).add(file.path)
         return service to file
+    }
+
+    fun testRevokedLoginFromBackgroundClearsDirtySecretsInAWriteSafeContext() {
+        val (service, file) = openConfig("background-revocation")
+        val document = myFixture.editor.document
+        WriteAction.run<RuntimeException> { document.setText("A: locally-edited") }
+        val saved = observeWriteSafeSave(document)
+        val failure = AtomicReference<Throwable>()
+        val worker =
+            Thread({
+                service.pollOpenConfigs(
+                    30_000,
+                    0,
+                    refreshableFiles = { emptyList() },
+                    validateAccount = { throw DopplerCliException("Login revoked", DopplerCliException.Kind.NOT_AUTHENTICATED) },
+                )
+            }, "Doppler revoked-login test").apply {
+                uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> failure.set(error) }
+                start()
+            }
+        joinWithEventDispatch(worker, "Revoked-login cleanup must finish without blocking the EDT")
+        failure.get()?.let { throw AssertionError("Revoked-login cleanup failed", it) }
+        assertTrue(saved())
+        assertRevokedConfigCleared(file, document)
+    }
+
+    fun testRevokedLoginFromAnyModalityCallbackDefersDocumentWrites() {
+        val (_, file) = openConfig("unsafe-edt-revocation")
+        val document = myFixture.editor.document
+        WriteAction.run<RuntimeException> { document.setText("A: locally-edited") }
+        val saved = observeWriteSafeSave(document)
+        val failure = AtomicReference<Throwable>()
+        var callbackRan = false
+        ApplicationManager.getApplication().invokeLater({
+            try {
+                assertFalse("Reproduce the unsafe callback from the crash", TransactionGuard.getInstance().isWritingAllowed)
+                DopplerSecretsEditorService.invalidateCachedFiles(null, project)
+                assertFalse("Unsafe callbacks must defer cleanup rather than write inline", file.isInvalidated)
+            } catch (error: Throwable) {
+                failure.set(error)
+            } finally {
+                callbackRan = true
+            }
+        }, ModalityState.any())
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+        while ((!callbackRan || !file.isInvalidated) && failure.get() == null && System.nanoTime() < deadline) {
+            UIUtil.dispatchAllInvocationEvents()
+            Thread.sleep(10)
+        }
+        failure.get()?.let { throw AssertionError("Unsafe callback cleanup failed", it) }
+        assertTrue(callbackRan)
+        assertTrue(saved())
+        assertRevokedConfigCleared(file, document)
+    }
+
+    private fun observeWriteSafeSave(document: Document): () -> Boolean {
+        var saved = false
+        ApplicationManager.getApplication().messageBus.connect(testRootDisposable).subscribe(
+            FileDocumentManagerListener.TOPIC,
+            object : FileDocumentManagerListener {
+                override fun beforeDocumentSaving(savedDocument: Document) {
+                    if (savedDocument !== document) return
+                    assertTrue(
+                        "Cleared secret documents must be saved in a write-safe context",
+                        TransactionGuard.getInstance().isWritingAllowed,
+                    )
+                    saved = true
+                }
+            },
+        )
+        return { saved }
+    }
+
+    private fun assertRevokedConfigCleared(
+        file: DopplerSecretsFile,
+        document: Document,
+    ) {
+        assertTrue(file.isInvalidated)
+        assertFalse(file.isWritable)
+        assertTrue(file.remoteSnapshot.isEmpty())
+        assertEquals(DopplerSecretsFile.EMPTY_DOCUMENT, document.text)
+        assertEquals(DopplerSecretsFile.EMPTY_DOCUMENT, String(file.contentsToByteArray(), StandardCharsets.UTF_8))
+        assertFalse(FileDocumentManager.getInstance().isDocumentUnsaved(document))
+        assertFalse(FileEditorManager.getInstance(project).isFileOpen(file))
+        assertNull(DopplerFileSystem.getInstance().findFileByPath(file.path))
+        assertFalse(file.hasPendingSync)
+        assertNull(file.pendingPushText.get())
     }
 
     fun testAnotherProjectsAccountRefreshKeepsThisProjectsSecretsOpen() {

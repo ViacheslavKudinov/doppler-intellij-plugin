@@ -2,6 +2,18 @@
 
 # Doppler-plugin Changelog
 
+## [1.12.1](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.12.0...v1.12.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **deps:** update dependency com.fasterxml.jackson:jackson-bom to v2.23.0 ([#123](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/123)) ([1280cfe](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/1280cfe09b598afdf6d79ec95a949d4fdc6ff2dc))
+
+
+### Maintenance
+
+* **deps:** update github/codeql-action action to v4.39.3 ([#118](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/118)) ([29ac244](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/29ac244d4052d4903bacffc441c07e20b4115fc2))
+
 ## [1.12.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.11.0...v1.12.0) (2026-11-07)
 
 

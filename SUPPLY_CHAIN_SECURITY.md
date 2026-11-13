@@ -74,6 +74,11 @@ to fail. If no report is produced, the summary identifies that failure instead. 
 required status check in branch protection or a ruleset to prevent merging a failing PR.
 The release scan remains informational.
 
+The generated PR SBOM is uploaded before scanning as the `pr-sbom` Actions artifact and
+retained for seven days, so it remains downloadable even if Grype fails. Open the PR's
+**Build plugin** workflow run and download `pr-sbom` from **Artifacts** to get the
+CycloneDX `.cdx.json` file. If SBOM generation fails, no SBOM artifact is uploaded.
+
 ### Scan a published SBOM for vulnerabilities with Grype
 
 [Grype](https://github.com/anchore/grype) scans an existing SBOM for known vulnerabilities.

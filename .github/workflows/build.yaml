@@ -138,6 +138,14 @@ jobs:
           fi
           echo "path=${sboms[0]}" >> "$GITHUB_OUTPUT"
 
+      - name: Upload PR SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pr-sbom
+          path: ${{ steps.sbom.outputs.path }}
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Scan PR SBOM with Grype
         uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
         with:

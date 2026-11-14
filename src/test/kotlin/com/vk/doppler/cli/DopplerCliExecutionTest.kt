@@ -357,7 +357,21 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
 
     fun `test downloaded environment rejects process environment controls`() {
         assumeFalse(SystemInfo.isWindows)
-        for (name in listOf("PATH", "path", "LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "NODE_OPTIONS", "JAVA_TOOL_OPTIONS")) {
+        val unsafeNames =
+            listOf(
+                "PATH",
+                "path",
+                "LD_PRELOAD",
+                "lD_LIBRARY_PATH",
+                "DYLD_INSERT_LIBRARIES",
+                "dYlD_FRAMEWORK_PATH",
+                "NODE_OPTIONS",
+                "NODE_PATH",
+                "JAVA_TOOL_OPTIONS",
+                "JDK_JAVA_OPTIONS",
+                "_JAVA_OPTIONS",
+            )
+        for (name in unsafeNames) {
             try {
                 cli("""printf '%s' '{"$name":"synthetic"}'""").downloadEnvironment("project", "config")
                 fail("Expected unsafe environment variable to be rejected")

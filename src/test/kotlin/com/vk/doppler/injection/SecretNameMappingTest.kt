@@ -1,9 +1,11 @@
 package com.vk.doppler.injection
 
 import com.vk.doppler.cli.DopplerReservedSecrets
+import com.vk.doppler.cli.DopplerSecretNames
 import com.vk.doppler.editor.SecretsDocumentFormat
 import com.vk.doppler.editor.SecretsFormatException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -81,14 +83,36 @@ class SecretNameMappingTest {
 
     @Test
     fun `process environment controls cannot be injected or mapped`() {
-        val names = listOf("PATH", "path", "LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "NODE_OPTIONS", "JAVA_TOOL_OPTIONS")
+        val names =
+            listOf(
+                "PATH",
+                "path",
+                "LD_PRELOAD",
+                "lD_LIBRARY_PATH",
+                "DYLD_INSERT_LIBRARIES",
+                "dYlD_FRAMEWORK_PATH",
+                "NODE_OPTIONS",
+                "NODE_PATH",
+                "JAVA_TOOL_OPTIONS",
+                "JDK_JAVA_OPTIONS",
+                "_JAVA_OPTIONS",
+            )
         for (name in names) {
-            assertNotNull(validateSecretNameMappings(listOf(pair("SOURCE", name))))
+            assertEquals(
+                "New secret names cannot override process environment controls.",
+                validateSecretNameMappings(listOf(pair("SOURCE", name))),
+            )
             assertEquals(
                 mapOf("SOURCE" to "synthetic"),
                 applySecretNameMapping(mapOf("SOURCE" to "synthetic"), listOf(pair("SOURCE", name))),
             )
         }
+        assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("path"))
+        assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("lD_LIBRARY_PATH"))
+        assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("dYlD_FRAMEWORK_PATH"))
+        assertTrue(DopplerSecretNames.isSafeForEnvironmentInjection("PATH_SUFFIX"))
+        assertTrue(DopplerSecretNames.isSafeForEnvironmentInjection("LD"))
+        assertTrue(DopplerSecretNames.isSafeForEnvironmentInjection("DYLD"))
     }
 
     @Test fun `new names follow the same validation as edited secret names`() {

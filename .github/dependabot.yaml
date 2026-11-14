@@ -9,10 +9,15 @@ updates:
     commit-message:
       prefix: 'chore(deps): '
     groups:
-      minor-patch-updates:
+      minor-updates:
         applies-to: version-updates
         update-types:
           - minor
+        patterns:
+          - "*"
+      patch-updates:
+        applies-to: version-updates
+        update-types:
           - patch
         patterns:
           - "*"
@@ -25,10 +30,15 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     groups:
-      minor-patch-updates:
+      minor-updates:
         applies-to: version-updates
         update-types:
           - minor
+        patterns:
+          - "*"
+      patch-updates:
+        applies-to: version-updates
+        update-types:
           - patch
         patterns:
           - "*"

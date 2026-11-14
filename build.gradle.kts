@@ -83,10 +83,18 @@ dependencies {
         add("intellijPlatformTestDependencies", libs.jackson.databind.get()) {
             because("Fix the vulnerable Jackson databind version in IntelliJ test tooling")
         }
-        add("intellijPlatformTestDependencies", libs.netty.codec.http.get()) {
+        add(
+            "intellijPlatformTestDependencies",
+            libs.netty.codec.http
+                .get(),
+        ) {
             because("Fix vulnerable Netty HTTP codecs in IntelliJ test tooling")
         }
-        add("intellijPlatformTestDependencies", libs.netty.codec.http2.get()) {
+        add(
+            "intellijPlatformTestDependencies",
+            libs.netty.codec.http2
+                .get(),
+        ) {
             because("Fix vulnerable Netty HTTP/2 codec in IntelliJ test tooling")
         }
         add("intellijPlatformTestDependencies", libs.bcprov.get()) {

@@ -5,6 +5,12 @@ ktlint = "1.8.0"
 logback = "1.6.6"
 jackson = "2.23.0"
 guava = "33.7.2-jre"
+protobuf = "3.25.5"
+netty = "4.2.16.Final"
+bouncycastle = "1.85"
+lz4 = "1.11.4"
+jsoup = "1.23.2"
+opentelemetry = "1.67.0"
 kotlin = "2.4.21"
 changelog = "2.5.0"
 
@@ -14,7 +20,18 @@ ktlint-cli = { module = "com.pinterest.ktlint:ktlint-cli", version.ref = "ktlint
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 logback-core = { module = "ch.qos.logback:logback-core", version.ref = "logback" }
 jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson" }
+jackson-core = { module = "com.fasterxml.jackson.core:jackson-core", version.ref = "jackson" }
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
+protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
+netty-codec-http = { module = "io.netty:netty-codec-http", version.ref = "netty" }
+netty-codec-http2 = { module = "io.netty:netty-codec-http2", version.ref = "netty" }
+bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }
+bcutil = { module = "org.bouncycastle:bcutil-jdk18on", version.ref = "bouncycastle" }
+lz4-java = { module = "org.lz4:lz4-java", version.ref = "lz4" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+opentelemetry-api = { module = "io.opentelemetry:opentelemetry-api", version.ref = "opentelemetry" }
 
 [plugins]
 cyclonedx = { id = "org.cyclonedx.bom", version.ref = "cyclonedx" }

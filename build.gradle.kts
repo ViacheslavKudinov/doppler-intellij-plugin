@@ -73,6 +73,44 @@ dependencies {
         "intellijPlatformTestDependencies",
         platform(libs.jackson.bom),
     )
+    constraints {
+        add("intellijPlatformTestDependencies", libs.protobuf.java.get()) {
+            because("Fix the vulnerable protobuf-java version in IntelliJ test tooling")
+        }
+        add("intellijPlatformTestDependencies", libs.jackson.core.get()) {
+            because("Fix the vulnerable Jackson core version in IntelliJ test tooling")
+        }
+        add("intellijPlatformTestDependencies", libs.jackson.databind.get()) {
+            because("Fix the vulnerable Jackson databind version in IntelliJ test tooling")
+        }
+        add("intellijPlatformTestDependencies", libs.netty.codec.http.get()) {
+            because("Fix vulnerable Netty HTTP codecs in IntelliJ test tooling")
+        }
+        add("intellijPlatformTestDependencies", libs.netty.codec.http2.get()) {
+            because("Fix vulnerable Netty HTTP/2 codec in IntelliJ test tooling")
+        }
+        add("intellijPlatformTestDependencies", libs.bcprov.get()) {
+            because("Fix the vulnerable Bouncy Castle provider in IntelliJ test tooling")
+        }
+        add("intellijPlatformTestDependencies", libs.bcpkix.get()) {
+            because("Keep Bouncy Castle modules aligned in IntelliJ test tooling")
+        }
+        add("intellijPlatformTestDependencies", libs.bcutil.get()) {
+            because("Keep Bouncy Castle modules aligned in IntelliJ test tooling")
+        }
+        add("intellijPlatformTestDependencies", libs.lz4.java.get()) {
+            because("Fix vulnerable lz4-java versions in IntelliJ test tooling")
+        }
+        add("intellijPlatformTestDependencies", libs.jsoup.get()) {
+            because("Fix the vulnerable jsoup version in IntelliJ test tooling")
+        }
+        add("intellijPlatformTestDependencies", libs.opentelemetry.api.get()) {
+            because("Fix the vulnerable OpenTelemetry API version in IntelliJ test tooling")
+        }
+        add("intellijPlatformTestDependencies", libs.guava.get()) {
+            because("Fix the vulnerable Guava version in IntelliJ test tooling")
+        }
+    }
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {

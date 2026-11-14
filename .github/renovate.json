@@ -5,7 +5,7 @@
   ],
   "prHourlyLimit": 5,
   "timezone": "Europe/Stockholm",
-  "minimumReleaseAge": "3 days",
+  "minimumReleaseAge": "7 days",
   "rebaseWhen": "conflicted",
   "labels": ["dependencies"]    
 }

@@ -79,6 +79,18 @@ class SecretNameMappingTest {
         assertNotNull(validateSecretNameMappings(listOf(pair("A", "B\u0000"))))
     }
 
+    @Test
+    fun `process environment controls cannot be injected or mapped`() {
+        val names = listOf("PATH", "path", "LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "NODE_OPTIONS", "JAVA_TOOL_OPTIONS")
+        for (name in names) {
+            assertNotNull(validateSecretNameMappings(listOf(pair("SOURCE", name))))
+            assertEquals(
+                mapOf("SOURCE" to "synthetic"),
+                applySecretNameMapping(mapOf("SOURCE" to "synthetic"), listOf(pair("SOURCE", name))),
+            )
+        }
+    }
+
     @Test fun `new names follow the same validation as edited secret names`() {
         val names =
             listOf("valid_NAME9", "path/name:part.ext-key", "9KEY", "HAS SPACE", " NAME", "NAME ", "HAS=EQUALS", "KEY@HOST", "caf\u00e9") +

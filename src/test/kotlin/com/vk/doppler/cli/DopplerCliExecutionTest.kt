@@ -355,6 +355,19 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
         }
     }
 
+    fun `test downloaded environment rejects process environment controls`() {
+        assumeFalse(SystemInfo.isWindows)
+        for (name in listOf("PATH", "path", "LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "NODE_OPTIONS", "JAVA_TOOL_OPTIONS")) {
+            try {
+                cli("""printf '%s' '{"$name":"synthetic"}'""").downloadEnvironment("project", "config")
+                fail("Expected unsafe environment variable to be rejected")
+            } catch (error: DopplerCliException) {
+                assertEquals("Doppler returned an invalid environment variable.", error.message)
+                assertFalse(error.message!!.contains(name))
+            }
+        }
+    }
+
     fun `test a successful write may have no output`() {
         assumeFalse(SystemInfo.isWindows)
         val cli = cli("cat >/dev/null\nexit 0")

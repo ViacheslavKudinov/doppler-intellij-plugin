@@ -214,7 +214,13 @@ class DopplerCli(
         val result = runJson(args)
         val values = result as? JsonObject ?: throw DopplerCliException("Invalid Doppler environment response.")
         return values.entrySet().associate { (name, value) ->
-            if (name.isEmpty() || '=' in name || '\u0000' in name || !value.isJsonPrimitive || !value.asJsonPrimitive.isString) {
+            if (name.isEmpty() ||
+                '=' in name ||
+                '\u0000' in name ||
+                !DopplerSecretNames.isSafeForEnvironmentInjection(name) ||
+                !value.isJsonPrimitive ||
+                !value.asJsonPrimitive.isString
+            ) {
                 throw DopplerCliException("Doppler returned an invalid environment variable.")
             }
             val text = value.asString

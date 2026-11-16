@@ -3,6 +3,8 @@ name: Daily documentation sync
 description: Find documentation drift from recent code changes and propose focused corrections.
 intent: Keep user and contributor documentation accurate as the plugin implementation evolves without creating duplicate review work.
 on:
+  push:
+    branches: [main]
   schedule: daily
   workflow_dispatch:
   skip-if-match: 'is:pr is:open "gh-aw-workflow-id: daily-docs-sync" in:body'
@@ -23,7 +25,7 @@ tools:
 safe-outputs:
   create-pull-request:
     max: 1
-    max-patch-files: 4
+    max-patch-files: 5
     draft: true
     title-prefix: "docs: "
     allowed-files:
@@ -31,6 +33,7 @@ safe-outputs:
       - CONTRIBUTING.md
       - SUPPLY_CHAIN_SECURITY.md
       - examples/README.md
+      - src/main/resources/META-INF/plugin.xml
     protected-files:
       policy: blocked
       exclude: [README.md, CONTRIBUTING.md]
@@ -61,13 +64,16 @@ the current default-branch implementation. Propose corrections, never merge them
 2. Use local Git history to inspect at most the 100 newest default-branch commits
    from the last 30 days, newest first. Include changes under `$/src/`, build
    scripts, `$/gradle.properties`, `$/gradle/`, `$/examples/`, and CI configuration.
+   Treat `$/src/main/resources/META-INF/plugin.xml` as the source of truth for
+   the plugin name, vendor, description, and user-facing requirements.
    Ignore documentation-only changes as triggers, but consider current docs and
    subsequent fixes before deciding a mismatch still exists. Do not fetch or
    check out PR branches.
 3. Summarize changed paths first; inspect relevant diffs, current source, tests,
-   and documentation on demand. Check documented settings, CLI behavior, secret
-   injection, supported IDE/Java versions, build commands, and supply-chain
-   claims only when relevant code changed. Do not perform a broad style cleanup.
+   and documentation on demand.    Check documented settings, CLI behavior, secret injection, supported IDE/Java
+   versions, build commands, and supply-chain claims only when relevant code changed.
+   Compare the plugin descriptor's user-facing name, vendor, description, and
+   requirements against the README. Do not perform a broad style cleanup.
 4. Check open PRs for overlapping documentation work and the three most recently
    closed PRs from this workflow, identified by `gh-aw-workflow-id: daily-docs-sync`
    in their bodies. Do not recreate a rejected correction without new code
@@ -81,11 +87,15 @@ the current default-branch implementation. Propose corrections, never merge them
 
 ## Make a small documentation-only correction
 
-Edit only `$/README.md`, `$/CONTRIBUTING.md`, `$/SUPPLY_CHAIN_SECURITY.md`, and
-`$/examples/README.md`. Preserve their existing style, scope, and examples.
-Choose one coherent set of corrections, touching at most four files.
-Do not edit source, tests, build files, workflows, generated files,
-`$/CHANGELOG.md`, `$/SECURITY.md`, agent instructions, or media.
+Edit only `$/README.md`, `$/CONTRIBUTING.md`, `$/SUPPLY_CHAIN_SECURITY.md`,
+`$/examples/README.md`, and user-facing descriptive text in
+`$/src/main/resources/META-INF/plugin.xml`. In `plugin.xml`, edit only `<name>`,
+`<vendor>` text/URL, or prose within `<description>`; never change plugin IDs,
+dependencies, extension points, listeners, or configuration references.
+Preserve existing style, scope, and examples. Choose one coherent set of
+corrections, touching at most five files. Do not edit other source, tests, build
+files, workflows, generated files, `$/CHANGELOG.md`, `$/SECURITY.md`, agent
+instructions, or media.
 Do not weaken security claims or policies to make documentation match a suspected
 bug; report that uncertainty without publishing a patch.
 

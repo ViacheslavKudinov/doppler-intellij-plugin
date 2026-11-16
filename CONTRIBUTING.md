@@ -40,24 +40,3 @@ gh aw compile --strict
 
 Commit each source file with its corresponding `.lock.yml` file. Do not edit
 compiled workflows manually.
-
-The **Validate agentic workflow sources** Action runs without write credentials
-for pull requests that change agentic workflow Markdown. After it succeeds, the
-**Compile agentic workflows** Action runs its workflow definition from the
-default branch, not from the PR. It compiles the PR head in a read-only job
-without secrets or write credentials, then passes changed lock files as data to a
-separate job that commits only validated `.lock.yml` paths to the exact PR head.
-It never checks out or executes PR content in the credentialed job. Unchanged
-output produces no commit; compilation errors, branch protection restrictions,
-and concurrent branch updates fail rather than overwriting newer work. The Action
-never updates the default branch or executes generated workflows.
-
-Automatic commits require a GitHub App installed on this repository with
-**Contents: read and write** and **Workflows: read and write** permissions.
-Configure its App ID as the `GH_AW_APP_ID` repository variable. Store the App
-private key in Doppler and sync it to Actions as `GH_AW_APP_PRIVATE_KEY`.
-The default Actions token is insufficient to update files under
-`$/.github/workflows/`. The App token is scoped to this repository, created only
-in the separate commit job, and revoked when that job ends. Missing App
-configuration fails token creation; use local compilation until it is configured.
-Branches without a pull request are not updated automatically.

@@ -1,22 +1,24 @@
 name: Compile agentic workflows
 
 on:
-  push:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
     paths:
       - .github/workflows/**.md
       - .github/workflows/compile-agentic-workflows.yaml
-  workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   compile:
     name: Regenerate compiled workflows
-    if: github.ref_type == 'branch' && github.ref_name != github.event.repository.default_branch
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -30,7 +32,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Install pinned Agentic Workflows compiler
         env:
@@ -101,9 +105,9 @@ jobs:
               input: {
                 branch: {
                   repositoryNameWithOwner: `${context.repo.owner}/${context.repo.repo}`,
-                  branchName: context.ref.replace(/^refs\/heads\//, ''),
+                  branchName: context.payload.pull_request.head.ref,
                 },
-                expectedHeadOid: context.sha,
+                expectedHeadOid: context.payload.pull_request.head.sha,
                 message: {
                   headline: 'ci: regenerate compiled agentic workflows',
                   body: 'Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>',

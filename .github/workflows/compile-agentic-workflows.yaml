@@ -1,0 +1,114 @@
+name: Compile agentic workflows
+
+on:
+  push:
+    paths:
+      - .github/workflows/**.md
+      - .github/workflows/compile-agentic-workflows.yaml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    name: Regenerate compiled workflows
+    if: github.ref_type == 'branch' && github.ref_name != github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Agentic Workflows compiler
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          compiler_dir="$RUNNER_TEMP/gh-aw-cli"
+          mkdir -p "$compiler_dir"
+          gh release download v1.2.2 --repo github/gh-aw \
+            --pattern linux-amd64 --dir "$compiler_dir"
+          printf '%s  %s\n' \
+            'c2378d85466d29cdbdfebd0e513557b5cbec18d34f44e7cc00c2fa323687a153' \
+            "$compiler_dir/linux-amd64" | sha256sum --check --status
+          chmod +x "$compiler_dir/linux-amd64"
+
+      - name: Compile Markdown workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/gh-aw-cli/linux-amd64" compile --strict
+
+      - name: Create branch-update token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.GH_AW_APP_ID }}
+          private-key: ${{ secrets.GH_AW_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-workflows: write
+
+      - name: Commit changed compiled workflows
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const fs = require('node:fs');
+            const { execFileSync } = require('node:child_process');
+            const changed = execFileSync('git', [
+              'ls-files', '--modified', '--others', '--exclude-standard', '-z',
+              '--', '.github/workflows/*.lock.yml',
+            ], { encoding: 'utf8' });
+            const paths = [...new Set(changed.split('\0').filter(Boolean))].sort();
+            if (paths.length === 0) {
+              core.info('Compiled workflows are already up to date; no commit needed.');
+              return;
+            }
+            const additions = paths.map(path => {
+              if (!/^\.github\/workflows\/[a-zA-Z0-9._-]+\.lock\.yml$/.test(path)) {
+                throw new Error('Unexpected compiled workflow path.');
+              }
+              if (!fs.lstatSync(path).isFile()) {
+                throw new Error('Compiled workflow must be a regular file.');
+              }
+              return { path, contents: fs.readFileSync(path).toString('base64') };
+            });
+            await github.graphql(`
+              mutation($input: CreateCommitOnBranchInput!) {
+                createCommitOnBranch(input: $input) {
+                  commit { oid }
+                }
+              }
+            `, {
+              input: {
+                branch: {
+                  repositoryNameWithOwner: `${context.repo.owner}/${context.repo.repo}`,
+                  branchName: context.ref.replace(/^refs\/heads\//, ''),
+                },
+                expectedHeadOid: context.sha,
+                message: {
+                  headline: 'ci: regenerate compiled agentic workflows',
+                  body: 'Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>',
+                },
+                fileChanges: { additions },
+              },
+            });
+            core.info(`Committed ${additions.length} compiled workflow file(s).`);

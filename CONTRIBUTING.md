@@ -27,3 +27,33 @@ ktlint configuration. Run the same check locally that CI uses:
 To apply automatic formatting, run `./gradlew ktlintFormat`, then run `./gradlew ktlintCheck`
 in a separate invocation. Fix any remaining violations manually. The Gradle `check` task also
 includes ktlint checks. CI fails on formatting violations and does not rewrite files.
+
+## Agentic workflows
+
+Edit agentic workflow sources under `$/.github/workflows/*.md`, then regenerate
+their compiled workflows with the pinned GitHub CLI extension:
+
+```bash
+gh extension install github/gh-aw --pin v1.2.2
+gh aw compile --strict
+```
+
+Commit each source file with its corresponding `.lock.yml` file. Do not edit
+compiled workflows manually.
+
+The **Compile agentic workflows** Action recompiles Markdown workflows when they
+change on a non-default branch, and supports manual runs on those branches. It
+commits changed `.lock.yml` files directly to that branch; unchanged output
+produces no commit. Generated-only commits do not retrigger compilation.
+Compilation errors, branch protection restrictions, and concurrent branch updates
+fail the job instead of overwriting newer work. The Action never updates the
+default branch or executes the generated workflows.
+
+Automatic commits require a GitHub App installed on this repository with
+**Contents: read and write** and **Workflows: read and write** permissions.
+Configure its App ID as the `GH_AW_APP_ID` repository variable. Store the App
+private key in Doppler and sync it to Actions as `GH_AW_APP_PRIVATE_KEY`.
+The default Actions token is insufficient to update files under
+`$/.github/workflows/`. The App token is scoped to this repository, created only
+after compilation, and revoked when the job ends. Missing App configuration
+fails token creation; use local compilation until it is configured.

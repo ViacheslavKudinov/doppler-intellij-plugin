@@ -30,6 +30,8 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    outputs:
+      plugin_artifact_prefix: ${{ steps.plugin.outputs.artifact_prefix }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
@@ -64,9 +66,8 @@ jobs:
           fi
           ./gradlew buildPlugin "${args[@]}" --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
-      - name: Locate PR plugin archive
+      - name: Locate plugin archive
         id: plugin
-        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -76,7 +77,9 @@ jobs:
             echo "::error::Expected exactly one plugin archive, found ${#zips[@]}"
             exit 1
           fi
-          echo "name=$(basename "${zips[0]}")" >> "$GITHUB_OUTPUT"
+          archive_name=$(basename "${zips[0]}")
+          echo "name=$archive_name" >> "$GITHUB_OUTPUT"
+          echo "artifact_prefix=${archive_name%.zip}" >> "$GITHUB_OUTPUT"
           echo "path=${zips[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Upload PR plugin
@@ -120,6 +123,7 @@ jobs:
 
   grype:
     name: Grype
+    needs: [ build ]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -165,7 +169,7 @@ jobs:
       - name: Upload PR SBOM
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: pr-sbom
+          name: ${{ needs.build.outputs.plugin_artifact_prefix }}-sbom
           path: ${{ steps.sbom.outputs.path }}
           retention-days: 7
           if-no-files-found: error
@@ -289,7 +293,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: plugin-verification-problems
+          name: ${{ needs.build.outputs.plugin_artifact_prefix }}-plugin-verification-problems
           path: build/reports/problems/problems-report.html
           retention-days: 1
           if-no-files-found: warn

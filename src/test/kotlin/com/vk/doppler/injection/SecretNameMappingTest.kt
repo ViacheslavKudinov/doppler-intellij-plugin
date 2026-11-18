@@ -96,8 +96,10 @@ class SecretNameMappingTest {
                 "JAVA_TOOL_OPTIONS",
                 "JDK_JAVA_OPTIONS",
                 "_JAVA_OPTIONS",
+                "BASH_ENV",
                 "PYTHONPATH",
                 "PYTHONHOME",
+                "PYTHONUSERBASE",
             )
         for (name in names) {
             assertEquals(

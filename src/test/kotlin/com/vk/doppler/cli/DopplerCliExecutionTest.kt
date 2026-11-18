@@ -370,6 +370,8 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
                 "JAVA_TOOL_OPTIONS",
                 "JDK_JAVA_OPTIONS",
                 "_JAVA_OPTIONS",
+                "PYTHONPATH",
+                "PYTHONHOME",
             )
         for (name in unsafeNames) {
             try {

@@ -270,7 +270,20 @@ jobs:
 
       # Run Verify Plugin task and IntelliJ Plugin Verifier tool
       - name: Run Plugin Verification tasks
-        run: ./gradlew verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+        run: |
+          for attempt in 1 2 3; do
+            if output=$(./gradlew verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g 2>&1); then
+              printf '%s\n' "$output"
+              exit 0
+            else
+              status=$?
+            fi
+            printf '%s\n' "$output"
+            if [[ "$output" != *"Received status code 429 from server: Too Many Requests"* ]] || [[ $attempt -eq 3 ]]; then
+              exit "$status"
+            fi
+            sleep $((attempt * 30))
+          done
 
       - name: Upload verification problems report
         if: ${{ always() }}

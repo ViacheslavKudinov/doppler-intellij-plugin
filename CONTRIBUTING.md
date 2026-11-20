@@ -27,3 +27,16 @@ ktlint configuration. Run the same check locally that CI uses:
 To apply automatic formatting, run `./gradlew ktlintFormat`, then run `./gradlew ktlintCheck`
 in a separate invocation. Fix any remaining violations manually. The Gradle `check` task also
 includes ktlint checks. CI fails on formatting violations and does not rewrite files.
+
+## Agentic workflows
+
+Edit agentic workflow sources under `$/.github/workflows/*.md`, then regenerate
+their compiled workflows with the pinned GitHub CLI extension:
+
+```bash
+gh extension install github/gh-aw --pin v1.2.2
+gh aw compile --strict
+```
+
+Commit each source file with its corresponding `.lock.yml` file. Do not edit
+compiled workflows manually.

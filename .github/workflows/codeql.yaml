@@ -85,7 +85,23 @@ jobs:
     - name: Run manual build steps
       if: matrix.build-mode == 'manual'
       shell: bash
-      run: ./gradlew buildPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+      run: |
+        set -o pipefail
+        build_log="$(mktemp "$RUNNER_TEMP/codeql-build.XXXXXX")"
+        for attempt in 1 2 3; do
+          if ./gradlew clean buildPlugin --no-build-cache --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g 2>&1 | tee "$build_log"; then
+            exit 0
+          fi
+          if ! grep -Fq 'Received status code 429 from server: Too Many Requests' "$build_log"; then
+            echo "Build failed for a reason other than HTTP 429 Too Many Requests; not retrying."
+            exit 1
+          fi
+          if [[ "$attempt" -eq 3 ]]; then
+            exit 1
+          fi
+          echo "Received HTTP 429 Too Many Requests; retrying in $((attempt * 30)) seconds."
+          sleep "$((attempt * 30))"
+        done
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3

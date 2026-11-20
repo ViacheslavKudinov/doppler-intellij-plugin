@@ -2,6 +2,24 @@
 
 # Doppler-plugin Changelog
 
+## [1.12.1](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.12.0...v1.12.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* **deps:** update dependency com.fasterxml.jackson:jackson-bom to v2.23.0 ([#123](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/123)) ([1280cfe](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/1280cfe09b598afdf6d79ec95a949d4fdc6ff2dc))
+
+
+### Maintenance
+
+* Change minimum release age from 3 to 7 days for Renovate ([#129](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/129)) ([c16c660](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/c16c660a272c83ae02b71a3ee9f1ce905c883d60))
+* **deps:** bump the minor-patch-updates group with 2 updates ([#127](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/127)) ([3a01053](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/3a0105351a96cf40fd1179fb3d3edda0624726ea))
+* **deps:** bump the minor-patch-updates group with 3 updates ([#126](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/126)) ([4d8b6a4](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/4d8b6a401dad2f6b7cae7b5e0b2e2d5b084ff75e))
+* **deps:** update dependency org.cyclonedx.bom to v3.6.0 ([#133](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/133)) ([f7de9d4](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/f7de9d4ee40d713cadddbfe06c0761a3883143cd))
+* **deps:** update github/codeql-action action to v4.39.3 ([#118](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/118)) ([29ac244](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/29ac244d4052d4903bacffc441c07e20b4115fc2))
+* **deps:** update gradle to v9.9.1 ([#122](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/122)) ([cccc150](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/cccc1508199b429a5f57b6a768564d130c340800))
+* Simplify Dependabot cooldown configuration ([#130](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/130)) ([337d8a6](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/337d8a604317af2d69f9c348e7ff7d313ec518ab))
+
 ## [1.12.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.11.0...v1.12.0) (2026-11-07)
 
 

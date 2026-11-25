@@ -54,6 +54,7 @@ object DopplerSecretNames {
             "JDK_JAVA_OPTIONS",
             "_JAVA_OPTIONS",
             "BASH_ENV",
+            "HOME",
             "PYTHONPATH",
             "PYTHONHOME",
             "PYTHONUSERBASE",

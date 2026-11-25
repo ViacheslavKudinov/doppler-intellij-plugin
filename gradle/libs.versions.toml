@@ -1,6 +1,6 @@
 [versions]
 junit = "4.13.2"
-cyclonedx = "3.6.0"
+cyclonedx = "3.6.1"
 ktlint = "1.8.0"
 logback = "1.6.7"
 jackson = "2.23.0"

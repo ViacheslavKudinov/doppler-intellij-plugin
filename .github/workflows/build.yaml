@@ -30,6 +30,8 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    outputs:
+      plugin-url: ${{ steps.upload-pr-plugin.outputs.artifact-url }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
@@ -65,6 +67,7 @@ jobs:
           ./gradlew buildPlugin "${args[@]}" --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
       - name: Upload PR plugin
+        id: upload-pr-plugin
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -72,6 +75,29 @@ jobs:
           path: build/distributions/*.zip
           retention-days: 7
           if-no-files-found: error
+
+  comment-pr-plugin:
+    name: Comment PR plugin
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [ build ]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
+        with:
+          egress-policy: audit
+
+      - name: Comment with PR plugin link
+        uses: step-security/sticky-pull-request-comment@3f74a8f2b4dc745810ded9bbfd887679bccd13c2 # v3.0.5
+        with:
+          header: pr-plugin
+          recreate: true
+          message: |
+            [Download the PR plugin](${{ needs.build.outputs.plugin-url }})
+
+            The artifact expires after 7 days.
 
   ktlint:
     name: ktlint
@@ -255,7 +281,24 @@ jobs:
 
       # Run Verify Plugin task and IntelliJ Plugin Verifier tool
       - name: Run Plugin Verification tasks
-        run: ./gradlew verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+        shell: bash
+        run: |
+          set -o pipefail
+          verify_log="$(mktemp "$RUNNER_TEMP/plugin-verify.XXXXXX")"
+          for attempt in 1 2 3; do
+            if ./gradlew verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g 2>&1 | tee "$verify_log"; then
+              exit 0
+            fi
+            if ! grep -Fq 'Received status code 429 from server: Too Many Requests' "$verify_log"; then
+              echo "Verification failed for a reason other than HTTP 429 Too Many Requests; not retrying."
+              exit 1
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              exit 1
+            fi
+            echo "Received HTTP 429 Too Many Requests; retrying in $((attempt * 30)) seconds."
+            sleep "$((attempt * 30))"
+          done
 
       - name: Upload verification problems report
         if: ${{ always() }}

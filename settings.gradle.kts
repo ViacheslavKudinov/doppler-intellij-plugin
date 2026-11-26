@@ -22,7 +22,7 @@ buildscript {
             classpath("org.jsoup:jsoup:1.24.1") {
                 because("Fix vulnerabilities in the IntelliJ Platform Gradle plugin's transitive jsoup dependency")
             }
-            classpath("org.bouncycastle:bcprov-jdk18on:1.85") {
+            classpath("org.bouncycastle:bcprov-jdk18on:1.87") {
                 because(
                     "Fix the certificate name-constraints bypass in the IntelliJ Platform Gradle plugin's transitive Bouncy Castle dependency",
                 )

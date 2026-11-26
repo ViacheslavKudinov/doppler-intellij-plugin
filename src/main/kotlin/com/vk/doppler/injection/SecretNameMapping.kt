@@ -9,7 +9,10 @@ data class SecretNameMapping(
     var newName: String = "",
 )
 
-private fun isValidEnvironmentName(name: String): Boolean = DopplerSecretNames.isValid(name) && !DopplerReservedSecrets.isReserved(name)
+private fun isValidEnvironmentName(name: String): Boolean =
+    DopplerSecretNames.isValid(name) &&
+        DopplerSecretNames.isSafeForEnvironmentInjection(name) &&
+        !DopplerReservedSecrets.isReserved(name)
 
 /** Returns a user-facing problem with [mappings], or null when they can be applied. Fully blank rows are ignored. */
 internal fun validateSecretNameMappings(mappings: List<SecretNameMapping>): String? {
@@ -18,6 +21,9 @@ internal fun validateSecretNameMappings(mappings: List<SecretNameMapping>): Stri
     if (used.any { it.newName.isBlank() }) return "Every mapping needs a new secret name."
     if (used.any { !DopplerSecretNames.isValid(it.newName) }) {
         return "Invalid new secret name. Use only letters, digits, _, /, :, ., and -."
+    }
+    if (used.any { !DopplerSecretNames.isSafeForEnvironmentInjection(it.newName) }) {
+        return "New secret names cannot override process environment controls."
     }
     if (used.any { DopplerReservedSecrets.isReserved(it.newName) }) {
         return "New secret names cannot use names managed by Doppler."

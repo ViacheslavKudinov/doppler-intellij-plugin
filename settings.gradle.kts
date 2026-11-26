@@ -38,7 +38,7 @@ buildscript {
     configurations.classpath {
         resolutionStrategy.dependencySubstitution {
             substitute(module("org.lz4:lz4-java"))
-                .using(module("at.yawk.lz4:lz4-java:1.11.4"))
+                .using(module("at.yawk.lz4:lz4-java:1.14.1"))
                 .because("Use the maintained LZ4 fork with fixes for vulnerabilities in the original artifact")
         }
     }

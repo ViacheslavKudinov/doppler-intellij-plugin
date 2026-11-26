@@ -431,6 +431,10 @@ Actions. Pull requests restore caches read-only; only pushes to `main` can save 
 on both events when build-related files change. `setup-java` does not also cache Gradle files,
 avoiding interference between the two actions.
 
+The same separation applies to release and Marketplace workflows: `setup-java` caches only
+the JDK, while `setup-gradle` owns Gradle caching. Both actions restore caches read-only
+unless the event is a push to `main`, including during manual release or publishing runs.
+
 If no JDK is on your `PATH`, any JetBrains IDE ships one:
 
 ```bash

@@ -405,6 +405,12 @@ The project uses the [IntelliJ Platform Gradle Plugin](https://plugins.jetbrains
 Use `./gradlew buildPlugin -Psnapshot` to append `-SNAPSHOT` to the version from
 `gradle.properties` without modifying the file. Without the flag, the version stays unchanged.
 
+The [Build plugin workflow](.github/workflows/build.yaml) uses `gradle/actions/setup-gradle`
+to cache Gradle dependencies, wrapper distributions, and local build-cache entries in GitHub
+Actions. Pull requests restore caches read-only; only pushes to `main` can save them. Builds run
+on both events when build-related files change. `setup-java` does not also cache Gradle files,
+avoiding interference between the two actions.
+
 If no JDK is on your `PATH`, any JetBrains IDE ships one:
 
 ```bash

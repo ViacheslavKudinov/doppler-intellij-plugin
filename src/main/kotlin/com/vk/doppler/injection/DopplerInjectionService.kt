@@ -48,7 +48,7 @@ class DopplerInjectionService(
     private fun loadAndMerge(existing: Map<String, String>): Map<String, String> {
         try {
             val folder = project.basePath ?: return existing
-            val service = DopplerService.getInstance()
+            val service = DopplerService.getInstance(project)
             // Local preflight: an unconfigured project needs no login or secret access.
             val setup = service.folderSetup(folder, CliOperation.RUN_INJECTION)
             val slug = setup.projectSlug

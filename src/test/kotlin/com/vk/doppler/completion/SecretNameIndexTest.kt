@@ -1,16 +1,26 @@
 package com.vk.doppler.completion
 
 import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.testFramework.TestApplicationManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.BeforeClass
 import org.junit.Test
 import java.util.concurrent.CancellationException
 import java.util.concurrent.Executor
 import java.util.concurrent.RejectedExecutionException
 
 class SecretNameIndexTest {
+    companion object {
+        @BeforeClass
+        @JvmStatic
+        fun initializeApplication() {
+            TestApplicationManager.getInstance()
+        }
+    }
+
     @Test
     fun `reading cached names neither starts loading nor replaces the completion callback`() {
         loader.namesByContext = mapOf("ctx" to first)
@@ -25,6 +35,26 @@ class SecretNameIndexTest {
         assertEquals(first, index.cachedNamesFor("ctx"))
         assertTrue(index.cachedNamesFor("other").isEmpty())
         assertEquals(1, loader.calls)
+    }
+
+    @Test
+    fun `sign out clears cached names and pending loads but allows a fresh login`() {
+        loader.namesByContext = mapOf("ctx" to first)
+        val index = index()
+        index.namesFor("ctx") {}
+        executor.runAll()
+        assertEquals(first, index.cachedNamesFor("ctx"))
+        index.invalidate()
+        index.namesFor("ctx") {}
+        assertTrue(index.isLoading())
+        index.clear()
+        assertFalse(index.isLoading())
+        assertTrue(index.cachedNamesFor("ctx").isEmpty())
+        executor.runAll()
+        assertTrue(index.cachedNamesFor("ctx").isEmpty())
+        index.namesFor("ctx") {}
+        executor.runAll()
+        assertEquals(first, index.cachedNamesFor("ctx"))
     }
 
     private class ManualExecutor : Executor {

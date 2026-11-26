@@ -1,6 +1,7 @@
 package com.vk.doppler.toolwindow
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.ui.TestDialog
 import com.intellij.openapi.ui.TestDialogManager
@@ -12,11 +13,13 @@ import com.intellij.ui.SimpleColoredComponent
 import com.intellij.util.ui.UIUtil
 import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.DopplerCli
+import com.vk.doppler.cli.DopplerCliException
 import com.vk.doppler.cli.DopplerFolderSetup
 import com.vk.doppler.cli.DopplerProject
 import com.vk.doppler.editor.DopplerFileSystem
 import com.vk.doppler.editor.DopplerSecretsEditorService
 import com.vk.doppler.editor.DopplerSecretsFile
+import com.vk.doppler.service.DopplerService
 import com.vk.doppler.service.DopplerStatus
 import com.vk.doppler.service.DopplerStatusReport
 import com.vk.doppler.settings.DopplerFolderSetupListener
@@ -24,14 +27,17 @@ import com.vk.doppler.settings.DopplerFolderSetupState
 import com.vk.doppler.settings.DopplerSettings
 import com.vk.doppler.testutil.joinWithEventDispatch
 import org.junit.Assume.assumeFalse
+import java.awt.event.ActionEvent
 import java.awt.event.MouseEvent
 import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JTree
+import javax.swing.Timer
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.TreePath
 
@@ -107,6 +113,7 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             val context = requireNotNull(field("authContextId").get(panel) as? String)
             val fileSystem = DopplerFileSystem.getInstance()
             val cached = fileSystem.obtain("cached", "dev", context)
+            val oldProject = projectNodes(panel).single()
             cli.setMode("not-authenticated")
             cli.clearCalls()
 
@@ -114,8 +121,19 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             awaitRefresh(panel)
 
             assertNull(field("authContextId").get(panel))
+            assertTrue(projectNodes(panel).isEmpty())
+            assertNull(oldProject.parent)
+            assertTrue(folderSetupState().isSignedOut)
             assertNull(fileSystem.findFileByPath(cached.path))
             assertEquals(DopplerFolderSetup(), folderSetupState().current)
+            assertTrue(statusText(panel).contains("Not logged in to Doppler."))
+            assertEquals(listOf("me"), cli.calls())
+
+            cli.clearCalls()
+            panel.refresh(CliOperation.TREE_RETRY)
+            awaitRefresh(panel)
+            assertTrue(projectNodes(panel).isEmpty())
+            assertTrue(folderSetupState().isSignedOut)
             assertTrue(statusText(panel).contains("Not logged in to Doppler."))
             assertEquals(listOf("me"), cli.calls())
 
@@ -126,10 +144,166 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             awaitConfigLoads(panel)
 
             assertEquals(context, field("authContextId").get(panel))
+            assertFalse(folderSetupState().isSignedOut)
+            assertNotSame(oldProject, projectNodes(panel).single())
             assertEquals(1, cli.callCount("projects"))
             assertEquals(1, cli.callCount("configure"))
             assertEquals(1, cli.callCount("configs"))
             assertEquals(DopplerFolderSetup("example", "dev"), folderSetupState().current)
+        }
+
+    fun `test background account failure returns the tool window to the initial signed out state`() =
+        withPanel { panel, cli ->
+            val environment = projectNodes(panel).single().getChildAt(0) as EnvironmentNode
+            val config = environment.getChildAt(0) as ConfigNode
+            clickConfig(panel, config)
+            val opened = awaitOpenConfig(config.projectSlug, config.config.name)
+            val document = requireNotNull(FileDocumentManager.getInstance().getCachedDocument(opened))
+            cli.setMode("not-authenticated")
+            val failure = AtomicReference<Throwable>()
+            val worker =
+                Thread({
+                    try {
+                        DopplerService.getInstance(project).currentAuthContextId()
+                        fail("Revoked login must fail authentication")
+                    } catch (error: DopplerCliException) {
+                        assertEquals(DopplerCliException.Kind.NOT_AUTHENTICATED, error.kind)
+                    }
+                }, "Doppler account revocation").apply {
+                    uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> failure.set(error) }
+                    start()
+                }
+            joinWithEventDispatch(worker, "The failed account lookup must finish")
+            UIUtil.dispatchAllInvocationEvents()
+            failure.get()?.let { throw AssertionError("Account check failed unexpectedly", it) }
+            assertTrue(projectNodes(panel).isEmpty())
+            assertNull(field("authContextId").get(panel))
+            assertTrue(folderSetupState().isSignedOut)
+            assertTrue(statusText(panel).contains("Not logged in to Doppler."))
+            assertTrue(opened.isInvalidated)
+            assertEquals(DopplerSecretsFile.EMPTY_DOCUMENT, document.text)
+            assertFalse(FileEditorManager.getInstance(project).isFileOpen(opened))
+        }
+
+    fun `test a successful account check supersedes a queued signed out reset`() =
+        withPanel { panel, cli ->
+            val node = projectNodes(panel).single()
+            val failure = AtomicReference<Throwable>()
+
+            fun checkAccount(expectFailure: Boolean) {
+                val worker =
+                    Thread({
+                        try {
+                            DopplerService.getInstance(project).currentAuthContextId()
+                            assertFalse(expectFailure)
+                        } catch (error: DopplerCliException) {
+                            assertTrue(expectFailure)
+                        }
+                    }, "Doppler queued account check").apply {
+                        uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> failure.set(error) }
+                        start()
+                    }
+                // Keep the UI queue paused until both account checks have completed.
+                worker.join(TimeUnit.SECONDS.toMillis(5))
+                assertFalse(worker.isAlive)
+            }
+            cli.setMode("not-authenticated")
+            checkAccount(true)
+            cli.setMode("ready")
+            checkAccount(false)
+            UIUtil.dispatchAllInvocationEvents()
+            failure.get()?.let { throw AssertionError("Account check failed unexpectedly", it) }
+            assertSame(node, projectNodes(panel).single())
+            assertFalse(folderSetupState().isSignedOut)
+            assertNotNull(field("authContextId").get(panel))
+        }
+
+    fun `test secret reload results and failures from a signed out session cannot affect the new session`() {
+        for (mode in listOf("blocked-secrets", "blocked-secrets-failure")) {
+            withPanel { panel, cli ->
+                val environment = projectNodes(panel).single().getChildAt(0) as EnvironmentNode
+                val config = environment.getChildAt(0) as ConfigNode
+                clickConfig(panel, config)
+                val file = awaitOpenConfig(config.projectSlug, config.config.name)
+                val before = file.remoteSnapshot
+                val setup = folderSetupState().current
+                cli.clearCalls()
+                cli.setMode(mode)
+                val failure = AtomicReference<Throwable>()
+                val worker =
+                    Thread({ DopplerSecretsEditorService.getInstance(project).reload(file) }, "Doppler stale secret reload").apply {
+                        uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> failure.set(error) }
+                        start()
+                    }
+                try {
+                    awaitCall(cli, "secrets")
+                    folderSetupState().markSignedOut()
+                    folderSetupState().update(setup)
+                } finally {
+                    cli.releaseConfigs()
+                    joinWithEventDispatch(worker, "The previous session's secret reload must finish")
+                    UIUtil.dispatchAllInvocationEvents()
+                }
+                failure.get()?.let { throw AssertionError("Secret reload failed unexpectedly", it) }
+                assertFalse("A stale failure must not invalidate the current session's file", file.isInvalidated)
+                assertEquals("A stale success must not replace the current session's secrets", before, file.remoteSnapshot)
+            }
+        }
+    }
+
+    fun `test automatic secret refresh completed after logout cannot restore the old session`() =
+        withPanel { panel, cli ->
+            val environment = projectNodes(panel).single().getChildAt(0) as EnvironmentNode
+            val config = environment.getChildAt(0) as ConfigNode
+            clickConfig(panel, config)
+            val file = awaitOpenConfig(config.projectSlug, config.config.name)
+            val before = file.remoteSnapshot
+            val setup = folderSetupState().current
+            cli.clearCalls()
+            cli.setMode("blocked-secrets")
+            val result = AtomicReference<Boolean>()
+            val failure = AtomicReference<Throwable>()
+            val worker =
+                Thread({
+                    result.set(DopplerSecretsEditorService.getInstance(project).refreshFromServer(file))
+                }, "Doppler stale refresh").apply {
+                    uncaughtExceptionHandler = Thread.UncaughtExceptionHandler { _, error -> failure.set(error) }
+                    start()
+                }
+            try {
+                try {
+                    awaitCall(cli, "secrets")
+                } catch (error: AssertionError) {
+                    throw AssertionError("Refresh result: ${result.get()}, calls: ${cli.calls()}", failure.get() ?: error)
+                }
+                folderSetupState().markSignedOut()
+                folderSetupState().update(setup)
+            } finally {
+                cli.releaseConfigs()
+                joinWithEventDispatch(worker, "The stale automatic refresh must finish")
+                UIUtil.dispatchAllInvocationEvents()
+            }
+            failure.get()?.let { throw AssertionError("Automatic refresh failed unexpectedly", it) }
+            assertEquals(false, result.get())
+            assertEquals(before, file.remoteSnapshot)
+        }
+
+    fun `test queued secret document update is discarded after logout and login`() =
+        withPanel { panel, cli ->
+            val environment = projectNodes(panel).single().getChildAt(0) as EnvironmentNode
+            val config = environment.getChildAt(0) as ConfigNode
+            clickConfig(panel, config)
+            val file = awaitOpenConfig(config.projectSlug, config.config.name)
+            val before = file.remoteSnapshot
+            val setup = folderSetupState().current
+            cli.setMode("changed-secrets")
+            assertTrue(DopplerSecretsEditorService.getInstance(project).refreshFromServer(file) { listOf(file) })
+            folderSetupState().markSignedOut()
+            folderSetupState().update(setup)
+            UIUtil.dispatchAllInvocationEvents()
+            assertFalse(file.isInvalidated)
+            assertEquals(before, file.remoteSnapshot)
+            assertFalse(requireNotNull(FileDocumentManager.getInstance().getCachedDocument(file)).text.contains("previous-session"))
         }
 
     fun `test project read failure keeps tree nodes but forces a full reload on focus`() =
@@ -229,6 +403,7 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             assertTrue(node.configLoadFailed)
             assertFalse(node.loaded)
             assertTrue(node.getChildAt(0).toString().contains("Temporary config read failure"))
+            assertTrue("The error must remain visible after expanding", tree.isExpanded(path))
 
             tree.collapsePath(path)
             cli.setMode("ready")
@@ -240,6 +415,86 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             cli.clearCalls()
             loadConfigs(panel, node)
             assertTrue(cli.calls().isEmpty())
+        }
+
+    fun `test empty configs keep the project expanded with an explanation and recover on refresh`() =
+        withPanel("empty-setup") { panel, cli ->
+            val node = projectNodes(panel).single()
+            val tree = field("tree").get(panel) as JTree
+            val path = TreePath(node.path)
+            val account = field("authContextId").get(panel)
+            cli.setMode("empty-configs")
+            tree.expandPath(path)
+            awaitConfigLoads(panel)
+            assertSame(node, projectNodes(panel).single())
+            assertTrue(node.loaded)
+            assertFalse(node.isLeaf)
+            assertTrue(tree.isExpanded(path))
+            val message = node.getChildAt(0)
+            assertTrue(message is EmptyConfigsNode)
+            assertTrue(message.toString().contains("may not have access"))
+            assertTrue(tree.isVisible(TreePath((message as EmptyConfigsNode).path)))
+            assertEquals(account, field("authContextId").get(panel))
+            val firstTimer = requireNotNull(messageCollapseTimer(panel, node))
+            assertEquals(5_000, firstTimer.initialDelay)
+            assertFalse(firstTimer.isRepeats)
+            fireTimer(firstTimer)
+            assertFalse(tree.isExpanded(path))
+            assertSame(node, projectNodes(panel).single())
+
+            tree.expandPath(path)
+            assertTrue(tree.isExpanded(path))
+            val reopenedTimer = requireNotNull(messageCollapseTimer(panel, node))
+            assertNotSame(firstTimer, reopenedTimer)
+            fireTimer(firstTimer)
+            assertTrue("An expired timer must not collapse a reopened project", tree.isExpanded(path))
+
+            cli.setMode("ready")
+            panel.refresh(CliOperation.TREE_REFRESH_BUTTON)
+            awaitRefresh(panel)
+            awaitConfigLoads(panel)
+            assertSame(node, projectNodes(panel).single())
+            assertTrue(tree.isExpanded(path))
+            assertTrue(node.getChildAt(0) is EnvironmentNode)
+            assertNull(messageCollapseTimer(panel, node))
+            assertFalse(reopenedTimer.isRunning)
+            fireTimer(reopenedTimer)
+            assertTrue("A stale message timer must not collapse successfully loaded configs", tree.isExpanded(path))
+        }
+
+    fun `test denied configs stay visible as a project error without losing authentication`() =
+        withPanel("empty-setup") { panel, cli ->
+            val node = projectNodes(panel).single()
+            val tree = field("tree").get(panel) as JTree
+            val path = TreePath(node.path)
+            val account = field("authContextId").get(panel)
+            cli.setMode("config-denied")
+            tree.expandPath(path)
+            awaitConfigLoads(panel)
+            assertSame(node, projectNodes(panel).single())
+            assertTrue(node.configLoadFailed)
+            assertTrue(tree.isExpanded(path))
+            assertTrue(node.getChildAt(0).toString().contains("Access denied"))
+            assertEquals(account, field("authContextId").get(panel))
+            assertFalse((field("statusPanel").get(panel) as javax.swing.JComponent).isVisible)
+            fireTimer(requireNotNull(messageCollapseTimer(panel, node)))
+            assertFalse(tree.isExpanded(path))
+
+            cli.setMode("ready")
+            tree.collapsePath(path)
+            tree.expandPath(path)
+            awaitConfigLoads(panel)
+            assertTrue(node.loaded)
+            assertTrue(node.getChildAt(0) is EnvironmentNode)
+
+            cli.setMode("config-denied")
+            loadConfigs(panel, node, force = true)
+            awaitConfigLoads(panel)
+            assertFalse(node.loaded)
+            assertTrue(node.configLoadFailed)
+            assertTrue(tree.isExpanded(path))
+            assertTrue(node.getChildAt(0).toString().contains("Access denied"))
+            assertEquals(account, field("authContextId").get(panel))
         }
 
     fun `test failed forced config reload preserves previously loaded children`() =
@@ -802,6 +1057,11 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
     ) {
         assumeFalse(SystemInfo.isWindows)
         withCli(initialMode) { cli ->
+            // These tests drive refreshes explicitly; wall-clock pollers must not race the fake CLI's barriers.
+            for (service in listOf(DopplerSecretsEditorService.getInstance(project), folderSetupState())) {
+                val timer = service.javaClass.getDeclaredField("pollHandle").apply { isAccessible = true }
+                (timer.get(service) as ScheduledFuture<*>).cancel(false)
+            }
             val panel = DopplerToolWindowPanel(project)
             try {
                 awaitRefresh(panel)
@@ -1035,6 +1295,19 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             .joinToString("\n") { it.getCharSequence(false).toString() }
     }
 
+    private fun messageCollapseTimer(
+        panel: DopplerToolWindowPanel,
+        node: ProjectNode,
+    ): Timer? {
+        val timers = field("messageCollapseTimers").get(panel) as Map<*, *>
+        return timers[node] as? Timer
+    }
+
+    private fun fireTimer(timer: Timer) {
+        timer.stop()
+        timer.actionListeners.forEach { it.actionPerformed(ActionEvent(timer, ActionEvent.ACTION_PERFORMED, "timeout")) }
+    }
+
     private fun field(name: String) =
         DopplerToolWindowPanel::class.java.getDeclaredField(name).apply {
             isAccessible = true
@@ -1113,7 +1386,13 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                       printf '%s' '{"error":"Temporary config read failure"}'
                       exit 1
                     fi
-                    if [ "${'$'}mode" = blocked-stale-configs ]; then
+                    if [ "${'$'}mode" = config-denied ]; then
+                      printf '%s' '{"error":"Access denied: you do not have access to configs in this project"}'
+                      exit 1
+                    fi
+                    if [ "${'$'}mode" = empty-configs ]; then
+                      printf '[]'
+                    elif [ "${'$'}mode" = blocked-stale-configs ]; then
                       printf '%s' '[{"name":"stale","environment":"stale"}]'
                     elif [ "${'$'}mode" = other-account ]; then
                       printf '%s' '[{"name":"prod","environment":"production"}]'
@@ -1122,6 +1401,23 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
                     fi
                     ;;
                   secrets)
+                    if [ "${'$'}mode" = changed-secrets ]; then
+                      printf '%s' '{"LATE":"previous-session"}'
+                      exit 0
+                    fi
+                    if [ "${'$'}mode" = blocked-secrets ] || [ "${'$'}mode" = blocked-secrets-failure ]; then
+                      attempts=0
+                      while [ ! -f '$releaseConfigsFile' ] && [ "${'$'}attempts" -lt 1500 ]; do
+                        attempts=${'$'}((attempts + 1))
+                        sleep 0.01
+                      done
+                      if [ "${'$'}mode" = blocked-secrets-failure ]; then
+                        printf '%s' '{"error":"Temporary secret read failure"}'
+                        exit 1
+                      fi
+                      printf '%s' '{"LATE":"previous-session"}'
+                      exit 0
+                    fi
                     printf '%s' '{"OPENED":"synthetic-value"}'
                     ;;
                   configure)

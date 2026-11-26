@@ -33,10 +33,13 @@ import com.intellij.remoteServer.configuration.ServerConfiguration
 import com.intellij.remoteServer.impl.configuration.deployment.DeployToServerRunConfiguration
 import com.intellij.testFramework.ExtensionTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.util.ui.UIUtil
 import com.jetbrains.nodejs.run.NodeJsRunConfigurationType
 import com.jetbrains.python.run.AbstractPythonRunConfiguration
 import com.jetbrains.python.run.PythonConfigurationType
+import com.vk.doppler.cli.DopplerFolderSetup
 import com.vk.doppler.cli.DopplerNameTransformer
+import com.vk.doppler.settings.DopplerFolderSetupState
 import com.vk.doppler.settings.DopplerInjectionConsent
 import com.vk.doppler.settings.DopplerInjectionSettings
 import com.vk.doppler.settings.DopplerSettings
@@ -316,9 +319,16 @@ class DopplerInjectionTest : BasePlatformTestCase() {
         assertSafeFailure()
         Files.delete(directory.resolve("switch-account"))
         assertEquals("resolved-two-dev", background { service.mergeEnvironment(emptyMap()) }["KEY"])
+        val state = DopplerFolderSetupState.getInstance(project)
+        val setup = DopplerFolderSetup("example", "dev")
+        state.update(setup)
         Files.createFile(directory.resolve("logged-out"))
         assertSafeFailure()
+        UIUtil.dispatchAllInvocationEvents()
+        assertTrue("Run authentication loss must reset this IDE project's session", state.isSignedOut)
+        assertEquals(DopplerFolderSetup(), state.current)
         Files.delete(directory.resolve("logged-out"))
+        state.update(setup)
         Files.createFile(directory.resolve("invalid"))
         assertSafeFailure()
         Files.delete(directory.resolve("invalid"))

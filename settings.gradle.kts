@@ -30,7 +30,7 @@ buildscript {
             classpath("com.google.guava:guava:33.8.0-jre") {
                 because("Fix vulnerabilities in the IntelliJ Platform Gradle plugin's transitive Guava dependency")
             }
-            classpath("com.google.protobuf:protobuf-java:3.25.9") {
+            classpath("com.google.protobuf:protobuf-java:4.36.2") {
                 because("Fix a denial-of-service vulnerability in the IntelliJ Platform Gradle plugin's transitive Protobuf dependency")
             }
         }

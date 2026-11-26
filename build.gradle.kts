@@ -56,6 +56,7 @@ configurations
     .matching {
         it.name == "testUiCompileClasspath" || it.name == "testUiRuntimeClasspath"
     }.configureEach {
+        resolutionStrategy.force(libs.ide.starter.get())
         resolutionStrategy.dependencySubstitution {
             substitute(module("org.lz4:lz4-java"))
                 .using(module("at.yawk.lz4:lz4-java:1.11.4"))

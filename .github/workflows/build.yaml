@@ -80,7 +80,6 @@ jobs:
             exit 1
           fi
           archive_name=$(basename "${zips[0]}")
-          echo "name=$archive_name" >> "$GITHUB_OUTPUT"
           echo "artifact_prefix=${archive_name%.zip}" >> "$GITHUB_OUTPUT"
           echo "path=${zips[0]}" >> "$GITHUB_OUTPUT"
 
@@ -89,8 +88,8 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ${{ steps.plugin.outputs.name }}
           path: ${{ steps.plugin.outputs.path }}
+          archive: false
           retention-days: 7
           if-no-files-found: error
 
@@ -113,7 +112,7 @@ jobs:
           header: pr-plugin
           recreate: true
           message: |
-            [Download the PR plugin](${{ needs.build.outputs.plugin-url }})
+            [Download the PR plugin ZIP](${{ needs.build.outputs.plugin-url }}) and install it via **Settings | Plugins | Install Plugin from Disk**.
 
             The artifact expires after 7 days.
 

@@ -156,4 +156,8 @@ jobs:
           set -euo pipefail
           : "${PUBLISH_TOKEN:?Marketplace token is required}"
           # Gradle verifies the signature before uploading this exact release file.
-          bash .github/scripts/gradle-with-retry.sh publishPlugin "-PreleaseArchive=$RELEASE_ARCHIVE" --no-daemon
+          if [[ -f .github/scripts/gradle-with-retry.sh ]]; then
+            bash .github/scripts/gradle-with-retry.sh publishPlugin "-PreleaseArchive=$RELEASE_ARCHIVE" --no-daemon
+          else
+            ./gradlew publishPlugin "-PreleaseArchive=$RELEASE_ARCHIVE" --no-daemon
+          fi

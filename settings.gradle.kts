@@ -17,12 +17,12 @@ buildscript {
     dependencies {
         classpath("org.jetbrains.intellij.platform:intellij-platform-gradle-plugin:2.20.1")
         classpath(platform("com.fasterxml.jackson:jackson-bom:2.23.0"))
-        classpath(platform("io.netty:netty-bom:4.2.17.Final"))
+        classpath(platform("io.netty:netty-bom:4.2.21.Final"))
         constraints {
             classpath("org.jsoup:jsoup:1.24.1") {
                 because("Fix vulnerabilities in the IntelliJ Platform Gradle plugin's transitive jsoup dependency")
             }
-            classpath("org.bouncycastle:bcprov-jdk18on:1.85") {
+            classpath("org.bouncycastle:bcprov-jdk18on:1.87") {
                 because(
                     "Fix the certificate name-constraints bypass in the IntelliJ Platform Gradle plugin's transitive Bouncy Castle dependency",
                 )
@@ -30,7 +30,7 @@ buildscript {
             classpath("com.google.guava:guava:33.8.0-jre") {
                 because("Fix vulnerabilities in the IntelliJ Platform Gradle plugin's transitive Guava dependency")
             }
-            classpath("com.google.protobuf:protobuf-java:3.25.5") {
+            classpath("com.google.protobuf:protobuf-java:3.25.9") {
                 because("Fix a denial-of-service vulnerability in the IntelliJ Platform Gradle plugin's transitive Protobuf dependency")
             }
         }
@@ -38,7 +38,7 @@ buildscript {
     configurations.classpath {
         resolutionStrategy.dependencySubstitution {
             substitute(module("org.lz4:lz4-java"))
-                .using(module("at.yawk.lz4:lz4-java:1.11.4"))
+                .using(module("at.yawk.lz4:lz4-java:1.14.1"))
                 .because("Use the maintained LZ4 fork with fixes for vulnerabilities in the original artifact")
         }
     }

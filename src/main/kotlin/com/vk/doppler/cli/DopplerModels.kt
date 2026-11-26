@@ -54,10 +54,15 @@ object DopplerSecretNames {
             "JDK_JAVA_OPTIONS",
             "_JAVA_OPTIONS",
             "BASH_ENV",
+            "ENV",
             "HOME",
             "PYTHONPATH",
             "PYTHONHOME",
             "PYTHONUSERBASE",
+            "RUBYOPT",
+            "RUBYLIB",
+            "PERL5OPT",
+            "PERL5LIB",
         )
 
     fun isValid(name: String): Boolean = VALID.matches(name)

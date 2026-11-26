@@ -88,18 +88,27 @@ class SecretNameMappingTest {
                 "PATH",
                 "path",
                 "LD_PRELOAD",
+                "LD_AUDIT",
                 "lD_LIBRARY_PATH",
                 "DYLD_INSERT_LIBRARIES",
+                "DYLD_LIBRARY_PATH",
                 "dYlD_FRAMEWORK_PATH",
+                "lD_aUdIt",
+                "dYlD_LiBrArY_PaTh",
                 "NODE_OPTIONS",
                 "NODE_PATH",
                 "JAVA_TOOL_OPTIONS",
                 "JDK_JAVA_OPTIONS",
                 "_JAVA_OPTIONS",
                 "BASH_ENV",
+                "ENV",
                 "PYTHONPATH",
                 "PYTHONHOME",
                 "PYTHONUSERBASE",
+                "RUBYOPT",
+                "RUBYLIB",
+                "PERL5OPT",
+                "PERL5LIB",
             )
         for (name in names) {
             assertEquals(
@@ -114,6 +123,8 @@ class SecretNameMappingTest {
         assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("path"))
         assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("lD_LIBRARY_PATH"))
         assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("dYlD_FRAMEWORK_PATH"))
+        assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("rubyopt"))
+        assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("Perl5Lib"))
         assertTrue(DopplerSecretNames.isSafeForEnvironmentInjection("PATH_SUFFIX"))
         assertTrue(DopplerSecretNames.isSafeForEnvironmentInjection("LD"))
         assertTrue(DopplerSecretNames.isSafeForEnvironmentInjection("DYLD"))

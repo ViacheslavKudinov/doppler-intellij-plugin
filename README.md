@@ -433,6 +433,13 @@ export JAVA_HOME="/Applications/IntelliJ IDEA.app/Contents/jbr/Contents/Home"
 
 Install the built archive via **Settings | Plugins | ⚙ | Install Plugin from Disk…**.
 
+For PR testing, open the PR's **Build plugin** workflow run and download **pr-plugin**
+from **Artifacts** after the **Build** job succeeds. Artifacts are retained for 7 days.
+Extract the downloaded artifact ZIP, then install the enclosed
+`doppler-plugin-<version>-SNAPSHOT.zip` using **Install Plugin from Disk**.
+These unsigned test builds contain unreviewed PR code; use an isolated IDE environment
+with non-sensitive test data.
+
 Restart the IDE when prompted after installation, updates, or removal. The plugin requires
 restart because its in-memory secret editors cannot be reliably unloaded while the IDE is running.
 

@@ -10,6 +10,7 @@ on:
       - gradlew
       - gradlew.bat
       - .editorconfig
+      - .github/scripts/gradle-with-retry.sh
       - .github/workflows/build.yaml
   workflow_call:
     secrets:

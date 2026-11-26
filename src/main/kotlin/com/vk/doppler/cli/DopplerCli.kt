@@ -299,7 +299,10 @@ class DopplerCli(
         timeoutMs: Int = DEFAULT_TIMEOUT_MS,
     ): String {
         val parameters = args.toMutableList()
-        scope?.let { parameters.addAll(listOf(SCOPE_OPTION, it)) }
+        val optionsEnd = parameters.indexOf("--").takeIf { it >= 0 } ?: parameters.size
+        if (scope != null && SCOPE_OPTION !in parameters.subList(0, optionsEnd)) {
+            parameters.addAll(optionsEnd, listOf(SCOPE_OPTION, scope))
+        }
         if (json) {
             val jsonFlags = listOf("--json", "--no-check-version")
             val terminatorIndex = parameters.indexOf("--")

@@ -1,7 +1,11 @@
 package com.vk.doppler.service
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectManager
 import com.vk.doppler.cli.CliLogContext
 import com.vk.doppler.cli.CliOperation
 import com.vk.doppler.cli.DopplerAccountInfo
@@ -13,8 +17,12 @@ import com.vk.doppler.cli.DopplerFolderSetup
 import com.vk.doppler.cli.DopplerNameTransformer
 import com.vk.doppler.cli.DopplerProject
 import com.vk.doppler.cli.DopplerSecret
+import com.vk.doppler.completion.SecretReferenceService
+import com.vk.doppler.editor.DopplerSecretsEditorService
 import com.vk.doppler.editor.ParsedSecrets
+import com.vk.doppler.settings.DopplerFolderSetupState
 import com.vk.doppler.settings.DopplerSettings
+import java.util.concurrent.atomic.AtomicLong
 
 enum class DopplerStatus { READY, CLI_NOT_FOUND, NOT_AUTHENTICATED, ERROR }
 
@@ -41,13 +49,40 @@ data class DopplerFolderSetupSnapshot(
  * Entry point for all Doppler access. Every method performs blocking I/O and must be
  * called off the EDT.
  */
-@Service(Service.Level.APP)
-class DopplerService {
+@Service(Service.Level.PROJECT)
+class DopplerService(
+    private val project: Project,
+) {
+    private val accountChecks = AtomicLong()
+    private val successfulAccountCheck = AtomicLong()
+
+    private fun accountInfo(cli: DopplerCli): DopplerAccountInfo {
+        val revision = accountChecks.incrementAndGet()
+        return try {
+            val account = cli.accountInfo()
+            successfulAccountCheck.updateAndGet { maxOf(it, revision) }
+            account
+        } catch (error: DopplerCliException) {
+            if (error.kind == DopplerCliException.Kind.NOT_AUTHENTICATED && !project.isDefault) {
+                ApplicationManager.getApplication().invokeLater({
+                    if (project.isDisposed || revision < successfulAccountCheck.get()) return@invokeLater
+                    // Document cleanup defers writes when this UI-only callback is not write-safe.
+                    DopplerSecretsEditorService.invalidateCachedFiles(null, project)
+                    project.getServiceIfCreated(SecretReferenceService::class.java)?.clear()
+                    DopplerFolderSetupState.getInstance(project).markSignedOut()
+                }, ModalityState.any())
+            }
+            throw error
+        }
+    }
+
+    private fun accountId(cli: DopplerCli): String = accountInfo(cli).authContextId
+
     private fun cli(
         operation: CliOperation = CliOperation.AUTOCOMPLETE,
         context: CliLogContext = CliLogContext(),
         relatedConfigs: List<CliLogContext> = emptyList(),
-        scope: String? = null,
+        scope: String? = project.basePath,
     ): DopplerCli {
         val path =
             DopplerExecutableLocator.find(DopplerSettings.getInstance().cliPath)
@@ -65,7 +100,7 @@ class DopplerService {
     ): DopplerStatusReport =
         try {
             val cli = cli(operation)
-            val account = cli.accountInfo()
+            val account = accountInfo(cli)
             DopplerStatusReport(DopplerStatus.READY, if (includeVersion) cli.version() else null, account.authContextId, account)
         } catch (e: DopplerCliException) {
             val status =
@@ -82,7 +117,7 @@ class DopplerService {
     fun currentAuthContextId(
         operation: CliOperation = CliOperation.AUTOCOMPLETE,
         relatedConfigs: List<CliLogContext> = emptyList(),
-    ): String = cli(operation, relatedConfigs = relatedConfigs).authContextId()
+    ): String = accountId(cli(operation, relatedConfigs = relatedConfigs))
 
     /** Tree reload already checked the account through checkStatus; avoid repeating that request. */
     internal fun listTreeProjects(operation: CliOperation = CliOperation.TREE_RELOAD): List<DopplerProject> = cli(operation).listProjects()
@@ -108,7 +143,7 @@ class DopplerService {
     /** Bind all initial choices to one account, checking once around the complete read batch. */
     fun loadFolderSetup(folder: String): DopplerFolderSetupSnapshot {
         val cli = cli(CliOperation.FOLDER_SETUP)
-        val account = cli.authContextId()
+        val account = accountId(cli)
         val setup = cli.folderSetup(folder)
         val projects = cli.listProjects()
         val configs = setup.projectSlug?.let(cli::listConfigs).orEmpty()
@@ -151,7 +186,7 @@ class DopplerService {
         cli: DopplerCli,
         expected: String,
     ) {
-        if (cli.authContextId() != expected) {
+        if (accountId(cli) != expected) {
             throw DopplerCliException(
                 "The Doppler account changed. Reload folder setup before applying changes.",
                 DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
@@ -189,7 +224,7 @@ class DopplerService {
     }
 
     /** Resolve the CLI login scoped to the launched IDE project, rather than the IDE process directory. */
-    internal fun injectionAccount(folder: String): String = cli(CliOperation.RUN_INJECTION, scope = folder).authContextId()
+    internal fun injectionAccount(folder: String): String = accountId(cli(CliOperation.RUN_INJECTION, scope = folder))
 
     /** Injection reads computed values without persisting a dotenv file. Account validation is owned by the caller. */
     internal fun downloadEnvironment(
@@ -209,7 +244,7 @@ class DopplerService {
         environment: String? = null,
     ): DopplerSecretsSnapshot {
         val cli = cli(operation, CliLogContext(projectSlug, configName, environment))
-        val authContextId = cli.authContextId()
+        val authContextId = accountId(cli)
         if (expectedAuthContextId != null && expectedAuthContextId != authContextId) {
             throw authContextChanged()
         }
@@ -284,7 +319,7 @@ class DopplerService {
         cli: DopplerCli,
         expected: String,
     ) {
-        if (cli.authContextId() != expected) throw authContextChanged()
+        if (accountId(cli) != expected) throw authContextChanged()
     }
 
     private fun authContextChanged() =
@@ -294,7 +329,7 @@ class DopplerService {
         )
 
     companion object {
-        fun getInstance(): DopplerService = service()
+        fun getInstance(project: Project? = null): DopplerService = (project ?: ProjectManager.getInstance().defaultProject).service()
     }
 }
 

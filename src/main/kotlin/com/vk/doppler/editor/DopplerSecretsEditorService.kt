@@ -8,6 +8,7 @@ import com.intellij.openapi.actionSystem.AnActionResult
 import com.intellij.openapi.actionSystem.ex.AnActionListener
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.TransactionGuard
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -173,6 +174,8 @@ class DopplerSecretsEditorService(
         treeAuthContextId: String? = null,
         onReady: (DopplerSecretsFile) -> Unit,
     ) {
+        val session = DopplerFolderSetupState.getInstance(project)
+        val authenticationGeneration = session.authenticationGeneration
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, title, true) {
                 private lateinit var snapshot: DopplerSecretsSnapshot
@@ -182,7 +185,7 @@ class DopplerSecretsEditorService(
                     indicator.isIndeterminate = true
                     indicator.text = "Loading Doppler secrets for /$projectSlug/$configName…"
                     indicator.text2 = "Waiting for the Doppler CLI to return secret values"
-                    val service = DopplerService.getInstance()
+                    val service = DopplerService.getInstance(project)
                     snapshot =
                         if (treeAuthContextId != null) {
                             service.loadSecretsAfterTreeValidation(
@@ -199,7 +202,8 @@ class DopplerSecretsEditorService(
                 }
 
                 override fun onSuccess() {
-                    invalidateCachedFiles(snapshot.authContextId)
+                    if (project.isDisposed || !session.isCurrentSession(authenticationGeneration)) return
+                    invalidateCachedFiles(snapshot.authContextId, project)
                     val file = DopplerFileSystem.getInstance().obtain(projectSlug, configName, snapshot.authContextId)
                     if (file.pushInProgress.get()) {
                         DopplerNotifier.error(project, "Wait for the current sync before reloading /$projectSlug/$configName.")
@@ -217,15 +221,16 @@ class DopplerSecretsEditorService(
                 }
 
                 override fun onThrowable(error: Throwable) {
+                    if (project.isDisposed || !session.isCurrentSession(authenticationGeneration)) return
                     if (error is DopplerCliException && error.kind in
                         setOf(
                             DopplerCliException.Kind.NOT_AUTHENTICATED,
                             DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
                         )
                     ) {
-                        invalidateCachedFiles(null)
+                        invalidateCachedFiles(null, project)
                     } else {
-                        invalidateConfig(projectSlug, configName)
+                        invalidateConfig(projectSlug, configName, project)
                     }
                     DopplerNotifier.error(project, "Could not load /$projectSlug/$configName. ${failureRecoveryMessage(error)}")
                 }
@@ -248,7 +253,7 @@ class DopplerSecretsEditorService(
     /** Keeps `${...}` completion in step with what the config actually contains on the server. */
     private fun publishSecretNames(file: DopplerSecretsFile) {
         SecretReferenceService
-            .getInstance()
+            .getInstance(project)
             .update(file.authContextId, file.projectSlug, file.configName, file.remoteSnapshot.keys)
     }
 
@@ -288,7 +293,7 @@ class DopplerSecretsEditorService(
         refreshableFiles: () -> List<DopplerSecretsFile> = ::focusedRefreshFiles,
         refresh: (DopplerSecretsFile) -> Boolean = ::refreshFromServer,
         validateAccount: () -> String = {
-            DopplerService.getInstance().currentAuthContextId(
+            DopplerService.getInstance(project).currentAuthContextId(
                 operation = CliOperation.ACCOUNT_VALIDATION,
                 relatedConfigs =
                     DopplerFileSystem
@@ -322,11 +327,11 @@ class DopplerSecretsEditorService(
         }
         lastAccountValidationAt = now
         try {
-            invalidateCachedFiles(validateAccount())
+            invalidateCachedFiles(validateAccount(), project)
         } catch (error: DopplerCliException) {
             // As with value refresh, unreadable authentication must not leave secrets visible.
             thisLogger().debug("Doppler account validation failed", error)
-            invalidateCachedFiles(null)
+            invalidateCachedFiles(null, project)
         }
     }
 
@@ -357,11 +362,18 @@ class DopplerSecretsEditorService(
         return document.text == SecretsDocumentFormat.serialize(file.remoteSnapshot)
     }
 
-    internal fun refreshFromServer(file: DopplerSecretsFile): Boolean {
+    internal fun refreshFromServer(file: DopplerSecretsFile): Boolean = refreshFromServer(file, ::focusedRefreshFiles)
+
+    internal fun refreshFromServer(
+        file: DopplerSecretsFile,
+        refreshableFiles: () -> List<DopplerSecretsFile>,
+    ): Boolean {
+        val session = DopplerFolderSetupState.getInstance(project)
+        val authenticationGeneration = session.authenticationGeneration
         val snapshotBeforeFetch = file.remoteSnapshot
         val loaded =
             try {
-                DopplerService.getInstance().loadSecrets(
+                DopplerService.getInstance(project).loadSecrets(
                     file.projectSlug,
                     file.configName,
                     expectedAuthContextId = file.authContextId,
@@ -377,21 +389,23 @@ class DopplerSecretsEditorService(
                         DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
                     )
                 ) {
-                    invalidateCachedFiles(null)
+                    invalidateCachedFiles(null, project)
                 } else {
                     invalidateCachedFile(file)
                 }
                 return false
             }
 
+        if (!session.isCurrentSession(authenticationGeneration)) return false
         // loadSecrets validates the account before and after reading; no separate preflight is needed.
-        invalidateCachedFiles(loaded.authContextId)
+        invalidateCachedFiles(loaded.authContextId, project)
         val snapshot = loaded.secrets.associate { it.name to it.raw }
         if (snapshot == file.remoteSnapshot) return true
         val text = SecretsDocumentFormat.serialize(loaded.secrets)
 
         ApplicationManager.getApplication().invokeLater({
-            if (project.isDisposed || !owns(file) || file !in focusedRefreshFiles()) return@invokeLater
+            if (project.isDisposed || !owns(file) || file !in refreshableFiles()) return@invokeLater
+            if (!session.isCurrentSession(authenticationGeneration)) return@invokeLater
             if (file.remoteSnapshot != snapshotBeforeFetch) return@invokeLater
             applyServerContent(file, text, snapshot)
         }, project.disposed)
@@ -480,7 +494,7 @@ class DopplerSecretsEditorService(
         originalSnapshot: Map<String, String?>,
         changes: SecretChanges,
         applyChanges: () -> Unit = {
-            DopplerService.getInstance().applyChanges(
+            DopplerService.getInstance(project).applyChanges(
                 file.authContextId,
                 file.projectSlug,
                 file.configName,
@@ -539,7 +553,7 @@ class DopplerSecretsEditorService(
                         DopplerCliException.Kind.AUTH_CONTEXT_CHANGED,
                     )
                 ) {
-                    invalidateCachedFiles(null)
+                    invalidateCachedFiles(null, project)
                 }
                 DopplerNotifier.error(project, "Failed to sync $label. ${failureRecoveryMessage(error)}")
             }
@@ -590,8 +604,17 @@ class DopplerSecretsEditorService(
     }
 
     companion object {
-        fun invalidateCachedFiles(currentAuthContextId: String?) {
-            invalidateFiles { currentAuthContextId == null || it.authContextId != currentAuthContextId }
+        fun invalidateCachedFiles(
+            currentAuthContextId: String?,
+            project: Project? = null,
+        ) {
+            invalidateFiles {
+                (
+                    project == null || project.getServiceIfCreated(DopplerSecretsEditorService::class.java)?.owns(it) == true ||
+                        findOwner(it) == null
+                ) &&
+                    (currentAuthContextId == null || it.authContextId != currentAuthContextId)
+            }
         }
 
         private fun invalidateCachedFile(file: DopplerSecretsFile) {
@@ -601,8 +624,12 @@ class DopplerSecretsEditorService(
         private fun invalidateConfig(
             projectSlug: String,
             configName: String,
+            project: Project,
         ) {
-            invalidateFiles { it.projectSlug == projectSlug && it.configName == configName }
+            invalidateFiles {
+                it.projectSlug == projectSlug && it.configName == configName &&
+                    (project.getServiceIfCreated(DopplerSecretsEditorService::class.java)?.owns(it) == true || findOwner(it) == null)
+            }
         }
 
         private fun invalidateFiles(shouldInvalidate: (DopplerSecretsFile) -> Boolean) {
@@ -649,10 +676,20 @@ class DopplerSecretsEditorService(
                         }
                     }
                 }
-            if (application.isDispatchThread) {
-                invalidate.run()
+            runWhenWriteSafe(invalidate)
+        }
+
+        private fun runWhenWriteSafe(action: Runnable) {
+            val application = ApplicationManager.getApplication()
+            if (!application.isDispatchThread) {
+                application.invokeAndWait(action, ModalityState.nonModal())
+                return
+            }
+            if (TransactionGuard.getInstance().isWritingAllowed) {
+                action.run()
             } else {
-                application.invokeAndWait(invalidate, ModalityState.any())
+                // An any-modality callback is on the EDT but still cannot save documents safely.
+                application.invokeLater(action, ModalityState.nonModal())
             }
         }
 

@@ -170,6 +170,17 @@ doppler login
 The CLI is auto-detected on `PATH` and in common install locations. If your IDE was launched from the GUI
 with a minimal `PATH`, set the binary location explicitly in **Settings | Tools | Doppler**.
 
+Authentication uses the current IDE project folder as the CLI scope, matching commands run from
+that folder in Terminal. Project-scoped logins work without replacing the global login. In Settings
+opened without a project, Test Connection checks the global login.
+
+Click **Test Connection** in **Settings | Tools | Doppler** to check that the CLI can be found and
+started, authenticate with `doppler me`, validate the returned account and workplace identity,
+and read the CLI version. A successful result means authentication works for the selected scope.
+It does not list projects or configs, read secrets, check access to a particular project or config,
+or validate the folder's selected project and config. These operations can still fail because of
+missing permissions or invalid folder defaults even after Test Connection succeeds.
+
 Global CLI settings are available even without an open project.
 
 ### Default project and config
@@ -184,7 +195,9 @@ removes this folder's override when applied; a parent folder's defaults may stil
 Use **Reload** to read changes made with `doppler setup` outside the IDE.
 While folder setup or config choices are loading, the fields are disabled and a spinner appears
 beside the loading message.
-The configured project and config are marked with a bookmark icon in the Doppler tree.
+The configured project and config are marked with a bookmark icon in the Doppler tree, editor tabs,
+and IDE navigation bar. Navigation popup entries include the project/config path so same-named
+configs remain distinct when switching tabs.
 Folder setup is checked in the background every 30 seconds so CLI changes update the bookmark
 and any unchanged Settings selections. Setup operations use the existing CLI call logging;
 background checks appear as `FOLDER_SETUP_POLL` when **Log CLI calls** is enabled.
@@ -226,6 +239,9 @@ failure recovery, and [How secrets are handled](#how-secrets-are-handled) for da
 ## ▶️ Run and Debug environment injection
 
 Choose your default project and config in **Settings | Tools | Doppler | Folder Setup**.
+The Run and Debug controls stay disabled until both defaults are set. Saving or clearing Folder Setup
+updates those controls while Settings is open. Saved injection preferences and custom mappings are
+preserved while the controls are inactive.
 Then click **Run and Debug…** on the main Doppler settings page and enable **Automatically inject Doppler
 secrets into Run and Debug**. Injection is automatic on every launch; there is no Inject button.
 The setting is local to the current IDE project and starts disabled.
@@ -356,6 +372,10 @@ refresh is paused while you edit and resumes on the next interval after you undo
 or successfully save to Doppler. Pending or rejected/failed syncs also pause refresh. When all open
 configs are paused, account-only validation still runs every 30 seconds while configs are open,
 including when value refresh is disabled. This clears cached documents on logout or account change.
+When an account check confirms that the login is missing or revoked, the plugin returns to its
+signed-out state: secret tabs close, cached values and completion names are cleared, the project
+tree and Folder Setup choices are emptied, and Run and Debug controls become inactive.
+Saved CLI folder defaults and injection preferences are preserved; log in and retry to load them again.
 Normal value refresh already validates the account and postpones the standalone check, avoiding
 an extra request. Standalone checks are logged as `ACCOUNT_VALIDATION`.
 A rejected/failed save stays in the editor; correct the document and save it again,
@@ -412,6 +432,13 @@ export JAVA_HOME="/Applications/IntelliJ IDEA.app/Contents/jbr/Contents/Home"
 ```
 
 Install the built archive via **Settings | Plugins | ⚙ | Install Plugin from Disk…**.
+
+For PR testing, open the PR's **Build plugin** workflow run and download **pr-plugin**
+from **Artifacts** after the **Build** job succeeds. Artifacts are retained for 7 days.
+Extract the downloaded artifact ZIP, then install the enclosed
+`doppler-plugin-<version>-SNAPSHOT.zip` using **Install Plugin from Disk**.
+These unsigned test builds contain unreviewed PR code; use an isolated IDE environment
+with non-sensitive test data.
 
 Restart the IDE when prompted after installation, updates, or removal. The plugin requires
 restart because its in-memory secret editors cannot be reliably unloaded while the IDE is running.

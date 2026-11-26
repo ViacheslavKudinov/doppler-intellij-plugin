@@ -60,16 +60,20 @@ import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JTree
 import javax.swing.SwingUtilities
+import javax.swing.Timer
 import javax.swing.event.TreeExpansionEvent
+import javax.swing.event.TreeExpansionListener
 import javax.swing.event.TreeWillExpandListener
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
+import javax.swing.tree.TreePath
 
 private const val CARD_STATUS = "status"
 private const val CARD_TREE = "tree"
 private const val DOPPLER_TERMINAL_TAB_NAME = "Doppler CLI"
 private const val INSTALL_DOCS_URL = "https://docs.doppler.com/docs/install-cli"
 private const val MAX_INSTALLER_REDIRECTS = 5
+private const val MESSAGE_COLLAPSE_DELAY_MS = 5_000
 private val AUTOMATIC_REFRESH_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(30)
 
 class DopplerToolWindowPanel(
@@ -80,6 +84,7 @@ class DopplerToolWindowPanel(
     private val treeModel = DefaultTreeModel(rootNode)
     private val treeUpdater = DopplerTreeUpdater(treeModel)
     private val tree = Tree(treeModel)
+    private val messageCollapseTimers = mutableMapOf<ProjectNode, Timer>()
     private val statusPanel = JBPanelWithEmptyText(BorderLayout())
     private val cardLayout = CardLayout()
     private val cards = JPanel(cardLayout)
@@ -103,11 +108,13 @@ class DopplerToolWindowPanel(
         project.messageBus.connect(this).subscribe(
             DopplerFolderSetupState.TOPIC,
             DopplerFolderSetupListener {
-                tree.repaint()
+                if (DopplerFolderSetupState.getInstance(project).isSignedOut) showSignedOutState() else tree.repaint()
             },
         )
         cards.add(statusPanel, CARD_STATUS)
-        cards.add(JBScrollPane(tree), CARD_TREE)
+        val treeScrollPane = JBScrollPane(tree)
+        dismissTreeTooltipOnScroll(tree, treeScrollPane.viewport)
+        cards.add(treeScrollPane, CARD_TREE)
         setContent(cards)
         toolbar = buildToolbar()
         focusManager.addPropertyChangeListener("focusOwner", focusListener)
@@ -117,6 +124,7 @@ class DopplerToolWindowPanel(
 
     override fun dispose() {
         disposed = true
+        cancelMessageCollapses()
         refreshGeneration++
         configGeneration++
         focusManager.removePropertyChangeListener("focusOwner", focusListener)
@@ -160,6 +168,18 @@ class DopplerToolWindowPanel(
             },
         )
 
+        tree.addTreeExpansionListener(
+            object : TreeExpansionListener {
+                override fun treeExpanded(event: TreeExpansionEvent) {
+                    (event.path.lastPathComponent as? ProjectNode)?.let(::scheduleMessageCollapse)
+                }
+
+                override fun treeCollapsed(event: TreeExpansionEvent) {
+                    (event.path.lastPathComponent as? ProjectNode)?.let(::cancelMessageCollapse)
+                }
+            },
+        )
+
         tree.addMouseListener(
             DopplerTreeClickListener(tree) { node ->
                 DopplerSecretsEditorService
@@ -199,7 +219,7 @@ class DopplerToolWindowPanel(
     }
 
     private fun loadRefreshResult(operation: CliOperation): RefreshResult {
-        val service = DopplerService.getInstance()
+        val service = DopplerService.getInstance(project)
         val report = service.checkStatus(includeVersion = false, operation = operation)
         if (report.status != DopplerStatus.READY) return RefreshResult(report)
         if (refreshGate.canReuseTree(operation, requireNotNull(report.authContextId))) {
@@ -227,25 +247,43 @@ class DopplerToolWindowPanel(
         val report = result.report
         DopplerSecretsEditorService.invalidateCachedFiles(
             report.authContextId.takeIf { report.status == DopplerStatus.READY },
+            project,
         )
-        SecretReferenceService.getInstance().invalidate()
+        val references = SecretReferenceService.getInstance(project)
+        if (report.status == DopplerStatus.NOT_AUTHENTICATED) references.clear() else references.invalidate()
         val setupState = DopplerFolderSetupState.getInstance(project)
+        if (report.status == DopplerStatus.NOT_AUTHENTICATED) {
+            setupState.markSignedOut()
+            showSignedOutState()
+            return
+        }
         if (report.status != DopplerStatus.READY) {
             authContextId = null
             refreshGate.invalidate()
             invalidateConfigLoads()
-            setupState.update(DopplerFolderSetup())
+            if (!setupState.isSignedOut) setupState.update(DopplerFolderSetup())
             showStatusFor(report)
         } else {
             val currentAuthContextId = requireNotNull(report.authContextId)
             authContextId = currentAuthContextId
             if (!result.reuseExistingTree) {
                 invalidateConfigLoads()
-                result.folderSetup?.let(setupState::update)
+                setupState.update(result.folderSetup ?: setupState.current)
                 populate(result.projects, operation)
                 refreshGate.recordTreeReload(currentAuthContextId)
             }
         }
+    }
+
+    private fun showSignedOutState() {
+        authContextId = null
+        refreshing = false
+        refreshGeneration++
+        refreshGate.invalidate()
+        invalidateConfigLoads()
+        tree.clearSelection()
+        treeUpdater.projects(emptyList())
+        showStatusFor(DopplerStatusReport(DopplerStatus.NOT_AUTHENTICATED, null))
     }
 
     private fun handleRefreshFailure(
@@ -256,7 +294,7 @@ class DopplerToolWindowPanel(
         authContextId = null
         refreshGate.invalidate()
         invalidateConfigLoads()
-        DopplerSecretsEditorService.invalidateCachedFiles(null)
+        DopplerSecretsEditorService.invalidateCachedFiles(null, project)
         showStatus("Could not reach Doppler: ${error.message}", "Retry")
     }
 
@@ -294,6 +332,7 @@ class DopplerToolWindowPanel(
     }
 
     private fun invalidateConfigLoads() {
+        cancelMessageCollapses()
         configGeneration++
         rootNode
             .children()
@@ -308,6 +347,7 @@ class DopplerToolWindowPanel(
         operation: CliOperation = CliOperation.TREE_EXPAND,
     ) {
         if (node.loading || (node.loaded && !force)) return
+        cancelMessageCollapse(node)
         node.loading = true
         val slug = node.dopplerProject.slug
         val generation = configGeneration
@@ -317,26 +357,17 @@ class DopplerToolWindowPanel(
                 private var configs: List<DopplerConfig> = emptyList()
 
                 override fun run(indicator: ProgressIndicator) {
-                    configs = DopplerService.getInstance().listConfigs(slug, operation)
+                    configs = DopplerService.getInstance(project).listConfigs(slug, operation)
                 }
 
                 override fun onSuccess() {
-                    if (project.isDisposed || generation != configGeneration || node.parent !== rootNode) return
-                    val state = DopplerTreeState(tree)
-                    val changed = treeUpdater.configs(node, configs)
-                    node.loaded = true
-                    node.configLoadFailed = false
-                    if (changed) state.restore(tree)
+                    if (!isCurrentConfigLoad(node, generation)) return
+                    applyLoadedConfigs(node, configs)
                 }
 
                 override fun onThrowable(error: Throwable) {
-                    if (project.isDisposed || generation != configGeneration || node.parent !== rootNode) return
-                    if (node.loaded) return
-                    node.loaded = false
-                    node.configLoadFailed = true
-                    node.removeAllChildren()
-                    node.add(DefaultMutableTreeNode("Failed to load: ${error.message}"))
-                    treeModel.nodeStructureChanged(node)
+                    if (!isCurrentConfigLoad(node, generation)) return
+                    showConfigLoadFailure(node, error)
                 }
 
                 override fun onFinished() {
@@ -344,6 +375,69 @@ class DopplerToolWindowPanel(
                 }
             },
         )
+    }
+
+    private fun isCurrentConfigLoad(
+        node: ProjectNode,
+        generation: Int,
+    ): Boolean = !project.isDisposed && generation == configGeneration && node.parent === rootNode
+
+    private fun applyLoadedConfigs(
+        node: ProjectNode,
+        configs: List<DopplerConfig>,
+    ) {
+        val state = DopplerTreeState(tree)
+        val changed = treeUpdater.configs(node, configs)
+        node.loaded = true
+        node.configLoadFailed = false
+        if (changed) state.restore(tree)
+        scheduleMessageCollapse(node)
+    }
+
+    private fun showConfigLoadFailure(
+        node: ProjectNode,
+        error: Throwable,
+    ) {
+        val accessFailure = error is DopplerCliException && error.kind == DopplerCliException.Kind.NOT_AUTHENTICATED
+        if (node.loaded && !accessFailure) return
+        val state = DopplerTreeState(tree)
+        node.loaded = false
+        node.configLoadFailed = true
+        node.removeAllChildren()
+        node.add(DefaultMutableTreeNode("Failed to load: ${error.message}"))
+        treeModel.nodeStructureChanged(node)
+        state.restore(tree)
+        scheduleMessageCollapse(node)
+    }
+
+    private fun scheduleMessageCollapse(node: ProjectNode) {
+        cancelMessageCollapse(node)
+        val path = TreePath(node.path)
+        val message = node.children().toList().firstOrNull() ?: return
+        if (disposed || project.isDisposed || !tree.isExpanded(path) ||
+            (message !is EmptyConfigsNode && !node.configLoadFailed)
+        ) {
+            return
+        }
+        val timer = Timer(MESSAGE_COLLAPSE_DELAY_MS, null).apply { isRepeats = false }
+        timer.addActionListener {
+            if (messageCollapseTimers[node] !== timer) return@addActionListener
+            messageCollapseTimers.remove(node)
+            if (!disposed && !project.isDisposed && !node.loading && node.parent === rootNode && node.firstChild === message) {
+                tree.collapsePath(path)
+            }
+        }
+        messageCollapseTimers[node] = timer
+        timer.start()
+    }
+
+    private fun cancelMessageCollapse(node: ProjectNode) {
+        messageCollapseTimers.remove(node)?.stop()
+    }
+
+    private fun cancelMessageCollapses() {
+        messageCollapseTimers.values.forEach(Timer::stop)
+        messageCollapseTimers.clear()
     }
 
     private fun showStatusFor(report: DopplerStatusReport) {

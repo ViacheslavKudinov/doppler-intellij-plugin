@@ -30,7 +30,7 @@ jobs:
       sha: ${{ steps.release.outputs.sha || steps.manual-release.outputs.sha }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -114,7 +114,7 @@ jobs:
       grype_report: ${{ steps.grype-report-upload.outputs.artifact-id }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -151,7 +151,7 @@ jobs:
           ref: ${{ needs.release-please.outputs.sha }}
 
       - name: Setup Java
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: corretto
           java-version: 21
@@ -159,7 +159,7 @@ jobs:
           cache-jdk: true
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
       - name: Build and verify plugin and SBOM
         run: ./gradlew buildPlugin cyclonedxBom check verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
@@ -269,7 +269,7 @@ jobs:
       security-events: write
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
         with:
           egress-policy: audit
 
@@ -280,7 +280,7 @@ jobs:
           path: ${{ runner.temp }}/grype-sarif
 
       - name: Upload Grype SARIF to code scanning
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: ${{ runner.temp }}/grype-sarif/grype-results.sarif
           checkout_path: ${{ github.workspace }}
@@ -300,7 +300,7 @@ jobs:
       attestations: write
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
         with:
           egress-policy: block
           allowed-endpoints: >

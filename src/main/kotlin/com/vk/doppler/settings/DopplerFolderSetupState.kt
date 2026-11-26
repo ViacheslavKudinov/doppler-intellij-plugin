@@ -26,7 +26,14 @@ class DopplerFolderSetupState(
 ) : Disposable {
     var current: DopplerFolderSetup = DopplerFolderSetup()
         private set
+
+    @Volatile var isSignedOut: Boolean = false
+        private set
     private val revision = AtomicLong()
+    private val authenticationRevision = AtomicLong()
+    val authenticationGeneration: Long get() = authenticationRevision.get()
+
+    fun isCurrentSession(generation: Long): Boolean = !isSignedOut && authenticationRevision.get() == generation
 
     @Volatile private var disposed = false
     private val pollHandle =
@@ -37,15 +44,28 @@ class DopplerFolderSetupState(
     /** Called on the EDT, including after applying settings. Invalidates pending reads. */
     fun update(setup: DopplerFolderSetup) {
         revision.incrementAndGet()
-        if (current == setup || disposed || project.isDisposed) return
+        if (disposed || project.isDisposed) return
+        val changed = current != setup || isSignedOut
+        isSignedOut = false
+        if (!changed) return
         current = setup
+        project.messageBus.syncPublisher(TOPIC).changed()
+    }
+
+    /** Authentication loss clears the display cache without changing CLI-owned folder defaults. */
+    fun markSignedOut() {
+        revision.incrementAndGet()
+        if (disposed || project.isDisposed || isSignedOut) return
+        isSignedOut = true
+        authenticationRevision.incrementAndGet()
+        current = DopplerFolderSetup()
         project.messageBus.syncPublisher(TOPIC).changed()
     }
 
     /** One local CLI read on a background thread; failures retain the last known setup. */
     internal fun refreshFromCli() {
         val folder = project.basePath ?: return
-        if (disposed || project.isDisposed) return
+        if (disposed || project.isDisposed || isSignedOut) return
         // Newer reads supersede older queued results, even while the EDT is busy.
         val expectedRevision = revision.incrementAndGet()
         val setup =
@@ -55,7 +75,7 @@ class DopplerFolderSetupState(
                 return
             }
         ApplicationManager.getApplication().invokeLater({
-            if (!disposed && !project.isDisposed && revision.get() == expectedRevision) update(setup)
+            if (!disposed && !project.isDisposed && !isSignedOut && revision.get() == expectedRevision) update(setup)
         }, ModalityState.any())
     }
 

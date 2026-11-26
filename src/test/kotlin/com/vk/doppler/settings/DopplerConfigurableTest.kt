@@ -1,10 +1,15 @@
 package com.vk.doppler.settings
 
+import com.intellij.ide.DataManager
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.notification.Notification
 import com.intellij.notification.Notifications
+import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.extensions.PluginId
+import com.intellij.openapi.options.Configurable
+import com.intellij.openapi.options.ConfigurableGroup
+import com.intellij.openapi.options.ex.Settings
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.TestDialog
 import com.intellij.openapi.ui.TestDialogManager
@@ -15,6 +20,8 @@ import com.intellij.ui.components.ActionLink
 import com.intellij.util.ui.UIUtil
 import com.vk.doppler.service.DopplerCliStartupListener
 import com.vk.doppler.service.DopplerCliUpdateService
+import org.jetbrains.concurrency.AsyncPromise
+import org.jetbrains.concurrency.Promise
 import org.junit.Assume.assumeFalse
 import java.nio.file.Files
 import java.util.concurrent.CopyOnWriteArrayList
@@ -502,7 +509,7 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
                     "project=example",
                     "config=stg",
                 )
-            val preflightArguments = listOf("me", "--json", "--no-check-version")
+            val preflightArguments = listOf("me", "--scope", requireNotNull(project.basePath), "--json", "--no-check-version")
             assertEquals(
                 preflightArguments + setArguments,
                 Files.readAllLines(replacementCalls).take(preflightArguments.size + setArguments.size),
@@ -622,6 +629,93 @@ class DopplerConfigurableTest : BasePlatformTestCase() {
     ) {
         Files.writeString(path, "#!/bin/sh\n${body.trimIndent()}\n")
         assertTrue(path.toFile().setExecutable(true))
+    }
+
+    fun `test connection uses the settings dialogs project when the button has no project context`() {
+        checkConnectionScope(useSettingsDialog = true)
+    }
+
+    fun `test connection uses the button project context outside the settings dialog`() {
+        checkConnectionScope(useSettingsDialog = false)
+    }
+
+    private fun checkConnectionScope(useSettingsDialog: Boolean) {
+        assumeFalse(SystemInfo.isWindows)
+        val directory = Files.createTempDirectory("doppler-connection-scope-")
+        val executable = directory.resolve("doppler")
+        val calls = directory.resolve("calls")
+        val messages = CopyOnWriteArrayList<String>()
+        TestDialogManager.setTestDialog(
+            TestDialog { message ->
+                messages += message
+                Messages.OK
+            },
+            testRootDisposable,
+        )
+        val settings = DopplerSettings.getInstance()
+        val originalPath = settings.cliPath
+        val configurable = DopplerConfigurable()
+        try {
+            writeExecutable(
+                executable,
+                """
+                printf '%s\n' "${'$'}*" >> '$calls'
+                case "${'$'}1" in
+                  me) printf '%s' '{"slug":"local","type":"cli","token_preview":"synthetic","workplace":{"slug":"team"}}' ;;
+                  --version) printf v3.77.1 ;;
+                  *) exit 1 ;;
+                esac
+                """,
+            )
+            val panel = configurable.createPanel()
+            val dialog = settingsDialog(DopplerFolderSetupConfigurable(project))
+            DataManager.registerDataProvider(panel) { id ->
+                when {
+                    useSettingsDialog && Settings.KEY.`is`(id) -> dialog
+                    !useSettingsDialog && CommonDataKeys.PROJECT.`is`(id) -> project
+                    else -> null
+                }
+            }
+            requireNotNull(UIUtil.findComponentOfType(panel, TextFieldWithBrowseButton::class.java)).text = executable.toString()
+            UIUtil
+                .uiTraverser(panel)
+                .filter(JButton::class.java)
+                .single { it.text == "Test Connection" }
+                .doClick()
+            assertTrue(awaitMessage(messages, 1).contains("Connected to Doppler."))
+            assertEquals(
+                listOf(
+                    "me --scope ${project.basePath} --json --no-check-version",
+                    "--version --scope ${project.basePath}",
+                ),
+                Files.readAllLines(calls),
+            )
+        } finally {
+            configurable.disposeUIResources()
+            settings.cliPath = originalPath
+            Files.walk(directory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) } }
+        }
+    }
+
+    private fun settingsDialog(configurable: Configurable): Settings {
+        val group =
+            object : ConfigurableGroup {
+                override fun getDisplayName(): String = "Test settings"
+
+                override fun getConfigurables(): Array<Configurable> = arrayOf(configurable)
+            }
+        return object : Settings(listOf(group)) {
+            override fun selectImpl(configurable: Configurable): Promise<Any> = AsyncPromise()
+
+            override fun getConfigurableWithInitializedUiComponentImpl(
+                configurable: Configurable,
+                initializeUi: Boolean,
+            ): Configurable = configurable
+
+            override fun checkModifiedImpl(configurable: Configurable) = Unit
+
+            override fun setSearchText(text: String) = Unit
+        }
     }
 
     fun `test CLI browse field preserves manual entry apply reset and automatic detection`() {

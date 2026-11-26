@@ -427,14 +427,12 @@ Use `./gradlew buildPlugin -Psnapshot` to append `-SNAPSHOT` to the version from
 
 The [Build plugin workflow](.github/workflows/build.yaml) uses `gradle/actions/setup-gradle`
 to cache Gradle dependencies, wrapper distributions, and local build-cache entries in GitHub
-Actions. Pull requests restore caches read-only; only pushes to `main` can save them. Builds run
+Actions. This workflow restores caches read-only with `cache-mode: read`. Builds run
 on every push to `main` and on pull requests when build-related files change.
-`setup-java` does not also cache Gradle files,
-avoiding interference between the two actions.
+`setup-java` caches only the JDK, avoiding interference with Gradle caching.
 
-The same separation applies to release and Marketplace workflows: `setup-java` caches only
-the JDK, while `setup-gradle` owns Gradle caching. Both actions restore caches read-only
-unless the event is a push to `main`, including during manual release or publishing runs.
+The release asset-build job restores and saves JDK and Gradle caches with `cache-mode: write`,
+including during manual release recovery. The Marketplace workflow only restores caches.
 
 If no JDK is on your `PATH`, any JetBrains IDE ships one:
 

@@ -229,12 +229,15 @@ tasks.check {
 }
 
 tasks.named<CyclonedxDirectTask>("cyclonedxDirectBom") {
-    includeBuildEnvironment = true
+    // The release SBOM describes the plugin archive, not IDE test or build tooling.
+    includeConfigs = listOf("runtimeClasspath")
+    includeBuildEnvironment = false
+    projectType = Component.Type.APPLICATION
+    jsonOutput = layout.buildDirectory.file("distributions/${project.name}-${project.version}.cdx.json")
     xmlOutput.convention(null as RegularFile?)
 }
 
 tasks.cyclonedxBom {
     projectType = Component.Type.APPLICATION
-    jsonOutput = layout.buildDirectory.file("distributions/${project.name}-${project.version}.cdx.json")
     xmlOutput.convention(null as RegularFile?)
 }

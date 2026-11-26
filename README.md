@@ -428,7 +428,8 @@ Use `./gradlew buildPlugin -Psnapshot` to append `-SNAPSHOT` to the version from
 The [Build plugin workflow](.github/workflows/build.yaml) uses `gradle/actions/setup-gradle`
 to cache Gradle dependencies, wrapper distributions, and local build-cache entries in GitHub
 Actions. Pull requests restore caches read-only; only pushes to `main` can save them. Builds run
-on both events when build-related files change. `setup-java` does not also cache Gradle files,
+on every push to `main` and on pull requests when build-related files change.
+`setup-java` does not also cache Gradle files,
 avoiding interference between the two actions.
 
 The same separation applies to release and Marketplace workflows: `setup-java` caches only

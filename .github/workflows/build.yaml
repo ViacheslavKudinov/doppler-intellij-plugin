@@ -2,16 +2,6 @@ name: Build plugin
 on:
   push:
     branches: [ main ]
-    paths:
-      - src/**
-      - gradle/**
-      - build.gradle.kts
-      - settings.gradle.kts
-      - gradle.properties
-      - gradlew
-      - gradlew.bat
-      - .editorconfig
-      - .github/workflows/build.yaml
   pull_request:
     paths:
       - src/**

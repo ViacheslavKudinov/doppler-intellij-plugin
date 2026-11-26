@@ -162,7 +162,7 @@ jobs:
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
       - name: Build and verify plugin and SBOM
-        run: ./gradlew buildPlugin cyclonedxBom check verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+        run: bash .github/scripts/gradle-with-retry.sh buildPlugin cyclonedxBom check verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
       - name: Locate generated SBOM
         id: sbom
@@ -208,7 +208,7 @@ jobs:
           set -euo pipefail
           : "${CERTIFICATE_CHAIN:?Signing certificate is required}"
           : "${PRIVATE_KEY:?Signing key is required}"
-          ./gradlew signPlugin verifyPluginSignature --no-daemon
+          bash .github/scripts/gradle-with-retry.sh signPlugin verifyPluginSignature --no-daemon
 
           # Publish the public CERTIFICATE_CHAIN as chain.crt for later signature verification.
           mkdir release-assets

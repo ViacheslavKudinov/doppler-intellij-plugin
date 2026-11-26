@@ -10,6 +10,7 @@ on:
       - gradlew
       - gradlew.bat
       - .editorconfig
+      - .github/scripts/gradle-with-retry.sh
       - .github/workflows/build.yaml
   workflow_call:
     secrets:
@@ -30,6 +31,9 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    outputs:
+      plugin_artifact_prefix: ${{ steps.plugin.outputs.artifact_prefix }}
+      plugin-url: ${{ steps.upload-pr-plugin.outputs.artifact-url }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
@@ -62,16 +66,55 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             args+=(-Psnapshot)
           fi
-          ./gradlew buildPlugin "${args[@]}" --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+          bash .github/scripts/gradle-with-retry.sh buildPlugin "${args[@]}" --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+
+      - name: Locate plugin archive
+        id: plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          zips=(build/distributions/*.zip)
+          if [[ ${#zips[@]} -ne 1 ]]; then
+            echo "::error::Expected exactly one plugin archive, found ${#zips[@]}"
+            exit 1
+          fi
+          archive_name=$(basename "${zips[0]}")
+          echo "artifact_prefix=${archive_name%.zip}" >> "$GITHUB_OUTPUT"
+          echo "path=${zips[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Upload PR plugin
+        id: upload-pr-plugin
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: pr-plugin
-          path: build/distributions/*.zip
+          path: ${{ steps.plugin.outputs.path }}
+          archive: false
           retention-days: 7
           if-no-files-found: error
+
+  comment-pr-plugin:
+    name: Comment PR plugin
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [ build ]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
+        with:
+          egress-policy: audit
+
+      - name: Comment with PR plugin link
+        uses: step-security/sticky-pull-request-comment@3f74a8f2b4dc745810ded9bbfd887679bccd13c2 # v3.0.5
+        with:
+          header: pr-plugin
+          recreate: true
+          message: |
+            [Download the PR plugin ZIP](${{ needs.build.outputs.plugin-url }}) and install it via **Settings | Plugins | Install Plugin from Disk**.
+
+            The artifact expires after 7 days.
 
   ktlint:
     name: ktlint
@@ -101,10 +144,11 @@ jobs:
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
       - name: Check Kotlin formatting
-        run: ./gradlew ktlintCheck --no-daemon --console=plain
+        run: bash .github/scripts/gradle-with-retry.sh ktlintCheck --no-daemon --console=plain
 
   grype:
     name: Grype
+    needs: [ build ]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -132,7 +176,7 @@ jobs:
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
       - name: Generate PR SBOM
-        run: ./gradlew cyclonedxBom -Psnapshot --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+        run: bash .github/scripts/gradle-with-retry.sh cyclonedxBom -Psnapshot --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
       - name: Locate generated SBOM
         id: sbom
@@ -150,7 +194,7 @@ jobs:
       - name: Upload PR SBOM
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: pr-sbom
+          name: ${{ needs.build.outputs.plugin_artifact_prefix }}-sbom
           path: ${{ steps.sbom.outputs.path }}
           retention-days: 7
           if-no-files-found: error
@@ -215,7 +259,7 @@ jobs:
 
       # Run tests
       - name: Run Tests
-        run: ./gradlew check jacocoTestReport --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+        run: bash .github/scripts/gradle-with-retry.sh check jacocoTestReport --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
@@ -255,13 +299,15 @@ jobs:
 
       # Run Verify Plugin task and IntelliJ Plugin Verifier tool
       - name: Run Plugin Verification tasks
-        run: ./gradlew verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+        shell: bash
+        run: |
+          bash .github/scripts/gradle-with-retry.sh verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
 
       - name: Upload verification problems report
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: plugin-verification-problems
+          name: ${{ needs.build.outputs.plugin_artifact_prefix }}-plugin-verification-problems
           path: build/reports/problems/problems-report.html
           retention-days: 1
           if-no-files-found: warn

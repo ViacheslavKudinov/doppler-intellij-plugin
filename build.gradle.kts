@@ -12,14 +12,20 @@ import java.util.Base64
 
 buildscript {
     repositories {
+        gradlePluginPortal()
         mavenCentral()
     }
     dependencies {
-        // Patch CycloneDX's transitive Jackson dependencies on the build classpath.
+        // Keep IntelliJ Platform plugin transitives on the constrained buildscript classpath.
+        classpath("org.jetbrains.intellij.platform:intellij-platform-gradle-plugin:2.20.1")
+        // Keep build-time Jackson dependencies on the patched BOM.
         classpath(platform(libs.jackson.bom))
         constraints {
             classpath(libs.guava.get()) {
                 because("Fix GHSA-xxph-c9ww-hj94 in CycloneDX's transitive build dependency")
+            }
+            classpath("org.jsoup:jsoup:1.23.2") {
+                because("Fix vulnerabilities in the IntelliJ Platform Gradle plugin's transitive jsoup dependency")
             }
         }
     }
@@ -269,12 +275,15 @@ tasks.check {
 }
 
 tasks.named<CyclonedxDirectTask>("cyclonedxDirectBom") {
-    includeBuildEnvironment = true
+    // The release SBOM describes the plugin archive, not IDE test or build tooling.
+    includeConfigs = listOf("runtimeClasspath")
+    includeBuildEnvironment = false
+    projectType = Component.Type.APPLICATION
+    jsonOutput = layout.buildDirectory.file("distributions/${project.name}-${project.version}.cdx.json")
     xmlOutput.convention(null as RegularFile?)
 }
 
 tasks.cyclonedxBom {
     projectType = Component.Type.APPLICATION
-    jsonOutput = layout.buildDirectory.file("distributions/${project.name}-${project.version}.cdx.json")
     xmlOutput.convention(null as RegularFile?)
 }

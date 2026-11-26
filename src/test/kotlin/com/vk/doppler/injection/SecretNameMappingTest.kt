@@ -1,9 +1,11 @@
 package com.vk.doppler.injection
 
 import com.vk.doppler.cli.DopplerReservedSecrets
+import com.vk.doppler.cli.DopplerSecretNames
 import com.vk.doppler.editor.SecretsDocumentFormat
 import com.vk.doppler.editor.SecretsFormatException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -77,6 +79,55 @@ class SecretNameMappingTest {
         assertNotNull(validateSecretNameMappings(listOf(pair("A", "B=C"))))
         assertNotNull(validateSecretNameMappings(listOf(pair("A", "B\nC"))))
         assertNotNull(validateSecretNameMappings(listOf(pair("A", "B\u0000"))))
+    }
+
+    @Test
+    fun `process environment controls cannot be injected or mapped`() {
+        val names =
+            listOf(
+                "PATH",
+                "path",
+                "LD_PRELOAD",
+                "LD_AUDIT",
+                "lD_LIBRARY_PATH",
+                "DYLD_INSERT_LIBRARIES",
+                "DYLD_LIBRARY_PATH",
+                "dYlD_FRAMEWORK_PATH",
+                "lD_aUdIt",
+                "dYlD_LiBrArY_PaTh",
+                "NODE_OPTIONS",
+                "NODE_PATH",
+                "JAVA_TOOL_OPTIONS",
+                "JDK_JAVA_OPTIONS",
+                "_JAVA_OPTIONS",
+                "BASH_ENV",
+                "ENV",
+                "PYTHONPATH",
+                "PYTHONHOME",
+                "PYTHONUSERBASE",
+                "RUBYOPT",
+                "RUBYLIB",
+                "PERL5OPT",
+                "PERL5LIB",
+            )
+        for (name in names) {
+            assertEquals(
+                "New secret names cannot override process environment controls.",
+                validateSecretNameMappings(listOf(pair("SOURCE", name))),
+            )
+            assertEquals(
+                mapOf("SOURCE" to "synthetic"),
+                applySecretNameMapping(mapOf("SOURCE" to "synthetic"), listOf(pair("SOURCE", name))),
+            )
+        }
+        assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("path"))
+        assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("lD_LIBRARY_PATH"))
+        assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("dYlD_FRAMEWORK_PATH"))
+        assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("rubyopt"))
+        assertFalse(DopplerSecretNames.isSafeForEnvironmentInjection("Perl5Lib"))
+        assertTrue(DopplerSecretNames.isSafeForEnvironmentInjection("PATH_SUFFIX"))
+        assertTrue(DopplerSecretNames.isSafeForEnvironmentInjection("LD"))
+        assertTrue(DopplerSecretNames.isSafeForEnvironmentInjection("DYLD"))
     }
 
     @Test fun `new names follow the same validation as edited secret names`() {

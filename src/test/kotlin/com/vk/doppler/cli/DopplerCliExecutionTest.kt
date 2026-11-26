@@ -355,6 +355,65 @@ class DopplerCliExecutionTest : BasePlatformTestCase() {
         }
     }
 
+    fun `test downloaded environment rejects process environment controls`() {
+        assumeFalse(SystemInfo.isWindows)
+        val unsafeNames =
+            listOf(
+                "PATH",
+                "path",
+                "LD_PRELOAD",
+                "lD_LIBRARY_PATH",
+                "DYLD_INSERT_LIBRARIES",
+                "dYlD_FRAMEWORK_PATH",
+                "NODE_OPTIONS",
+                "NODE_PATH",
+                "JAVA_TOOL_OPTIONS",
+                "JDK_JAVA_OPTIONS",
+                "_JAVA_OPTIONS",
+                "BASH_ENV",
+                "PYTHONPATH",
+                "PYTHONHOME",
+                "PYTHONUSERBASE",
+            )
+        for (name in unsafeNames) {
+            try {
+                cli("""printf '%s' '{"$name":"synthetic"}'""").downloadEnvironment("project", "config")
+                fail("Expected unsafe environment variable to be rejected")
+            } catch (error: DopplerCliException) {
+                assertEquals("Doppler returned an invalid environment variable.", error.message)
+                assertFalse(error.message!!.contains(name))
+            }
+        }
+    }
+
+    fun `test downloaded environment validates names and string values`() {
+        assumeFalse(SystemInfo.isWindows)
+        assertEquals(
+            mapOf("SAFE_NAME" to "synthetic"),
+            cli("""printf '%s' '{"SAFE_NAME":"synthetic"}'""").downloadEnvironment("project", "config"),
+        )
+
+        val invalidResponses =
+            listOf(
+                """{"":"synthetic"}""",
+                """{"HAS=EQUALS":"synthetic"}""",
+                """{"HAS\u0000NUL":"synthetic"}""",
+                """{"OBJECT":{}}""",
+                """{"ARRAY":[]}""",
+                """{"NULL":null}""",
+                """{"NUMBER":7}""",
+                """{"BOOLEAN":true}""",
+            )
+        for (response in invalidResponses) {
+            try {
+                cli("""printf '%s' '$response'""").downloadEnvironment("project", "config")
+                fail("Expected invalid environment response to be rejected")
+            } catch (error: DopplerCliException) {
+                assertEquals("Doppler returned an invalid environment variable.", error.message)
+            }
+        }
+    }
+
     fun `test a successful write may have no output`() {
         assumeFalse(SystemInfo.isWindows)
         val cli = cli("cat >/dev/null\nexit 0")

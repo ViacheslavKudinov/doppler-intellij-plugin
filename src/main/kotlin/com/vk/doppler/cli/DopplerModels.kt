@@ -45,6 +45,32 @@ object DopplerReservedSecrets {
 object DopplerSecretNames {
     /** Doppler secret names may contain only ASCII letters, digits, `_`, `/`, `:`, `.`, and `-`. */
     private val VALID = Regex("[A-Za-z0-9_/:.-]+")
+    private val UNSAFE_ENVIRONMENT_NAMES =
+        setOf(
+            "PATH",
+            "NODE_OPTIONS",
+            "NODE_PATH",
+            "JAVA_TOOL_OPTIONS",
+            "JDK_JAVA_OPTIONS",
+            "_JAVA_OPTIONS",
+            "BASH_ENV",
+            "ENV",
+            "HOME",
+            "PYTHONPATH",
+            "PYTHONHOME",
+            "PYTHONUSERBASE",
+            "RUBYOPT",
+            "RUBYLIB",
+            "PERL5OPT",
+            "PERL5LIB",
+        )
 
     fun isValid(name: String): Boolean = VALID.matches(name)
+
+    fun isSafeForEnvironmentInjection(name: String): Boolean {
+        val normalized = name.uppercase()
+        return normalized !in UNSAFE_ENVIRONMENT_NAMES &&
+            !normalized.startsWith("LD_") &&
+            !normalized.startsWith("DYLD_")
+    }
 }

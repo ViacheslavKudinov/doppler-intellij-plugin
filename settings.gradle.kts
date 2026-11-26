@@ -18,7 +18,7 @@ buildscript {
         classpath("org.jetbrains.intellij.platform:intellij-platform-gradle-plugin:2.20.1")
         classpath(platform("com.fasterxml.jackson:jackson-bom:2.23.0"))
         constraints {
-            classpath("org.jsoup:jsoup:1.23.2") {
+            classpath("org.jsoup:jsoup:1.24.1") {
                 because("Fix vulnerabilities in the IntelliJ Platform Gradle plugin's transitive jsoup dependency")
             }
         }

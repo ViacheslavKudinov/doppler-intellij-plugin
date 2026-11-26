@@ -24,7 +24,7 @@ buildscript {
             classpath(libs.guava.get()) {
                 because("Fix GHSA-xxph-c9ww-hj94 in CycloneDX's transitive build dependency")
             }
-            classpath("org.jsoup:jsoup:1.23.2") {
+            classpath("org.jsoup:jsoup:1.24.1") {
                 because("Fix vulnerabilities in the IntelliJ Platform Gradle plugin's transitive jsoup dependency")
             }
         }

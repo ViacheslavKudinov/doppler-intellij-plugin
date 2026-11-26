@@ -422,6 +422,11 @@ The [CodeQL workflow](.github/workflows/codeql.yaml) builds and analyzes Actions
 job with read-only repository permissions. It stores only SARIF results as temporary artifacts;
 automatic SARIF and database uploads are disabled in that job.
 
+The Kotlin job uses CodeQL's built-in dependency cache. Only pushes to `main` restore and save
+dependencies; pull requests and scheduled runs only restore them. Gradle task-output caching is disabled and
+tasks are rerun so CodeQL observes fresh compilation. The Actions analysis does not use this
+dependency cache.
+
 A separate job on a fresh runner uploads the reports with `security-events: write`. It does not
 check out the repository or execute project code. Reports come from the same workflow run, and
 the upload uses the workflow's commit and ref. The final jobs retain the `Analyze (actions)` and

@@ -69,6 +69,8 @@ jobs:
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
+        # Only pushes to main save dependency caches; other runs only restore them.
+        dependency-caching: ${{ matrix.language == 'java-kotlin' && (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'full' || 'restore') || 'none' }}
         # If you wish to specify custom queries, you can do so here or in a config file.
         # By default, queries listed here will override any specified in a config file.
         # Prefix the list here with "+" to use these queries and those in the config file.
@@ -85,7 +87,8 @@ jobs:
     - name: Run manual build steps
       if: matrix.build-mode == 'manual'
       shell: bash
-      run: ./gradlew buildPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+      # CodeQL must observe compilation rather than reuse cached task outputs.
+      run: ./gradlew buildPlugin --no-daemon --no-build-cache --rerun-tasks -Pkotlin.daemon.jvmargs=-Xmx4g
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1

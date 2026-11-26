@@ -3,8 +3,30 @@ name: CodeQL
 on:
   push:
     branches: [ main ]
+    paths:
+      - src/**
+      - gradle/**
+      - build.gradle.kts
+      - settings.gradle.kts
+      - gradle.properties
+      - gradlew
+      - gradlew.bat
+      - .editorconfig
+      - .github/scripts/gradle-with-retry.sh
+      - .github/workflows/**
   pull_request:
     branches: [ main ]
+    paths:
+      - src/**
+      - gradle/**
+      - build.gradle.kts
+      - settings.gradle.kts
+      - gradle.properties
+      - gradlew
+      - gradlew.bat
+      - .editorconfig
+      - .github/scripts/gradle-with-retry.sh
+      - .github/workflows/**
   schedule:
     - cron: 44 0 * * 1
       timezone: Europe/Stockholm

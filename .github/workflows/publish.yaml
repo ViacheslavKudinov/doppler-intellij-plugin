@@ -81,6 +81,7 @@ jobs:
           allowed-endpoints: >
             api.github.com:443
             cafe.github.com:443
+            cache-redirector.jetbrains.com:443
             corretto.aws:443
             corretto.github.io:443
             downloads.gradle.org:443

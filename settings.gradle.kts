@@ -18,9 +18,13 @@ buildscript {
         classpath("org.jetbrains.intellij.platform:intellij-platform-gradle-plugin:2.20.1")
         classpath(platform("com.fasterxml.jackson:jackson-bom:2.23.0"))
         classpath(platform("io.netty:netty-bom:4.2.21.Final"))
+        classpath(platform("io.opentelemetry:opentelemetry-bom:1.67.0"))
         constraints {
             classpath("org.jsoup:jsoup:1.24.1") {
                 because("Fix vulnerabilities in the IntelliJ Platform Gradle plugin's transitive jsoup dependency")
+            }
+            classpath("org.bouncycastle:bcpkix-jdk18on:1.87") {
+                because("Fix vulnerabilities in the IntelliJ Platform Gradle plugin's transitive Bouncy Castle dependency")
             }
             classpath("org.bouncycastle:bcprov-jdk18on:1.87") {
                 because(

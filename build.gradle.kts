@@ -116,6 +116,7 @@ dependencies {
         bundledPlugin("org.jetbrains.idea.maven")
         plugin("PythonCore", "253.33813.55")
         testFramework(TestFrameworkType.Platform)
+        zipSigner("0.1.45")
     }
 }
 

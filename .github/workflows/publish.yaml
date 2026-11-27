@@ -96,11 +96,12 @@ jobs:
             tuf-repo-cdn.sigstore.dev:443
             tuf-repo.github.com:443
 
-      - name: Checkout validated release commit
+      # Use the maintained publishing configuration, including fixes for existing tags.
+      - name: Checkout publishing configuration
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.validate-release.outputs.commit }}
+          ref: main
 
       - name: Download and verify release archive
         id: archive

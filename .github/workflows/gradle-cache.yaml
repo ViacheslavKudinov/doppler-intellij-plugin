@@ -37,4 +37,4 @@ jobs:
           cache-provider: basic
 
       - name: Populate Gradle cache
-        run: bash .github/scripts/gradle-with-retry.sh buildPlugin check verifyPlugin --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
+        run: bash .github/scripts/gradle-with-retry.sh testClasses ktlintCheck --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g

@@ -2,6 +2,10 @@
 
 A Kotlin plugin for JetBrains IDEs that manages [Doppler](https://www.doppler.com) secrets. It talks to Doppler **only through the `doppler` CLI subprocess** and injects secrets into run configurations at launch.
 
+## IntelliJ Platform compatibility
+
+- Maintain compatibility with IntelliJ Platform **2025.3 (build 253) or later**. Do not raise the minimum supported build without an explicit user request.
+
 ## Secrets: hard rules
 
 Secrets must never be persisted or leaked. Before suggesting any code, check that it does **not**:

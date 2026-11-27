@@ -470,9 +470,11 @@ The [Release workflow](.github/workflows/release-please.yaml) runs on pushes to 
 Release Please to create or update the release PR. Pull-request builds use `-SNAPSHOT` versions;
 release builds use the version committed in `gradle.properties`.
 
-The CI workflow declares `cache-mode: read`, and the release build and signing job declares
-`cache-mode: write`. The Publish workflow has no cache-mode override and uses GitHub's
-[trigger-based default](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#cache-mode).
+The CI workflow uses the GitHub Actions cache through `setup-gradle`'s basic provider.
+PR and reusable CI runs have read-only cache access; a separate workflow warms the cache on
+pushes to `main`.
+The release build and signing job declares `cache-mode: write`. The Publish workflow has no
+cache-mode override and uses GitHub's [trigger-based default](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#cache-mode).
 
 1. Merging the release PR makes Release Please create the tag and a **draft** GitHub release.
 2. The `release` environment job builds the plugin and CycloneDX SBOM from the released commit,

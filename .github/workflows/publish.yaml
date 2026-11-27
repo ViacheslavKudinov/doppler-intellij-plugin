@@ -77,13 +77,16 @@ jobs:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
         with:
-          egress-policy: audit
+          egress-policy: block
           allowed-endpoints: >
             api.github.com:443
-            cafe.github.com:443
+            artifacts-caching-proxy.aws.intellij.net:443
             cache-redirector.jetbrains.com:443
+            cafe.github.com:443
             corretto.aws:443
             corretto.github.io:443
+            d2cico3c979uwg.cloudfront.net:443
+            d2s4y8xcwt8bet.cloudfront.net:443
             downloads.gradle.org:443
             github.com:443
             plugins-artifacts.gradle.org:443
@@ -91,7 +94,6 @@ jobs:
             plugins.jetbrains.com:443
             release-assets.githubusercontent.com:443
             repo.maven.apache.org:443
-            repo1.maven.org:443
             services.gradle.org:443
             tmaproduction.blob.core.windows.net:443
             tuf-repo-cdn.sigstore.dev:443

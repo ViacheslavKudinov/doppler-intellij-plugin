@@ -85,7 +85,7 @@ dependencies {
         add("ktlint", libs.logback.core.get()) {
             because("Fix object injection through HardenedObjectInputStream in ktlint's transitive dependency")
         }
-        add("testUiImplementation", "org.bouncycastle:bcprov-jdk18on:1.85") {
+        add("testUiImplementation", "org.bouncycastle:bcprov-jdk18on:1.87") {
             because("Fix vulnerabilities in the IntelliJ Platform UI test framework's transitive Bouncy Castle dependency")
         }
         add("testUiImplementation", libs.guava.get()) {

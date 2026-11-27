@@ -120,6 +120,11 @@ class DopplerFolderSetupRefreshTest : BasePlatformTestCase() {
             panel.refresh(CliOperation.TREE_WINDOW_FOCUS)
             awaitRefresh(panel)
 
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+            while (fileSystem.findFileByPath(cached.path) != null && System.nanoTime() < deadline) {
+                UIUtil.dispatchAllInvocationEvents()
+                Thread.sleep(10)
+            }
             assertNull(field("authContextId").get(panel))
             assertTrue(projectNodes(panel).isEmpty())
             assertNull(oldProject.parent)

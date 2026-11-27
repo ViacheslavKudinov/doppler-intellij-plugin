@@ -5,6 +5,10 @@ set -o pipefail
 gradle_log="$(mktemp "$RUNNER_TEMP/gradle.XXXXXX")"
 trap 'rm -f "$gradle_log"' EXIT
 
+printf 'Running: ./gradlew'
+printf ' %q' "$@"
+printf '\n'
+
 for attempt in 1 2 3; do
   if ./gradlew "$@" 2>&1 | tee "$gradle_log"; then
     exit 0

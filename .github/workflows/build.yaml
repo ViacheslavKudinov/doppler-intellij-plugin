@@ -52,12 +52,13 @@ jobs:
         with:
           distribution: corretto
           java-version: 21
-          cache: gradle
           cache-jdk: true
 
       # Setup Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
 
       # Build plugin
       - name: Build plugin
@@ -137,11 +138,12 @@ jobs:
         with:
           distribution: corretto
           java-version: 21
-          cache: gradle
           cache-jdk: true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
 
       - name: Check Kotlin formatting
         run: bash .github/scripts/gradle-with-retry.sh ktlintCheck --no-daemon --console=plain
@@ -169,11 +171,12 @@ jobs:
         with:
           distribution: corretto
           java-version: 21
-          cache: gradle
           cache-jdk: true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
 
       - name: Generate PR SBOM
         run: bash .github/scripts/gradle-with-retry.sh cyclonedxBom -Psnapshot --no-daemon -Pkotlin.daemon.jvmargs=-Xmx4g
@@ -250,12 +253,13 @@ jobs:
         with:
           distribution: corretto
           java-version: 21
-          cache: gradle
           cache-jdk: true
 
       # Setup Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
 
       # Run tests
       - name: Run Tests
@@ -290,12 +294,13 @@ jobs:
         with:
           distribution: corretto
           java-version: 21
-          cache: gradle
           cache-jdk: true
 
       # Setup Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
 
       # Run Verify Plugin task and IntelliJ Plugin Verifier tool
       - name: Run Plugin Verification tasks

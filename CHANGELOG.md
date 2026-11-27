@@ -2,6 +2,47 @@
 
 # Doppler-plugin Changelog
 
+## [1.12.1](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.12.0...v1.12.1) (2026-11-27)
+
+
+### Bug Fixes
+
+* **deps:** address vulnerabilities in transitive dependencies of IntelliJ Platform Gradle plugin ([#148](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/148)) ([94da84b](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/94da84b5c78dfcdeebd53c468c785ca72e517c34))
+* **deps:** constrain test UI dependency graph ([#157](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/157)) ([ee80e35](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/ee80e35065769e3dd7b9464fcba63a8e45fe0b8b))
+* **deps:** constrain vulnerable build dependencies ([#162](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/162)) ([d97c5af](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/d97c5afae76b04a4a55204a3064dff1a1cfa0ecb))
+* **deps:** patch high and critical transitive dependencies ([#151](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/151)) ([d1e715c](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/d1e715c19cf6c40d8213c9f23b791d90d506a5bd))
+* **deps:** update dependency at.yawk.lz4:lz4-java to v1.14.1 ([#154](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/154)) ([a2576b4](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/a2576b4635b8d0c878b01e3db86b1d04c71157fe))
+* **deps:** update dependency at.yawk.lz4:lz4-java to v1.14.1 ([#159](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/159)) ([e6da44d](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/e6da44d223da840f0ec24409d39cd8e594708ab5))
+* **deps:** update dependency com.fasterxml.jackson:jackson-bom to v2.23.0 ([#123](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/123)) ([1280cfe](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/1280cfe09b598afdf6d79ec95a949d4fdc6ff2dc))
+* **deps:** update dependency com.google.protobuf:protobuf-java to v3.25.9 ([#152](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/152)) ([7824687](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/7824687b29efb7b6058997bb6e6fa4a4e5e63a31))
+* **deps:** update dependency com.google.protobuf:protobuf-java to v4 ([#156](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/156)) ([b87662c](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/b87662c0187e6dc698f93086e51e5921220a187e))
+* **deps:** update dependency io.netty:netty-bom to v4.2.21.final ([#153](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/153)) ([c1529c5](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/c1529c575eb391cdac6e868f0dd5a182cba4fdb1))
+* **deps:** update dependency org.bouncycastle:bcprov-jdk18on to v1.87 ([#155](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/155)) ([7044578](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/70445782187d3befeb2ad78f0689514b993b7570))
+* **deps:** update dependency org.bouncycastle:bcprov-jdk18on to v1.87 ([#160](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/160)) ([6b40fc4](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/6b40fc4bfd23394e8c826332009bebe20a63b737))
+* **deps:** update dependency org.jsoup:jsoup to v1.24.1 ([#150](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/150)) ([70cee2b](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/70cee2b54be5f333ef199341980e550353afd5fe))
+* **deps:** update logback monorepo to v1.6.7 ([#137](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/137)) ([2184c8b](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/2184c8be910a941ef53fd7e20812069cbb07158a))
+* **deps:** update logback monorepo to v1.6.8 ([#142](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/142)) ([b4656b3](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/b4656b3a9b9eeacaffbd09cb30d91296de27cf6d))
+* reject unsafe launch environment names ([#128](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/128)) ([9a09e11](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/9a09e114da8a4776ebf449f59805dcaec8fcaf79))
+
+
+### Maintenance
+
+* Change minimum release age from 3 to 7 days for Renovate ([#129](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/129)) ([c16c660](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/c16c660a272c83ae02b71a3ee9f1ce905c883d60))
+* **deps:** bump the minor-patch-updates group with 2 updates ([#127](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/127)) ([3a01053](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/3a0105351a96cf40fd1179fb3d3edda0624726ea))
+* **deps:** bump the minor-patch-updates group with 3 updates ([#126](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/126)) ([4d8b6a4](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/4d8b6a401dad2f6b7cae7b5e0b2e2d5b084ff75e))
+* **deps:** update actions/dependency-review-action action to v5.0.1 ([#138](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/138)) ([0a450fc](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/0a450fc32f7d61e6060b9384e3c05c73c9b49ca3))
+* **deps:** update actions/setup-java action to v6.3.0 ([#119](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/119)) ([57cb65f](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/57cb65f72729b0cbf6f2292d5b434320e2f3ca98))
+* **deps:** update dependency org.cyclonedx.bom to v3.6.0 ([#133](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/133)) ([f7de9d4](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/f7de9d4ee40d713cadddbfe06c0761a3883143cd))
+* **deps:** update dependency org.cyclonedx.bom to v3.6.1 ([#134](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/134)) ([7cb5738](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/7cb5738198d5e6773b82a1b5814d53763d1ada24))
+* **deps:** update github/codeql-action action to v4.39.3 ([#118](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/118)) ([29ac244](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/29ac244d4052d4903bacffc441c07e20b4115fc2))
+* **deps:** update github/codeql-action action to v4.39.4 ([#161](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/161)) ([cfdb8de](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/cfdb8de6329a182462a651ee8ddb6852c872299e))
+* **deps:** update gradle to v9.9.1 ([#122](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/122)) ([cccc150](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/cccc1508199b429a5f57b6a768564d130c340800))
+* **deps:** update gradle to v9.9.2 ([#158](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/158)) ([f2c7652](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/f2c765271166d5133eccb7c5766b82d7df432879))
+* **deps:** update ossf/scorecard-action action to v2.6.0 ([#141](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/141)) ([b279be8](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/b279be8274172109c2a50c678ac94e8ea39f2712))
+* **deps:** update step-security/harden-runner action to v2.23.0 ([#139](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/139)) ([0654fad](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/0654faded8de3f492210c0e6469d93ad3a5f3cd3))
+* Simplify Dependabot cooldown configuration ([#130](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/130)) ([337d8a6](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/337d8a604317af2d69f9c348e7ff7d313ec518ab))
+* **workflows:** implement gradle-with-retry script for improved build reliability ([#144](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/144)) ([0d213ef](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/0d213efcac67dd04acc19d3e0ea31034b68830ff))
+
 ## [1.12.0](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.11.0...v1.12.0) (2026-11-07)
 
 

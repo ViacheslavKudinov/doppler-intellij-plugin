@@ -52,6 +52,18 @@ val ktlintClasspath =
         }
     }
 
+configurations
+    .matching {
+        it.name == "testUiCompileClasspath" || it.name == "testUiRuntimeClasspath"
+    }.configureEach {
+        resolutionStrategy.force(libs.ide.starter.get())
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("org.lz4:lz4-java"))
+                .using(module("at.yawk.lz4:lz4-java:1.14.1"))
+                .because("Use the maintained LZ4 fork with fixes for vulnerabilities in the original artifact")
+        }
+    }
+
 if (providers.gradleProperty("snapshot").isPresent) {
     version = "${project.version.toString().removeSuffix("-SNAPSHOT")}-SNAPSHOT"
 }
@@ -73,12 +85,23 @@ dependencies {
         add("ktlint", libs.logback.core.get()) {
             because("Fix object injection through HardenedObjectInputStream in ktlint's transitive dependency")
         }
+        add("testUiImplementation", "org.bouncycastle:bcprov-jdk18on:1.87") {
+            because("Fix vulnerabilities in the IntelliJ Platform UI test framework's transitive Bouncy Castle dependency")
+        }
+        add("testUiImplementation", libs.guava.get()) {
+            because("Fix vulnerabilities in the IntelliJ Platform UI test framework's transitive Guava dependency")
+        }
+        add("testUiImplementation", "com.google.protobuf:protobuf-java:3.25.5") {
+            because("Fix a denial-of-service vulnerability in the IntelliJ Platform UI test framework's transitive Protobuf dependency")
+        }
     }
     // Patch the IDE test framework without bundling Jackson in the plugin.
     add(
         "intellijPlatformTestDependencies",
         platform(libs.jackson.bom),
     )
+    add("testUiImplementation", platform(libs.jackson.bom))
+    add("testUiImplementation", platform("io.netty:netty-bom:4.2.17.Final"))
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {

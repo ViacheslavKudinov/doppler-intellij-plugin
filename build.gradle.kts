@@ -88,6 +88,12 @@ dependencies {
         add("testUiImplementation", "org.bouncycastle:bcprov-jdk18on:1.87") {
             because("Fix vulnerabilities in the IntelliJ Platform UI test framework's transitive Bouncy Castle dependency")
         }
+        add("testUiImplementation", "org.bouncycastle:bcpkix-jdk18on:1.87") {
+            because("Fix vulnerabilities in the IntelliJ Platform UI test framework's transitive Bouncy Castle dependency")
+        }
+        add("testUiImplementation", "org.bouncycastle:bcutil-jdk18on:1.87") {
+            because("Keep Bouncy Castle modules aligned with the patched bcpkix and bcprov versions")
+        }
         add("testUiImplementation", libs.guava.get()) {
             because("Fix vulnerabilities in the IntelliJ Platform UI test framework's transitive Guava dependency")
         }
@@ -102,6 +108,8 @@ dependencies {
     )
     add("testUiImplementation", platform(libs.jackson.bom))
     add("testUiImplementation", platform("io.netty:netty-bom:4.2.17.Final"))
+    // Fix quadratic W3C tracestate parsing in the UI test framework's transitive OpenTelemetry API.
+    add("testUiImplementation", platform("io.opentelemetry:opentelemetry-bom:1.67.0"))
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {

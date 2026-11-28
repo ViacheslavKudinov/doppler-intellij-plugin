@@ -2,6 +2,13 @@
 
 # Doppler-plugin Changelog
 
+## [1.12.2](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.12.1...v1.12.2) (2026-11-28)
+
+
+### Bug Fixes
+
+* **deps:** patch UI test dependency vulnerabilities ([#172](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/issues/172)) ([b3bd7ac](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/commit/b3bd7aced53f925fc93f2ea0925941ac8dd7d68a))
+
 ## [1.12.1](https://github.com/ViacheslavKudinov/doppler-intellij-plugin/compare/v1.12.0...v1.12.1) (2026-11-27)
 
 
